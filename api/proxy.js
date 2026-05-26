@@ -1,76 +1,73 @@
-// api/proxy.js  — DIAGNOSTIC VERSION
-// Visit: https://cryogen-proxy-v2.vercel.app/api/proxy
-// This will try every known endpoint + auth format and show what works.
-// Replace with the production version once we know the correct combination.
+// api/proxy.js — CRYO-GEN API Proxy
+// Endpoints confirmed from zpdatafetch source code:
+//   Base:    https://api.zwiftracing.app/api
+//   Team:    /public/clubs/{id}/0
+//   Rider:   /public/riders/{id}
+//   Results: /public/results/{id}
+//   Batch:   POST /public/riders
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Access-Control-Allow-Origin",  "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "GET")    return res.status(405).json({ error: "Method not allowed" });
 
   const KEY     = process.env.ZRA_API_KEY || "63e32b2550a0742a4aa04923";
   const TEAM_ID = "2740";
+  const BASE    = "https://api.zwiftracing.app/api";
 
-  // Every known endpoint format from community research
-  const ENDPOINTS = [
-    `https://www.zwiftracing.app/api/clubs/${TEAM_ID}/riders`,
-    `https://www.zwiftracing.app/api/teams/${TEAM_ID}/riders`,
-    `https://zwift-ranking.herokuapp.com/public/clubs/${TEAM_ID}/riders`,
-    `https://zwift-ranking.herokuapp.com/public/teams/${TEAM_ID}/riders`,
-    `https://www.zwiftracing.app/api/club/${TEAM_ID}/riders`,
-    `https://www.zwiftracing.app/clubs/${TEAM_ID}/riders`,
-  ];
+  // Route
+  const { endpoint = "team" } = req.query;
 
-  // Every known auth header format
-  const AUTH_FORMATS = [
-    KEY,
-    `Bearer ${KEY}`,
-    `Token ${KEY}`,
-    `Api-Key ${KEY}`,
-  ];
-
-  const results = [];
-
-  for (const url of ENDPOINTS) {
-    for (const auth of AUTH_FORMATS) {
-      try {
-        const upstream = await fetch(url, {
-          headers: {
-            Authorization: auth,
-            Accept:        "application/json",
-            "User-Agent":  "CRYOGEN-Club-App/1.0",
-          },
-          signal: AbortSignal.timeout(6000),
-        });
-
-        const text        = await upstream.text();
-        const isJson      = upstream.headers.get("content-type")?.includes("json");
-        const preview     = text.slice(0, 300);
-        const looksRight  = isJson && upstream.status === 200;
-
-        results.push({
-          url,
-          auth:        auth.startsWith("Bearer") ? "Bearer KEY" : auth.startsWith("Token") ? "Token KEY" : auth.startsWith("Api") ? "Api-Key KEY" : "KEY only",
-          status:      upstream.status,
-          contentType: upstream.headers.get("content-type"),
-          isJson,
-          looksRight,
-          preview,
-        });
-
-        // Stop early if we found a winner
-        if (looksRight) {
-          return res.status(200).json({
-            winner: { url, auth: auth.startsWith("Bearer") ? "Bearer KEY" : "KEY only" },
-            data:   JSON.parse(text),
-          });
-        }
-
-      } catch (err) {
-        results.push({ url, auth: auth.slice(0, 10) + "…", error: err.message });
-      }
-    }
+  let url;
+  if (endpoint === "team") {
+    // /public/clubs/{id}/0  — the trailing 0 is the rider offset
+    url = `${BASE}/public/clubs/${TEAM_ID}/0`;
+  } else if (endpoint === "rider") {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: "Missing ?id= for rider endpoint" });
+    url = `${BASE}/public/riders/${id}`;
+  } else if (endpoint === "result") {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: "Missing ?id= for result endpoint" });
+    url = `${BASE}/public/results/${id}`;
+  } else {
+    return res.status(400).json({ error: `Unknown endpoint "${endpoint}". Use team, rider, or result.` });
   }
 
-  // No winner — return all results so we can see what happened
-  return res.status(200).json({ winner: null, results });
+  try {
+    const upstream = await fetch(url, {
+      headers: {
+        // Key used raw — no Bearer prefix (confirmed from source)
+        Authorization: KEY,
+        Accept:        "application/json",
+        "User-Agent":  "CRYOGEN-Club-App/1.0",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const text = await upstream.text();
+
+    // Try to return JSON; fall back to raw text with debug info
+    try {
+      const json = JSON.parse(text);
+      if (upstream.ok) {
+        res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=60");
+      }
+      return res.status(upstream.status).json(json);
+    } catch {
+      // Not JSON — return debug info so we can see what happened
+      return res.status(upstream.status).json({
+        error:       "Upstream returned non-JSON",
+        http_status: upstream.status,
+        url,
+        preview:     text.slice(0, 500),
+      });
+    }
+
+  } catch (err) {
+    return res.status(502).json({ error: err.message, url });
+  }
 }
