@@ -33,7 +33,7 @@ table{width:100%;border-collapse:collapse}
 .sortarrow{font-size:9px;margin-left:3px;opacity:0.5}
 .sortarrow.active{opacity:1;color:#00D4FF}
 /* Branding gradient */
-.brand-bar{background:linear-gradient(135deg,#001428 0%,#003352 50%,#001428 100%);border-bottom:1px solid rgba(0,212,255,0.2);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.brand-bar{background:linear-gradient(135deg,#0d1f3c 0%,#1a3a6b 40%,#0d1f3c 100%);border-bottom:2px solid rgba(0,180,255,0.3);padding:8px 16px;display:flex;align-items:center;gap:12px}
 .snowflake{color:#00D4FF;font-size:20px;animation:spin 20s linear infinite}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase}
@@ -49,12 +49,11 @@ table{width:100%;border-collapse:collapse}
 <body>
 
 <!-- LOGIN SCREEN -->
-<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#002040 0%,#060a14 70%)">
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:url(/images/banner.jpg) center/cover no-repeat;position:relative"><div style="position:absolute;inset:0;background:rgba(6,10,20,0.82)"></div><div style="position:relative;z-index:1;width:100%;max-width:420px;padding:24px">
   <div style="width:100%;max-width:420px;padding:24px">
     <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:48px;margin-bottom:8px">❄️</div>
-      <div style="font-size:28px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#0080FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent">CRYO-GEN</div>
-      <div style="font-size:13px;color:#6b7280;margin-top:4px">Zwift Cycling Club · Member Portal</div>
+      <img src="/images/logo.png" alt="Team CRYO-GEN" style="width:180px;height:180px;object-fit:contain;margin-bottom:8px"/>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">Zwift Cycling Club · Member Portal</div>
     </div>
     <div id="login-step1" class="card" style="padding:24px">
       <div style="font-size:13px;color:#9ca3af;margin-bottom:20px;text-align:center">Select your access level</div>
@@ -93,7 +92,7 @@ table{width:100%;border-collapse:collapse}
         <div id="login-err" style="margin-top:10px;font-size:12px;color:#f87171;display:none"></div>
       </div>
     </div>
-  </div>
+  </div></div>
 </div>
 
 <!-- MAIN APP -->
@@ -101,9 +100,9 @@ table{width:100%;border-collapse:collapse}
 
   <!-- BRAND BAR -->
   <div class="brand-bar">
-    <span class="snowflake">❄️</span>
+    <img src="/images/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
     <div style="flex:1">
-      <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent">CRYO-GEN</div>
+      <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
       <div style="font-size:10px;color:#4b5563">Cycling Club · Member Portal</div>
     </div>
     <div id="role-display" style="display:flex;align-items:center;gap:10px">
@@ -116,6 +115,9 @@ table{width:100%;border-collapse:collapse}
 
   <!-- SIDEBAR -->
   <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
+    <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
+      <img src="/images/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
+    </div>
     <nav style="flex:1;padding:8px" id="main-nav">
       <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
       <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
@@ -189,6 +191,8 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <!-- Active series content -->
     <div id="series-content"></div>
+    <!-- Google Sheet data panel -->
+    <div id="sheet-panel"></div>
   </div>
 
   <!-- RIDES -->
@@ -248,7 +252,10 @@ table{width:100%;border-collapse:collapse}
     <div class="modal-body">
       <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
       <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
-      <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open TTT Google Sheet →</a>
+      <div style="display:flex;gap:8px">
+        <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
+        <button onclick="syncSheet()" style="flex:1;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Sync Sheet</button>
+      </div>
       <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
@@ -857,6 +864,47 @@ function renderProfile(){
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}`
   ;
+}
+
+// ── Google Sheet Sync ─────────────────────────────────────
+let sheetData = null;
+async function syncSheet(){
+  try{
+    const btn = event.target;
+    btn.textContent = '↻ Syncing…';
+    const r = await fetch('/api/proxy?endpoint=ttt-sheet');
+    if(r.ok){
+      const d = await r.json();
+      sheetData = d;
+      btn.textContent = `✓ ${d.rows.length} rows synced`;
+      btn.style.color = '#10B981';
+      // Show sheet data in TTT event if we're on events page
+      renderSheetPanel(d);
+    } else {
+      btn.textContent = 'Sheet Error';
+      btn.style.color = '#f87171';
+    }
+  } catch(e){
+    console.error('Sheet sync error:', e);
+    event.target.textContent = 'Failed';
+    event.target.style.color = '#f87171';
+  }
+}
+function renderSheetPanel(d){
+  const el = document.getElementById('sheet-panel');
+  if(!el || !d) return;
+  const shown = d.rows.slice(0,20);
+  el.innerHTML = `<div class="card" style="margin-top:20px">
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Google Sheet — TTT Data (${d.rows.length} rows)</span>
+      <span style="font-size:10px;color:#10B981">● Live</span>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr>${d.headers.slice(0,6).map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${shown.map(row=>`<tr>${d.headers.slice(0,6).map(h=>`<td style="font-size:12px;color:#9ca3af">${row[h]||'-'}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    ${d.rows.length>20?`<div style="padding:10px 14px;font-size:11px;color:#4b5563">Showing 20 of ${d.rows.length} rows</div>`:''}
+  </div>`;
 }
 
 // ── Init ───────────────────────────────────────────────────
