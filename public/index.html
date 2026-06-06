@@ -52,7 +52,7 @@ table{width:100%;border-collapse:collapse}
 <div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:url(/images/banner.jpg) center/cover no-repeat;position:relative"><div style="position:absolute;inset:0;background:rgba(6,10,20,0.82)"></div><div style="position:relative;z-index:1;width:100%;max-width:420px;padding:24px">
   <div style="width:100%;max-width:420px;padding:24px">
     <div style="text-align:center;margin-bottom:32px">
-      <img src="/images/logo.png" alt="Team CRYO-GEN" style="width:180px;height:180px;object-fit:contain;margin-bottom:8px"/>
+      <img src="/logo.png" alt="Team CRYO-GEN" style="width:180px;height:180px;object-fit:contain;margin-bottom:8px"/>
       <div style="font-size:13px;color:#9ca3af;margin-top:4px">Zwift Cycling Club · Member Portal</div>
     </div>
     <div id="login-step1" class="card" style="padding:24px">
@@ -100,7 +100,7 @@ table{width:100%;border-collapse:collapse}
 
   <!-- BRAND BAR -->
   <div class="brand-bar">
-    <img src="/images/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
+    <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
     <div style="flex:1">
       <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
       <div style="font-size:10px;color:#4b5563">Cycling Club · Member Portal</div>
@@ -116,7 +116,7 @@ table{width:100%;border-collapse:collapse}
   <!-- SIDEBAR -->
   <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
     <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
-      <img src="/images/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
+      <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
     </div>
     <nav style="flex:1;padding:8px" id="main-nav">
       <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
@@ -450,6 +450,10 @@ async function loadLive(){
         }
         renderAll();
       }
+    } else if(r.status===429){
+      const d=await r.json().catch(()=>({}));
+      const wait=d.retryAfter||600;
+      setZRA('#F59E0B',`Rate limited — retry in ${Math.ceil(wait/60)} min. Showing cached data.`);
     } else { setZRA('#EF4444',`Error ${r.status}`); }
   } catch(e){ setZRA('#EF4444',e.message); }
 }
