@@ -1,2362 +1,504 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CRYO-GEN Cycling Club</title>
-  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#080c18;color:white;font-family:system-ui,sans-serif;min-height:100vh}
-    select option{background:#0f1623}
-    ::-webkit-scrollbar{width:6px;height:6px}
-    ::-webkit-scrollbar-track{background:#0f1623}
-    ::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}
-    input,select{color-scheme:dark}
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CRYO-GEN Cycling Club</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080c18;color:white;font-family:system-ui,sans-serif;display:flex;min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+input,select{font-family:inherit;outline:none;color:white}
+select option{background:#0f1623}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0f1623}
+::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}
+input,select{color-scheme:dark}
+.card{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px}
+.inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px}
+th{padding:9px 18px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;border-bottom:1px solid rgba(255,255,255,0.07)}
+td{padding:11px 18px;border-bottom:1px solid rgba(255,255,255,0.04);color:white;font-size:13px}
+#sidebar{width:220px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0}
+#main{flex:1;overflow:auto;padding:32px}
+#content{max-width:960px;margin:0 auto}
+.navbtn{width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:#6b7280;text-align:left;font-size:12px;font-weight:600;margin-bottom:2px}
+.navbtn.active{border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:#00D4FF}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:#0d1322;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:440px}
+.modal-head{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px}
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
+.btn-cyan{padding:10px 0;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;width:100%;font-size:14px}
+.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
+.cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.statcard{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px}
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.page{display:none}.page.active{display:block}
+table{width:100%;border-collapse:collapse}
+</style>
 </head>
 <body>
-<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6b7280;font-family:system-ui">Loading CRYO-GEN…</div></div>
+
+<div id="sidebar">
+  <div style="padding:14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:10px">
+    <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#00D4FF,#0066CC);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#000;flex-shrink:0">CG</div>
+    <div><div style="font-size:13px;font-weight:900">CRYO-GEN</div><div style="font-size:10px;color:#4b5563">Cycling Club</div></div>
+  </div>
+  <nav style="flex:1;padding:8px">
+    <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+    <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
+    <button class="navbtn" onclick="showTab('ttt',this)">⏱️ TTT Sign-Up</button>
+    <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
+    <button class="navbtn" onclick="showTab('members',this)">👥 Members</button>
+  </nav>
+  <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
+    <button class="navbtn" onclick="document.getElementById('adminModal').style.display='flex'">⚙️ Admin</button>
+  </div>
+</div>
+
+<div id="main">
+<div id="content">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
+  <p style="font-size:13px;color:#6b7280;margin-bottom:24px">ZwiftPower · ZwiftRacing.app</p>
+  <div class="grid4" style="margin-bottom:16px">
+    <div class="statcard"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#00D4FF;margin-bottom:10px">👥 Active Riders</div><div id="stat-riders" style="font-size:22px;font-weight:900">—</div><div id="stat-riders-sub" style="font-size:11px;color:#6b7280;margin-top:3px">loading…</div></div>
+    <div class="statcard"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#10B981;margin-bottom:10px">⏱️ TTT Signups</div><div id="stat-ttt" style="font-size:22px;font-weight:900">0/40</div><div style="font-size:11px;color:#6b7280;margin-top:3px">Wed 28 May · 19:00 UTC</div></div>
+    <div class="statcard"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8B5CF6;margin-bottom:10px">🚴 Upcoming Rides</div><div id="stat-rides" style="font-size:22px;font-weight:900">4</div><div style="font-size:11px;color:#6b7280;margin-top:3px">Next ride coming up</div></div>
+    <div class="statcard"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#F59E0B;margin-bottom:10px">📈 Avg vELO</div><div id="stat-velo" style="font-size:22px;font-weight:900">—</div><div id="stat-velo-sub" style="font-size:11px;color:#6b7280;margin-top:3px">loading…</div></div>
+  </div>
+  <div class="grid2" style="margin-bottom:16px">
+    <div class="card" style="padding:20px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6b7280;margin-bottom:16px">Top 5 Riders by vELO</div>
+      <div id="top5"></div>
+    </div>
+    <div class="card" style="padding:20px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6b7280;margin-bottom:16px">Category Distribution</div>
+      <div id="catdist"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6b7280">Recent Team Results</div>
+    <table><thead><tr><th>Event</th><th>Date</th><th>Cat</th><th>Result</th><th>Time</th><th>W/kg</th></tr></thead><tbody id="results-body"></tbody></table>
+  </div>
+</div>
+
+<!-- RACING -->
+<div id="page-racing" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap">
+    <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Racing Dashboard</h2><p style="font-size:13px;color:#6b7280">ZwiftPower · ZwiftRacing.app</p></div>
+    <button onclick="loadLive()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+    <div class="card" style="padding:16px;display:flex;align-items:center;gap:12px">
+      <div style="width:10px;height:10px;border-radius:50%;background:#FBBF24;flex-shrink:0"></div>
+      <div><div style="font-size:13px;font-weight:700">ZwiftPower <span style="color:#6b7280;font-weight:400;font-size:11px">· Team 2740</span></div><div style="font-size:11px;color:#6b7280;margin-top:2px">Engineering API access in progress · mock data</div></div>
+    </div>
+    <div class="card" id="zra-card" style="padding:16px;display:flex;align-items:center;gap:12px">
+      <div id="zra-dot" style="width:10px;height:10px;border-radius:50%;background:#FBBF24;flex-shrink:0"></div>
+      <div><div style="font-size:13px;font-weight:700">ZwiftRacing.app</div><div id="zra-msg" style="font-size:11px;color:#6b7280;margin-top:2px">Connecting…</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6b7280">Rider Rankings — vELO</span>
+      <span id="live-badge" style="font-size:10px;color:#4b5563;background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:99px">Loading…</span>
+    </div>
+    <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Rider</th><th>Cat</th><th>FTP</th><th>W/kg</th><th>vELO</th><th>Phenotype</th></tr></thead><tbody id="racing-body"></tbody></table></div>
+  </div>
+</div>
+
+<!-- TTT -->
+<div id="page-ttt" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px">
+    <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">TTT Sign-Up</h2><p style="font-size:13px;color:#6b7280">Weekly Team Time Trial</p></div>
+    <div style="display:flex;gap:8px">
+      <button id="lock-btn" onclick="toggleLock()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">🔓 Lock</button>
+      <button onclick="exportCsv()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">⬇️ Export CSV</button>
+    </div>
+  </div>
+  <div style="background:rgba(0,80,120,0.2);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:20px;margin-bottom:24px">
+    <div style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">This Week</div>
+    <div style="font-size:18px;font-weight:900;margin-bottom:4px">CRYO-GEN Weekly TTT</div>
+    <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">Sign up by Tue 18:00 UTC. Min 4 riders per team.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;font-size:12px;color:#9ca3af">
+      <span>📅 Wed 28 May 2026</span><span>⏱️ 19:00 UTC</span><span>📍 Tempus Fugit</span><span>📏 17.3 km</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:6px">
+      <span id="ttt-count">0 signed up</span><span id="ttt-left">40 spots left</span>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px">
+      <div id="ttt-bar" style="height:100%;background:#00D4FF;border-radius:3px;width:0%;transition:width .3s"></div>
+    </div>
+  </div>
+  <div class="card" style="padding:16px;margin-bottom:24px" id="signup-form">
+    <label class="lbl">Sign Me Up</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="sup-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:180px" onkeydown="if(event.key==='Enter')doSignup()"/>
+      <select id="sup-cat" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
+      <button onclick="doSignup()" style="padding:9px 20px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Sign Up</button>
+    </div>
+  </div>
+  <div id="ttt-list"></div>
+</div>
+
+<!-- RIDES -->
+<div id="page-rides" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Social Rides</h2><p style="font-size:13px;color:#6b7280">Sign up · replaces WhatsApp</p></div>
+    <button onclick="document.getElementById('newRideModal').style.display='flex'" style="display:flex;align-items:center;gap:6px;padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
+  </div>
+  <div id="rides-list"></div>
+</div>
+
+<!-- MEMBERS -->
+<div id="page-members" class="page">
+  <div style="margin-bottom:24px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <input id="m-search" class="inp" placeholder="Search by name…" style="flex:1;min-width:180px" oninput="renderMembers()"/>
+    <select id="m-cat" class="inp" style="width:80px" onchange="renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+    <button id="m-active-btn" onclick="toggleMActive()" style="padding:8px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto"><table><thead><tr><th>Rider</th><th>Cat</th><th>FTP</th><th>W/kg</th><th>vELO</th><th>Phenotype</th><th>Status</th></tr></thead><tbody id="members-body"></tbody></table></div>
+    <div style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
+      <span id="page-info" style="font-size:12px;color:#4b5563">Page 1</span>
+      <div style="display:flex;gap:6px">
+        <button onclick="changePage(-1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:13px">←</button>
+        <button onclick="changePage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:13px">→</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ADMIN MODAL -->
+<div id="adminModal" class="modal-bg" style="display:none">
+  <div class="modal">
+    <div class="modal-head">⚙️ Admin <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:18px">×</button></div>
+    <div class="modal-body">
+      <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px">
+        <div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div>
+        <div id="admin-msg" style="font-size:12px;color:#9ca3af">Connecting…</div>
+      </div>
+      <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
+        <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Danger Zone</div>
+        <button onclick="if(confirm('Clear all TTT sign-ups?')){signups=[];save('cg_s',signups);renderTTT();document.getElementById('adminModal').style.display='none'}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All TTT Sign-ups</button>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-cyan" onclick="document.getElementById('adminModal').style.display='none'">Close</button></div>
+  </div>
+</div>
+
+<!-- NEW RIDE MODAL -->
+<div id="newRideModal" class="modal-bg" style="display:none">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">Create New Ride <button onclick="document.getElementById('newRideModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:18px">×</button></div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+      <div><label class="lbl">Title</label><input id="nr-title" class="inp" placeholder="e.g. Thursday Night Chaingang"/></div>
+      <div><label class="lbl">Route</label><input id="nr-route" class="inp" placeholder="e.g. Watopia Hilly"/></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label class="lbl">Date</label><input id="nr-date" type="date" class="inp"/></div>
+        <div><label class="lbl">Time (UTC)</label><input id="nr-time" class="inp" placeholder="19:00 UTC"/></div>
+        <div><label class="lbl">Max Riders</label><input id="nr-max" type="number" class="inp" value="20"/></div>
+      </div>
+      <div><label class="lbl">Distance</label><input id="nr-dist" class="inp" placeholder="e.g. 45 km"/></div>
+      <div><label class="lbl">Pace (W/kg)</label><input id="nr-pace" class="inp" placeholder="e.g. 2.5–3.2 w/kg"/></div>
+      <div><label class="lbl">Description</label><input id="nr-desc" class="inp" placeholder="Brief description"/></div>
+      <div><label class="lbl">Category</label><select id="nr-cat" class="inp"><option>All</option><option>A/B</option><option>B/C</option><option>C/D</option></select></div>
+    </div>
+    <div class="modal-foot" style="display:flex;gap:8px">
+      <button class="btn-cyan" onclick="createRide()">Create Ride</button>
+      <button onclick="document.getElementById('newRideModal').style.display='none'" style="padding:10px 18px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
-var React = window.React;
-var ReactDOM = window.ReactDOM;
-function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
-const {
-  useState,
-  useEffect,
-  useMemo
-} = React;
-const {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell
-} = Recharts;
-
-// ── Inline SVG Icons (no CDN needed)
-const Icon = ({
-  d,
-  size = 14,
-  color = "currentColor",
-  ...p
-}) => /*#__PURE__*/React.createElement("svg", _extends({
-  width: size,
-  height: size,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: color,
-  strokeWidth: "2",
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  style: {
-    flexShrink: 0,
-    ...(p.style || {})
-  }
-}, p), Array.isArray(d) ? d.map((path, i) => /*#__PURE__*/React.createElement("path", {
-  key: i,
-  d: path
-})) : /*#__PURE__*/React.createElement("path", {
-  d: d
-}));
-const I = {
-  users: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M23 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
-  trophy: ["M8 21h8", "M12 17v4", "M6 3H3v5c0 5 3 8 9 8s9-3 9-8V3h-3", "M6 3c0 4 2 7 6 7s6-3 6-7"],
-  bike: ["M5 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0", "M15 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0", "M5 19l3.5-7L12 9l4 3 3-5", "M12 9V5l-3 2"],
-  chart: ["M18 20V10", "M12 20V4", "M6 20v-6"],
-  settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1"],
-  plus: ["M12 5v14", "M5 12h14"],
-  search: ["M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14", "M21 21l-4.35-4.35"],
-  x: ["M18 6L6 18", "M6 6l12 12"],
-  check: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4L12 14.01l-3-3"],
-  clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20", "M12 6v6l4 2"],
-  zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8",
-  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
-  trending: ["M23 6l-9.5 9.5-5-5L1 18", "M17 6h6v6"],
-  pin: ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0", "M12 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2"],
-  download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"],
-  lock: ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2", "M7 11V7a5 5 0 0 1 10 0v4"],
-  unlock: ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2", "M7 11V7a5 5 0 0 1 9.9-1"],
-  chevron: "M9 18l6-6-6-6",
-  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10",
-  calendar: ["M3 4h18v18H3z", "M3 9h18", "M8 2v4", "M16 2v4"],
-  refresh: ["M23 4v6h-6", "M1 20v-6h6", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"],
-  shield2: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"]
-};
-
 // ── Constants
-const CAT_COLOR = {
-  "A+": "#FFD700",
-  A: "#EF4444",
-  B: "#3B82F6",
-  C: "#10B981",
-  D: "#8B5CF6"
-};
-const PH_EMOJI = {
-  climber: "🏔️",
-  sprinter: "⚡",
-  puncheur: "🥊",
-  "all-rounder": "⭐",
-  "time-trialist": "⏱️",
-  pursuiter: "🎯"
-};
-const ZRA_COLOR = {
-  Diamond: "#00D4FF",
-  Ruby: "#EF4444",
-  Emerald: "#10B981",
-  Sapphire: "#3B82F6",
-  Amethyst: "#8B5CF6",
-  Platinum: "#E2E8F0",
-  Gold: "#FBBF24",
-  Silver: "#9CA3AF",
-  Bronze: "#B45309",
-  Copper: "#92400E"
-};
-const TT_STYLE = {
-  background: "#0b1020",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 10,
-  fontSize: 12
-};
-const toFlag = cc => (cc || "").toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt()));
-const fmtDate = ts => new Date(ts).toLocaleDateString("en-GB", {
-  day: "numeric",
-  month: "short"
-});
-const cleanCC = cc => (cc || "gb").split("-")[0];
-const mapPh = v => (v || "all-rounder").toLowerCase().replace(/\s+/g, "-");
-const mapRiders = data => (data.riders || []).map(r => ({
-  id: r.riderId,
-  name: r.name,
-  cc: cleanCC(r.country),
-  cat: r.zpCategory || "D",
-  ftp: Math.round(r.zpFTP || 0),
-  wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
-  velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
-  zraCat: r.race?.current?.mixed?.category || "",
-  ph: mapPh(r.phenotype?.value),
-  wins: r.race?.wins || 0,
-  podiums: r.race?.podiums || 0,
-  finishes: r.race?.finishes || 0,
-  active: !!(r.race?.current?.rating > 0),
-  gender: r.gender || "M"
-}));
-const save = (k, v) => {
-  try {
-    localStorage.setItem(k, JSON.stringify(v));
-  } catch {}
-};
-const load = k => {
-  try {
-    return JSON.parse(localStorage.getItem(k));
-  } catch {
-    return null;
-  }
-};
+const CAT_COLOR={A:"#EF4444","A+":"#FFD700",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
+const ZRA_COLOR={Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
+const PH_EMOJI={climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
+const toFlag=cc=>(cc||"").toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt()));
+const catBadge=cat=>{const c=CAT_COLOR[cat]||"#888";return `<span class="cat" style="background:${c}22;color:${c};border:1px solid ${c}44">${cat}</span>`;};
+const ph=v=>(v||"all-rounder").toLowerCase().replace(/\s+/g,"-");
+const cleanCC=cc=>(cc||"gb").split("-")[0];
 
-// ── Mock data (shown if API unavailable)
-const MEMBERS = [{
-  id: 1,
-  name: "Michael Mansfield (CRYO)",
-  cc: "us",
-  cat: "A+",
-  ftp: 392,
-  wkg: 5.35,
-  velo: 3044,
-  zraCat: "Diamond",
-  ph: "all-rounder",
-  active: true
-}, {
-  id: 2,
-  name: "Norman Henderson",
-  cc: "gb",
-  cat: "A",
-  ftp: 370,
-  wkg: 4.73,
-  velo: 2409,
-  zraCat: "Diamond",
-  ph: "all-rounder",
-  active: true
-}, {
-  id: 3,
-  name: "Owen Graham",
-  cc: "gb",
-  cat: "B",
-  ftp: 287,
-  wkg: 4.12,
-  velo: 1901,
-  zraCat: "Ruby",
-  ph: "time-trialist",
-  active: true
-}, {
-  id: 4,
-  name: "Rick (CRYO-GEN)",
-  cc: "ie",
-  cat: "B",
-  ftp: 282,
-  wkg: 4.07,
-  velo: 1325,
-  zraCat: "Amethyst",
-  ph: "all-rounder",
-  active: true
-}, {
-  id: 5,
-  name: "Roxanne Timmins",
-  cc: "gb",
-  cat: "D",
-  ftp: 179,
-  wkg: 2.15,
-  velo: 505,
-  zraCat: "Copper",
-  ph: "sprinter",
-  active: true
-}];
-const VELO_TREND = [{
-  w: "W14",
-  v: 1268
-}, {
-  w: "W15",
-  v: 1282
-}, {
-  w: "W16",
-  v: 1275
-}, {
-  w: "W17",
-  v: 1301
-}, {
-  w: "W18",
-  v: 1318
-}, {
-  w: "W19",
-  v: 1312
-}, {
-  w: "W20",
-  v: 1334
-}, {
-  w: "W21",
-  v: 1347
-}];
-const RESULTS = [{
-  event: "WTRL TTT S9 W12",
-  date: "14 May",
-  pos: 3,
-  total: 18,
-  cat: "B",
-  time: "28:14",
-  wkg: 3.68
-}, {
-  event: "ZRL Division 4",
-  date: "12 May",
-  pos: 1,
-  total: 24,
-  cat: "C",
-  time: "42:08",
-  wkg: 3.11
-}, {
-  event: "Herd Spring R5",
-  date: "10 May",
-  pos: 7,
-  total: 45,
-  cat: "A",
-  time: "18:52",
-  wkg: 4.31
-}, {
-  event: "CRYO Internal",
-  date: "7 May",
-  pos: 1,
-  total: 32,
-  cat: "B",
-  time: "35:20",
-  wkg: 3.84
-}, {
-  event: "ZRL Division 4",
-  date: "5 May",
-  pos: 2,
-  total: 22,
-  cat: "C",
-  time: "41:55",
-  wkg: 3.15
-}];
-const TTT_EVENT = {
-  title: "CRYO-GEN Weekly TTT",
-  date: "Wed 28 May 2026",
-  time: "19:00 UTC",
-  route: "Tempus Fugit",
-  dist: "17.3 km",
-  maxRiders: 40,
-  format: "4-rider teams · best 3 times count",
-  desc: "Sign up by Tue 18:00 UTC. Min 4 riders per team."
-};
-const INIT_RIDES = [{
-  id: 1,
-  title: "Easy Endurance Spin",
-  date: "2026-05-26",
-  time: "07:00 UTC",
-  route: "Watopia Hilly",
-  dist: "45 km",
-  pace: "2.0–2.5 w/kg",
-  max: 25,
-  desc: "Relaxed social spin. No one gets dropped.",
-  cat: "All"
-}, {
-  id: 2,
-  title: "B/C Group Ride",
-  date: "2026-05-27",
-  time: "18:30 UTC",
-  route: "Richmond UCI Circuit",
-  dist: "32 km",
-  pace: "2.5–3.2 w/kg",
-  max: 20,
-  desc: "Steady group ride for B and C riders.",
-  cat: "B/C"
-}, {
-  id: 3,
-  title: "Thursday Night Chaingang",
-  date: "2026-05-29",
-  time: "19:00 UTC",
-  route: "Crit City – Bell Lap",
-  dist: "25 km",
-  pace: "3.5+ w/kg",
-  max: 15,
-  desc: "Fast chaingang. A/B only. No flicking.",
-  cat: "A/B"
-}, {
-  id: 4,
-  title: "Weekend Long Ride",
-  date: "2026-05-31",
-  time: "09:00 UTC",
-  route: "Epic KOM Reverse",
-  dist: "85 km",
-  pace: "2.0–3.0 w/kg",
-  max: 30,
-  desc: "Big base miles. Coffee stop at the top!",
-  cat: "All"
-}];
-function CatBadge({
-  cat
-}) {
-  const c = CAT_COLOR[cat] || "#888";
-  return /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: c + "22",
-      color: c,
-      border: `1px solid ${c}44`,
-      padding: "1px 7px",
-      borderRadius: 4,
-      fontSize: 11,
-      fontWeight: 700
-    }
-  }, cat);
+// ── Storage
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}};
+
+// ── State
+let riders=[], signups=load("cg_s")||[], tttLocked=false;
+let mPage=1, mActiveOnly=false;
+let rides=load("cg_ri")||[
+  {id:1,title:"Easy Endurance Spin",date:"2026-05-26",time:"07:00 UTC",route:"Watopia Hilly",dist:"45 km",pace:"2.0–2.5 w/kg",max:25,desc:"Relaxed social spin. No one gets dropped.",cat:"All"},
+  {id:2,title:"B/C Group Ride",date:"2026-05-27",time:"18:30 UTC",route:"Richmond UCI Circuit",dist:"32 km",pace:"2.5–3.2 w/kg",max:20,desc:"Steady group ride for B and C riders.",cat:"B/C"},
+  {id:3,title:"Thursday Night Chaingang",date:"2026-05-29",time:"19:00 UTC",route:"Crit City – Bell Lap",dist:"25 km",pace:"3.5+ w/kg",max:15,desc:"Fast chaingang. A/B only. No flicking.",cat:"A/B"},
+  {id:4,title:"Weekend Long Ride",date:"2026-05-31",time:"09:00 UTC",route:"Epic KOM Reverse",dist:"85 km",pace:"2.0–3.0 w/kg",max:30,desc:"Big base miles. Coffee stop at the top!",cat:"All"},
+];
+let rsvps=load("cg_r")||{};
+const MOCK=[
+  {id:1,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true},
+  {id:2,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true},
+  {id:3,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true},
+  {id:4,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true},
+  {id:5,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true},
+];
+const RESULTS=[
+  {event:"WTRL TTT S9 W12",date:"14 May",pos:3,total:18,cat:"B",time:"28:14",wkg:3.68},
+  {event:"ZRL Division 4",date:"12 May",pos:1,total:24,cat:"C",time:"42:08",wkg:3.11},
+  {event:"Herd Spring R5",date:"10 May",pos:7,total:45,cat:"A",time:"18:52",wkg:4.31},
+  {event:"CRYO Internal",date:"7 May",pos:1,total:32,cat:"B",time:"35:20",wkg:3.84},
+  {event:"ZRL Division 4",date:"5 May",pos:2,total:22,cat:"C",time:"41:55",wkg:3.15},
+];
+
+// ── Navigation
+function showTab(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
 }
-function StatCard({
-  d,
-  label,
-  value,
-  sub,
-  color = "#00D4FF"
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#0f1623",
-      border: "1px solid rgba(255,255,255,0.08)",
-      borderRadius: 12,
-      padding: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: d,
-    size: 13,
-    color: color
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color,
-      opacity: 0.8
-    }
-  }, label)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 22,
-      fontWeight: 900
-    }
-  }, value), sub && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#6b7280",
-      marginTop: 3
-    }
-  }, sub));
+
+// ── Live Data
+async function loadLive(){
+  setZRA("loading","Connecting…","#FBBF24");
+  try{
+    const r=await fetch("/api/proxy?endpoint=team");
+    if(r.ok){
+      const d=await r.json();
+      if(d.riders&&Array.isArray(d.riders)){
+        riders=d.riders.map(r=>({
+          id:r.riderId,name:r.name,cc:cleanCC(r.country),cat:r.zpCategory||"D",
+          ftp:Math.round(r.zpFTP||0),
+          wkg:r.power?Math.round((r.power.wkg1200||0)*100)/100:0,
+          velo:r.race?.current?.rating?Math.round(r.race.current.rating):0,
+          zraCat:r.race?.current?.mixed?.category||"",
+          ph:ph(r.phenotype?.value),
+          active:!!(r.race?.current?.rating>0),
+        }));
+        setZRA("ok",`Live · ${riders.length} CRYO-GEN riders ✓`,"#10B981");
+        renderAll();
+      }
+    } else { setZRA("error",`Error ${r.status}`,"#EF4444"); renderAll(); }
+  } catch(e){ setZRA("error",e.message,"#EF4444"); renderAll(); }
 }
-function App() {
-  const [tab, setTab] = useState("dashboard");
-  const [sideOpen, setSide] = useState(true);
-  const [showAdmin, setAdmin] = useState(false);
-  const [showRide, setShowRide] = useState(false);
-  const [signups, setSignupsRaw] = useState([]);
-  const [tttLocked, setLocked] = useState(false);
-  const [supName, setSupName] = useState("");
-  const [supCat, setSupCat] = useState("B");
-  const [rides, setRidesRaw] = useState(INIT_RIDES);
-  const [rsvps, setRsvpsRaw] = useState({});
-  const [rsvpId, setRsvpId] = useState(null);
-  const [rsvpName, setRsvpName] = useState("");
-  const [newRide, setNewRide] = useState({
-    title: "",
-    date: "",
-    time: "",
-    route: "",
-    dist: "",
-    pace: "",
-    max: "20",
-    desc: "",
-    cat: "All"
-  });
-  const [mSearch, setMSearch] = useState("");
-  const [mCat, setMCat] = useState("All");
-  const [mActive, setMActive] = useState(false);
-  const [mPage, setMPage] = useState(1);
-  const [liveRiders, setLive] = useState([]);
-  const [liveStatus, setLS] = useState("loading");
-  const [liveMsg, setLM] = useState("Connecting…");
-  const PER = 10;
-  useEffect(() => {
-    const s = load("cg_s");
-    if (s) setSignupsRaw(s);
-    const r = load("cg_r");
-    if (r) setRsvpsRaw(r);
-    const ri = load("cg_ri");
-    if (ri) setRidesRaw(ri);
-    fetchLive();
-  }, []);
-  const setSignups = v => {
-    setSignupsRaw(v);
-    save("cg_s", v);
-  };
-  const setRsvps = v => {
-    setRsvpsRaw(v);
-    save("cg_r", v);
-  };
-  const setRides = v => {
-    setRidesRaw(v);
-    save("cg_ri", v);
-  };
-  const fetchLive = async () => {
-    setLS("loading");
-    setLM("Connecting to ZwiftRacing.app…");
-    try {
-      const r = await fetch("/api/proxy?endpoint=team");
-      if (r.ok) {
-        const d = await r.json();
-        if (d.riders && Array.isArray(d.riders)) {
-          const mapped = mapRiders(d);
-          setLive(mapped);
-          setLS("ok");
-          setLM(`Live · ${mapped.length} CRYO-GEN riders loaded ✓`);
-        } else {
-          setLS("error");
-          setLM("Unexpected response from proxy");
-        }
-      } else {
-        setLS("error");
-        setLM(`Proxy error ${r.status}`);
-      }
-    } catch (e) {
-      setLS("error");
-      setLM(`${e.message}`);
-    }
-  };
-  const members = liveRiders.length > 0 ? liveRiders : MEMBERS;
-  const active = members.filter(m => m.active);
-  const avgVelo = active.length ? Math.round(active.reduce((s, m) => s + m.velo, 0) / active.length) : 0;
-  const catDist = useMemo(() => {
-    const c = {};
-    active.forEach(m => {
-      c[m.cat] = (c[m.cat] || 0) + 1;
-    });
-    return ["A+", "A", "B", "C", "D"].filter(k => c[k]).map(cat => ({
-      cat,
-      count: c[cat]
-    }));
-  }, [active]);
-  const filteredM = useMemo(() => members.filter(m => m.name.toLowerCase().includes(mSearch.toLowerCase()) && (mCat === "All" || m.cat === mCat) && (!mActive || m.active)), [members, mSearch, mCat, mActive]);
-  const pagedM = filteredM.slice((mPage - 1) * PER, mPage * PER);
-  const totalPg = Math.ceil(filteredM.length / PER) || 1;
-  const doSignup = () => {
-    if (!supName.trim()) return;
-    if (tttLocked) {
-      alert("Sign-ups are locked.");
-      return;
-    }
-    if (signups.find(s => s.name.toLowerCase() === supName.toLowerCase())) {
-      alert("Already signed up!");
-      return;
-    }
-    if (signups.length >= TTT_EVENT.maxRiders) {
-      alert("Event is full.");
-      return;
-    }
-    setSignups([...signups, {
-      name: supName.trim(),
-      cat: supCat,
-      ts: new Date().toISOString()
-    }]);
-    setSupName("");
-  };
-  const rmSignup = ts => setSignups(signups.filter(s => s.ts !== ts));
-  const confirmRsvp = id => {
-    if (!rsvpName.trim()) return;
-    const cur = rsvps[id] || [];
-    if (cur.find(r => r.name.toLowerCase() === rsvpName.toLowerCase())) {
-      alert("Already RSVP'd!");
-      return;
-    }
-    setRsvps({
-      ...rsvps,
-      [id]: [...cur, {
-        name: rsvpName.trim(),
-        ts: new Date().toISOString()
-      }]
-    });
-    setRsvpId(null);
-    setRsvpName("");
-  };
-  const cancelRsvp = (id, name) => setRsvps({
-    ...rsvps,
-    [id]: (rsvps[id] || []).filter(r => r.name !== name)
-  });
-  const createRide = () => {
-    if (!newRide.title || !newRide.date) {
-      alert("Title and date required.");
-      return;
-    }
-    setRides([...rides, {
-      ...newRide,
-      id: Date.now(),
-      max: parseInt(newRide.max) || 20
-    }]);
-    setShowRide(false);
-    setNewRide({
-      title: "",
-      date: "",
-      time: "",
-      route: "",
-      dist: "",
-      pace: "",
-      max: "20",
-      desc: "",
-      cat: "All"
-    });
-  };
-  const exportCsv = () => {
-    const rows = [["Name", "Cat", "Signed Up"], ...signups.map(s => [s.name, s.cat, new Date(s.ts).toLocaleString()])];
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(",")).join("\n")], {
-      type: "text/csv"
-    }));
-    a.download = "cryogen_ttt.csv";
-    a.click();
-  };
-  const scol = {
-    idle: "#6b7280",
-    loading: "#FBBF24",
-    ok: "#10B981",
-    error: "#EF4444"
-  }[liveStatus];
-  const NAV = [{
-    id: "dashboard",
-    label: "Dashboard",
-    d: I.chart
-  }, {
-    id: "racing",
-    label: "Racing",
-    d: I.trophy
-  }, {
-    id: "ttt",
-    label: "TTT Sign-Up",
-    d: I.clock
-  }, {
-    id: "rides",
-    label: "Social Rides",
-    d: I.bike
-  }, {
-    id: "members",
-    label: "Members",
-    d: I.users
-  }];
-  const S = {
-    card: {
-      background: "#0f1623",
-      border: "1px solid rgba(255,255,255,0.08)",
-      borderRadius: 12
-    },
-    inp: {
-      width: "100%",
-      background: "rgba(255,255,255,0.06)",
-      border: "1px solid rgba(255,255,255,0.12)",
-      borderRadius: 8,
-      padding: "9px 12px",
-      color: "white",
-      fontSize: 13,
-      outline: "none"
-    },
-    td: {
-      padding: "11px 18px",
-      borderBottom: "1px solid rgba(255,255,255,0.04)",
-      color: "white"
-    },
-    th: {
-      padding: "9px 18px",
-      textAlign: "left",
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em",
-      color: "#6b7280",
-      borderBottom: "1px solid rgba(255,255,255,0.07)"
-    },
-    lbl: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em",
-      color: "#6b7280",
-      display: "block",
-      marginBottom: 5
-    },
-    btn: active => ({
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "7px 14px",
-      background: active ? "rgba(0,212,255,0.1)" : "rgba(255,255,255,0.05)",
-      border: active ? "1px solid rgba(0,212,255,0.2)" : "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 8,
-      color: active ? "#00D4FF" : "#9ca3af",
-      fontSize: 12,
-      cursor: "pointer"
-    })
-  };
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      minHeight: "100vh",
-      display: "flex",
-      background: "#080c18"
-    }
-  }, /*#__PURE__*/React.createElement("aside", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      flexShrink: 0,
-      width: sideOpen ? 220 : 52,
-      background: "#070b17",
-      borderRight: "1px solid rgba(255,255,255,0.07)",
-      transition: "width 0.2s",
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 14,
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      minWidth: 52
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 28,
-      height: 28,
-      borderRadius: 8,
-      background: "linear-gradient(135deg,#00D4FF,#0066CC)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 10,
-      fontWeight: 900,
-      color: "#000",
-      flexShrink: 0
-    }
-  }, "CG"), sideOpen && /*#__PURE__*/React.createElement("div", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      fontWeight: 900,
-      color: "white"
-    }
-  }, "CRYO-GEN"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#4b5563"
-    }
-  }, "Cycling Club"))), /*#__PURE__*/React.createElement("nav", {
-    style: {
-      flex: 1,
-      padding: 8
-    }
-  }, NAV.map(({
-    id,
-    label,
-    d
-  }) => /*#__PURE__*/React.createElement("button", {
-    key: id,
-    onClick: () => setTab(id),
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      padding: "10px 12px",
-      borderRadius: 8,
-      border: tab === id ? "1px solid rgba(0,212,255,0.2)" : "1px solid transparent",
-      background: tab === id ? "rgba(0,212,255,0.08)" : "transparent",
-      color: tab === id ? "#00D4FF" : "#6b7280",
-      cursor: "pointer",
-      marginBottom: 2,
-      textAlign: "left",
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: d,
-    size: 15,
-    color: tab === id ? "#00D4FF" : "#6b7280"
-  }), sideOpen && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 600
-    }
-  }, label)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 8,
-      borderTop: "1px solid rgba(255,255,255,0.06)"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setAdmin(true),
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      padding: "10px 12px",
-      borderRadius: 8,
-      border: "1px solid transparent",
-      background: "transparent",
-      color: "#4b5563",
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.settings,
-    size: 15,
-    color: "#4b5563"
-  }), sideOpen && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 600
-    }
-  }, "Admin")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setSide(o => !o),
-    style: {
-      width: "100%",
-      display: "flex",
-      justifyContent: "center",
-      padding: 8,
-      border: "none",
-      background: "transparent",
-      color: "#374151",
-      cursor: "pointer",
-      marginTop: 4
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.chevron,
-    size: 13,
-    color: "#374151",
-    style: {
-      transform: sideOpen ? "rotate(180deg)" : "none",
-      transition: "transform 0.2s"
-    }
-  })))), /*#__PURE__*/React.createElement("main", {
-    style: {
-      flex: 1,
-      overflow: "auto",
-      padding: 32
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 960,
-      margin: "0 auto"
-    }
-  }, tab === "dashboard" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontSize: 20,
-      fontWeight: 900,
-      margin: 0,
-      color: "white"
-    }
-  }, "Team Overview"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: "#6b7280",
-      marginTop: 4
-    }
-  }, "ZwiftPower \xB7 ZwiftRacing.app", liveRiders.length > 0 ? " · live ✓" : "")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(4,1fr)",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement(StatCard, {
-    d: I.users,
-    label: "Active Riders",
-    value: active.length,
-    sub: liveRiders.length > 0 ? `${liveRiders.length} in API` : "mock data",
-    color: "#00D4FF"
-  }), /*#__PURE__*/React.createElement(StatCard, {
-    d: I.clock,
-    label: "TTT Signups",
-    value: `${signups.length}/${TTT_EVENT.maxRiders}`,
-    sub: "Wed 28 May \xB7 19:00 UTC",
-    color: "#10B981"
-  }), /*#__PURE__*/React.createElement(StatCard, {
-    d: I.bike,
-    label: "Upcoming Rides",
-    value: rides.length,
-    sub: "Next ride coming up",
-    color: "#8B5CF6"
-  }), /*#__PURE__*/React.createElement(StatCard, {
-    d: I.trending,
-    label: "Avg Team vELO",
-    value: avgVelo || "—",
-    sub: liveRiders.length > 0 ? "Live" : "mock data",
-    color: "#F59E0B"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "2fr 1fr",
-      gap: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...S.card,
-      padding: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color: "#6b7280",
-      marginBottom: 16
-    }
-  }, "Team Avg vELO \u2014 Last 8 Weeks"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
-    width: "100%",
-    height: 150
-  }, /*#__PURE__*/React.createElement(LineChart, {
-    data: VELO_TREND,
-    margin: {
-      top: 5,
-      right: 10,
-      left: 0,
-      bottom: 5
-    }
-  }, /*#__PURE__*/React.createElement(CartesianGrid, {
-    strokeDasharray: "3 3",
-    stroke: "rgba(255,255,255,0.05)"
-  }), /*#__PURE__*/React.createElement(XAxis, {
-    dataKey: "w",
-    axisLine: false,
-    tickLine: false,
-    tick: {
-      fontSize: 10,
-      fill: "#6b7280"
-    }
-  }), /*#__PURE__*/React.createElement(YAxis, {
-    domain: [1200, 1400],
-    axisLine: false,
-    tickLine: false,
-    tick: {
-      fontSize: 10,
-      fill: "#6b7280"
-    }
-  }), /*#__PURE__*/React.createElement(Tooltip, {
-    contentStyle: TT_STYLE,
-    labelStyle: {
-      color: "#fff"
-    },
-    itemStyle: {
-      color: "#00D4FF"
-    }
-  }), /*#__PURE__*/React.createElement(Line, {
-    type: "monotone",
-    dataKey: "v",
-    name: "vELO",
-    stroke: "#00D4FF",
-    strokeWidth: 2.5,
-    dot: {
-      fill: "#00D4FF",
-      r: 3,
-      strokeWidth: 0
-    }
-  })))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...S.card,
-      padding: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color: "#6b7280",
-      marginBottom: 12
-    }
-  }, "Top 5 by vELO"), [...active].sort((a, b) => b.velo - a.velo).slice(0, 5).map((m, i) => /*#__PURE__*/React.createElement("div", {
-    key: m.id || i,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 9
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#4b5563",
-      width: 14
-    }
-  }, i + 1), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: "white"
-    }
-  }, m.name.split(" ")[0]), /*#__PURE__*/React.createElement(CatBadge, {
-    cat: m.cat
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontFamily: "monospace",
-      color: "#00D4FF",
-      fontWeight: 700
-    }
-  }, m.velo))))), /*#__PURE__*/React.createElement("div", {
-    style: S.card
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "12px 18px",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color: "#6b7280"
-    }
-  }, "Recent Team Results"), /*#__PURE__*/React.createElement("table", {
-    style: {
-      width: "100%",
-      borderCollapse: "collapse"
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Event", "Date", "Cat", "Result", "Time", "W/kg"].map(h => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: S.th
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, RESULTS.map((r, i) => /*#__PURE__*/React.createElement("tr", {
-    key: i
-  }, /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("strong", null, r.event)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      color: "#6b7280",
-      fontSize: 12
-    }
-  }, r.date), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement(CatBadge, {
-    cat: r.cat
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      color: r.pos <= 3 ? "#FBBF24" : "#9ca3af",
-      fontWeight: 700
-    }
-  }, r.pos <= 3 ? "🏆 " : "", r.pos, "/", r.total), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      color: "#9ca3af"
-    }
-  }, r.time), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      color: "#00D4FF",
-      fontWeight: 700
-    }
-  }, r.wkg))))))), tab === "racing" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontSize: 20,
-      fontWeight: 900,
-      margin: 0,
-      color: "white"
-    }
-  }, "Racing Dashboard"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: "#6b7280",
-      marginTop: 4
-    }
-  }, "ZwiftPower \xB7 ZwiftRacing.app")), /*#__PURE__*/React.createElement("button", {
-    onClick: fetchLive,
-    style: S.btn(false)
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.refresh,
-    size: 12,
-    color: "#9ca3af"
-  }), " Refresh")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...S.card,
-      padding: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: "50%",
-      background: "#FBBF24",
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      fontWeight: 700,
-      color: "white"
-    }
-  }, "ZwiftPower ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "#6b7280",
-      fontWeight: 400,
-      fontSize: 11
-    }
-  }, "\xB7 Team 2740")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#6b7280",
-      marginTop: 2
-    }
-  }, "Engineering API access in progress \xB7 mock data"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...S.card,
-      padding: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: "50%",
-      background: scol,
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      fontWeight: 700,
-      color: "white"
-    }
-  }, "ZwiftRacing.app ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "#6b7280",
-      fontWeight: 400,
-      fontSize: 11
-    }
-  }, "\xB7 ", liveStatus)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#6b7280",
-      marginTop: 2
-    }
-  }, liveMsg)))), /*#__PURE__*/React.createElement("div", {
-    style: S.card
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "12px 18px",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color: "#6b7280"
-    }
-  }, "Rider Rankings \u2014 vELO"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      color: liveRiders.length > 0 ? "#10B981" : "#4b5563",
-      background: "rgba(255,255,255,0.04)",
-      padding: "2px 8px",
-      borderRadius: 99
-    }
-  }, liveRiders.length > 0 ? `${liveRiders.length} riders · live ✓` : "Mock · pending live API")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    style: {
-      width: "100%",
-      borderCollapse: "collapse"
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["#", "Rider", "Cat", "FTP", "W/kg", "vELO", "Phenotype"].map(h => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: S.th
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, [...active].sort((a, b) => b.velo - a.velo).map((m, i) => /*#__PURE__*/React.createElement("tr", {
-    key: m.id || i
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      color: "#4b5563",
-      fontSize: 11,
-      fontFamily: "monospace"
-    }
-  }, i + 1), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginRight: 6
-    }
-  }, toFlag(m.cc)), m.name), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement(CatBadge, {
-    cat: m.cat
-  }), m.zraCat && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      color: ZRA_COLOR[m.zraCat] || "#9ca3af",
-      fontWeight: 700
-    }
-  }, m.zraCat))), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#6b7280"
-    }
-  }, m.ftp, "w"), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#00D4FF",
-      fontWeight: 700
-    }
-  }, m.wkg), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 56,
-      height: 4,
-      background: "rgba(255,255,255,0.08)",
-      borderRadius: 2
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: `${Math.min(m.velo / 3500 * 100, 100)}%`,
-      height: "100%",
-      background: "#00D4FF",
-      borderRadius: 2
-    }
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#9ca3af"
-    }
-  }, m.velo))), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontSize: 12,
-      color: "#6b7280"
-    }
-  }, PH_EMOJI[m.ph] || "⭐", " ", m.ph))))))), catDist.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...S.card,
-      padding: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.1em",
-      color: "#6b7280",
-      marginBottom: 12
-    }
-  }, "Category Distribution"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
-    width: "100%",
-    height: 120
-  }, /*#__PURE__*/React.createElement(BarChart, {
-    data: catDist,
-    margin: {
-      top: 0,
-      right: 0,
-      left: 0,
-      bottom: 0
-    }
-  }, /*#__PURE__*/React.createElement(CartesianGrid, {
-    strokeDasharray: "3 3",
-    stroke: "rgba(255,255,255,0.05)",
-    vertical: false
-  }), /*#__PURE__*/React.createElement(XAxis, {
-    dataKey: "cat",
-    axisLine: false,
-    tickLine: false,
-    tick: {
-      fontSize: 11,
-      fill: "#6b7280"
-    }
-  }), /*#__PURE__*/React.createElement(YAxis, {
-    axisLine: false,
-    tickLine: false,
-    tick: {
-      fontSize: 10,
-      fill: "#6b7280"
-    },
-    allowDecimals: false
-  }), /*#__PURE__*/React.createElement(Tooltip, {
-    contentStyle: TT_STYLE,
-    labelStyle: {
-      color: "#fff"
-    },
-    itemStyle: {
-      color: "#ccc"
-    }
-  }), /*#__PURE__*/React.createElement(Bar, {
-    dataKey: "count",
-    name: "Riders",
-    radius: [4, 4, 0, 0]
-  }, catDist.map(e => /*#__PURE__*/React.createElement(Cell, {
-    key: e.cat,
-    fill: CAT_COLOR[e.cat]
-  }))))))), tab === "ttt" && (() => {
-    const byCat = ["A+", "A", "B", "C", "D"].reduce((a, cat) => {
-      const r = signups.filter(s => s.cat === cat);
-      if (r.length) a.push({
-        cat,
-        r
-      });
-      return a;
-    }, []);
-    const pct = Math.min(signups.length / TTT_EVENT.maxRiders * 100, 100);
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        gap: 24
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: 10
-      }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-      style: {
-        fontSize: 20,
-        fontWeight: 900,
-        margin: 0,
-        color: "white"
-      }
-    }, "TTT Sign-Up"), /*#__PURE__*/React.createElement("p", {
-      style: {
-        fontSize: 13,
-        color: "#6b7280",
-        marginTop: 4
-      }
-    }, "Weekly Team Time Trial")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      onClick: () => setLocked(l => !l),
-      style: S.btn(tttLocked)
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: tttLocked ? I.lock : I.unlock,
-      size: 11
-    }), tttLocked ? "Locked" : "Lock"), /*#__PURE__*/React.createElement("button", {
-      onClick: exportCsv,
-      style: S.btn(false)
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: I.download,
-      size: 11
-    }), "Export CSV"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: "rgba(0,80,120,0.2)",
-        border: "1px solid rgba(0,212,255,0.15)",
-        borderRadius: 12,
-        padding: 20
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        marginBottom: 12,
-        flexWrap: "wrap",
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        color: "#00D4FF",
-        textTransform: "uppercase",
-        letterSpacing: "0.1em",
-        marginBottom: 4
-      }
-    }, "This Week"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 18,
-        fontWeight: 900,
-        color: "white"
-      }
-    }, TTT_EVENT.title), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        color: "#9ca3af",
-        marginTop: 4
-      }
-    }, TTT_EVENT.desc)), tttLocked && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        background: "rgba(239,68,68,0.15)",
-        color: "#f87171",
-        border: "1px solid rgba(239,68,68,0.3)",
-        padding: "4px 10px",
-        borderRadius: 6
-      }
-    }, "LOCKED")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "6px 20px",
-        marginBottom: 16
-      }
-    }, [{
-      d: I.calendar,
-      v: TTT_EVENT.date
-    }, {
-      d: I.clock,
-      v: TTT_EVENT.time
-    }, {
-      d: I.pin,
-      v: TTT_EVENT.route
-    }, {
-      d: I.activity,
-      v: TTT_EVENT.dist
-    }, {
-      d: I.zap,
-      v: TTT_EVENT.format
-    }].map(({
-      d,
-      v
-    }) => /*#__PURE__*/React.createElement("span", {
-      key: v,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        fontSize: 12,
-        color: "#9ca3af"
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: d,
-      size: 11,
-      color: "#00D4FF"
-    }), v))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        fontSize: 11,
-        color: "#6b7280",
-        marginBottom: 6
-      }
-    }, /*#__PURE__*/React.createElement("span", null, signups.length, " signed up"), /*#__PURE__*/React.createElement("span", null, TTT_EVENT.maxRiders - signups.length, " spots left")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 6,
-        background: "rgba(255,255,255,0.08)",
-        borderRadius: 3
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: `${pct}%`,
-        height: "100%",
-        background: "#00D4FF",
-        borderRadius: 3,
-        transition: "width 0.3s"
-      }
-    }))), !tttLocked && /*#__PURE__*/React.createElement("div", {
-      style: {
-        ...S.card,
-        padding: 16
-      }
-    }, /*#__PURE__*/React.createElement("label", {
-      style: {
-        ...S.lbl,
-        marginBottom: 10
-      }
-    }, "Sign Me Up"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap"
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      value: supName,
-      onChange: e => setSupName(e.target.value),
-      onKeyDown: e => e.key === "Enter" && doSignup(),
-      placeholder: "Your Zwift display name",
-      style: {
-        ...S.inp,
-        flex: 1,
-        minWidth: 180
-      }
-    }), /*#__PURE__*/React.createElement("select", {
-      value: supCat,
-      onChange: e => setSupCat(e.target.value),
-      style: {
-        ...S.inp,
-        width: 65
-      }
-    }, ["A+", "A", "B", "C", "D"].map(c => /*#__PURE__*/React.createElement("option", {
-      key: c
-    }, c))), /*#__PURE__*/React.createElement("button", {
-      onClick: doSignup,
-      style: {
-        padding: "9px 20px",
-        background: "#06b6d4",
-        color: "#000",
-        fontWeight: 700,
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 13
-      }
-    }, "Sign Up"))), signups.length === 0 ? /*#__PURE__*/React.createElement("div", {
-      style: {
-        ...S.card,
-        padding: 40,
-        textAlign: "center",
-        color: "#4b5563",
-        fontSize: 14
-      }
-    }, "No riders yet \u2014 be the first! \uD83D\uDEB4") : byCat.map(({
-      cat,
-      r
-    }) => /*#__PURE__*/React.createElement("div", {
-      key: cat,
-      style: S.card
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        padding: "10px 16px",
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
-        display: "flex",
-        alignItems: "center",
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement(CatBadge, {
-      cat: cat
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#6b7280"
-      }
-    }, r.length, " rider", r.length !== 1 ? "s" : "")), r.map(s => /*#__PURE__*/React.createElement("div", {
-      key: s.ts,
-      style: {
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderBottom: "1px solid rgba(255,255,255,0.04)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 10
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: I.check,
-      size: 13,
-      color: "#10B981"
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 13,
-        color: "white"
-      }
-    }, s.name)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 12
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#4b5563"
-      }
-    }, fmtDate(s.ts)), /*#__PURE__*/React.createElement("button", {
-      onClick: () => rmSignup(s.ts),
-      style: {
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        color: "#4b5563",
-        padding: 0,
-        display: "flex"
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: I.x,
-      size: 13,
-      color: "#4b5563"
-    }))))))));
-  })(), tab === "rides" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontSize: 20,
-      fontWeight: 900,
-      margin: 0,
-      color: "white"
-    }
-  }, "Social Rides"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: "#6b7280",
-      marginTop: 4
-    }
-  }, "Sign up \xB7 replaces WhatsApp")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowRide(true),
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "8px 16px",
-      background: "#06b6d4",
-      color: "#000",
-      fontWeight: 700,
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontSize: 13
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.plus,
-    size: 14,
-    color: "#000"
-  }), " New Ride")), [...rides].sort((a, b) => new Date(a.date) - new Date(b.date)).map(ride => {
-    const att = rsvps[ride.id] || [];
-    const left = ride.max - att.length;
-    const pct = Math.min(att.length / ride.max * 100, 100);
-    return /*#__PURE__*/React.createElement("div", {
-      key: ride.id,
-      style: {
-        ...S.card,
-        padding: 20
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 16,
-        marginBottom: 10,
-        flexWrap: "wrap"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 6,
-        marginBottom: 6,
-        flexWrap: "wrap"
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        background: "rgba(255,255,255,0.06)",
-        color: "#9ca3af",
-        border: "1px solid rgba(255,255,255,0.1)",
-        padding: "1px 8px",
-        borderRadius: 99
-      }
-    }, ride.cat), left <= 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        background: "rgba(239,68,68,0.12)",
-        color: "#f87171",
-        border: "1px solid rgba(239,68,68,0.25)",
-        padding: "1px 8px",
-        borderRadius: 99
-      }
-    }, "Full"), left > 0 && left <= 3 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        background: "rgba(251,191,36,0.12)",
-        color: "#fbbf24",
-        border: "1px solid rgba(251,191,36,0.25)",
-        padding: "1px 8px",
-        borderRadius: 99
-      }
-    }, "Almost Full")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 15,
-        fontWeight: 700,
-        color: "white"
-      }
-    }, ride.title), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 12,
-        color: "#6b7280",
-        marginTop: 4
-      }
-    }, ride.desc)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "right"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        fontWeight: 700,
-        color: "white"
-      }
-    }, new Date(ride.date + "T00:00:00").toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short"
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: "#6b7280",
-        marginTop: 2
-      }
-    }, ride.time))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "4px 16px",
-        marginBottom: 10
-      }
-    }, [{
-      d: I.pin,
-      v: ride.route
-    }, {
-      d: I.activity,
-      v: ride.dist
-    }, {
-      d: I.zap,
-      v: ride.pace
-    }, {
-      d: I.users,
-      v: `${att.length}/${ride.max}`
-    }].map(({
-      d,
-      v
-    }) => /*#__PURE__*/React.createElement("span", {
-      key: v,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 11,
-        color: "#6b7280"
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: d,
-      size: 10,
-      color: "#00D4FF"
-    }), v))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 3,
-        background: "rgba(255,255,255,0.07)",
-        borderRadius: 2,
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: `${pct}%`,
-        height: "100%",
-        background: pct > 85 ? "#EF4444" : "#00D4FF",
-        borderRadius: 2
-      }
-    })), att.length > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 5,
-        marginBottom: 10
-      }
-    }, att.slice(0, 8).map((r, i) => /*#__PURE__*/React.createElement("button", {
-      key: i,
-      onClick: () => cancelRsvp(ride.id, r.name),
-      title: "Click to cancel",
-      style: {
-        fontSize: 11,
-        background: "rgba(255,255,255,0.05)",
-        color: "#9ca3af",
-        border: "1px solid rgba(255,255,255,0.08)",
-        padding: "2px 10px",
-        borderRadius: 99,
-        cursor: "pointer"
-      }
-    }, r.name)), att.length > 8 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#4b5563",
-        alignSelf: "center"
-      }
-    }, "+", att.length - 8, " more")), rsvpId === ride.id ? /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap"
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      value: rsvpName,
-      onChange: e => setRsvpName(e.target.value),
-      onKeyDown: e => e.key === "Enter" && confirmRsvp(ride.id),
-      placeholder: "Your name",
-      autoFocus: true,
-      style: {
-        ...S.inp,
-        flex: 1,
-        minWidth: 150,
-        borderColor: "rgba(0,212,255,0.4)"
-      }
-    }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => confirmRsvp(ride.id),
-      style: {
-        padding: "9px 18px",
-        background: "#06b6d4",
-        color: "#000",
-        fontWeight: 700,
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 13
-      }
-    }, "Confirm"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setRsvpId(null);
-        setRsvpName("");
-      },
-      style: {
-        padding: "9px 12px",
-        background: "rgba(255,255,255,0.05)",
-        color: "#9ca3af",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 8,
-        cursor: "pointer"
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      d: I.x,
-      size: 14,
-      color: "#9ca3af"
-    }))) : /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setRsvpId(ride.id);
-        setRsvpName("");
-      },
-      style: {
-        width: "100%",
-        padding: "9px 0",
-        borderRadius: 8,
-        fontWeight: 700,
-        fontSize: 13,
-        cursor: "pointer",
-        background: left <= 0 ? "rgba(255,255,255,0.04)" : "rgba(0,212,255,0.1)",
-        color: left <= 0 ? "#6b7280" : "#00D4FF",
-        border: `1px solid ${left <= 0 ? "rgba(255,255,255,0.06)" : "rgba(0,212,255,0.2)"}`
-      }
-    }, left <= 0 ? "Join Waitlist" : "RSVP →"));
-  })), tab === "members" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontSize: 20,
-      fontWeight: 900,
-      margin: 0,
-      color: "white"
-    }
-  }, "Members"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: "#6b7280",
-      marginTop: 4
-    }
-  }, "Showing ", filteredM.length, liveRiders.length > 0 ? ` of ${liveRiders.length} live riders` : " (mock data)")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative",
-      flex: 1,
-      minWidth: 180
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.search,
-    size: 13,
-    color: "#6b7280",
-    style: {
-      position: "absolute",
-      left: 10,
-      top: "50%",
-      transform: "translateY(-50%)"
-    }
-  }), /*#__PURE__*/React.createElement("input", {
-    value: mSearch,
-    onChange: e => {
-      setMSearch(e.target.value);
-      setMPage(1);
-    },
-    placeholder: "Search by name\u2026",
-    style: {
-      ...S.inp,
-      paddingLeft: 30
-    }
-  })), /*#__PURE__*/React.createElement("select", {
-    value: mCat,
-    onChange: e => {
-      setMCat(e.target.value);
-      setMPage(1);
-    },
-    style: {
-      ...S.inp,
-      width: 80
-    }
-  }, ["All", "A+", "A", "B", "C", "D"].map(c => /*#__PURE__*/React.createElement("option", {
-    key: c
-  }, c))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setMActive(a => !a);
-      setMPage(1);
-    },
-    style: S.btn(mActive)
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.activity,
-    size: 13,
-    color: mActive ? "#00D4FF" : "#9ca3af"
-  }), " Active only")), /*#__PURE__*/React.createElement("div", {
-    style: S.card
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    style: {
-      width: "100%",
-      borderCollapse: "collapse"
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Rider", "Cat", "FTP", "W/kg", "vELO", "Phenotype", "Status"].map(h => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: S.th
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, pagedM.map((m, i) => /*#__PURE__*/React.createElement("tr", {
-    key: m.id || i
-  }, /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginRight: 6
-    }
-  }, toFlag(m.cc)), m.name), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement(CatBadge, {
-    cat: m.cat
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#6b7280"
-    }
-  }, m.ftp, "w"), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#00D4FF",
-      fontWeight: 700
-    }
-  }, m.wkg), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontFamily: "monospace",
-      fontSize: 12,
-      color: "#9ca3af"
-    }
-  }, m.velo), /*#__PURE__*/React.createElement("td", {
-    style: {
-      ...S.td,
-      fontSize: 12,
-      color: "#6b7280"
-    }
-  }, PH_EMOJI[m.ph] || "⭐", " ", m.ph), /*#__PURE__*/React.createElement("td", {
-    style: S.td
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      padding: "2px 8px",
-      borderRadius: 99,
-      background: m.active ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)",
-      color: m.active ? "#10B981" : "#4b5563"
-    }
-  }, m.active ? "Active" : "Inactive"))))))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "12px 18px",
-      borderTop: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      color: "#4b5563"
-    }
-  }, "Page ", mPage, " of ", totalPg), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMPage(p => Math.max(1, p - 1)),
-    disabled: mPage === 1,
-    style: {
-      padding: "5px 12px",
-      background: "rgba(255,255,255,0.05)",
-      border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 6,
-      color: "#9ca3af",
-      cursor: "pointer",
-      opacity: mPage === 1 ? 0.3 : 1
-    }
-  }, "\u2190"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMPage(p => Math.min(totalPg, p + 1)),
-    disabled: mPage >= totalPg,
-    style: {
-      padding: "5px 12px",
-      background: "rgba(255,255,255,0.05)",
-      border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 6,
-      color: "#9ca3af",
-      cursor: "pointer",
-      opacity: mPage >= totalPg ? 0.3 : 1
-    }
-  }, "\u2192"))))))), showAdmin && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.85)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 50,
-      padding: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#0d1322",
-      border: "1px solid rgba(255,255,255,0.12)",
-      borderRadius: 16,
-      width: "100%",
-      maxWidth: 420
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "16px 20px",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.shield,
-    size: 15,
-    color: "#00D4FF"
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 15,
-      color: "white"
-    }
-  }, "Admin")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setAdmin(false),
-    style: {
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      color: "#6b7280",
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.x,
-    size: 16,
-    color: "#6b7280"
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 20,
-      display: "flex",
-      flexDirection: "column",
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "rgba(16,185,129,0.07)",
-      border: "1px solid rgba(16,185,129,0.2)",
-      borderRadius: 10,
-      padding: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      color: "#10B981",
-      marginBottom: 4
-    }
-  }, "\uD83D\uDCE1 Live Data Status"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "#9ca3af"
-    }
-  }, liveMsg)), /*#__PURE__*/React.createElement("button", {
-    onClick: fetchLive,
-    style: {
-      padding: "10px 0",
-      background: "rgba(0,212,255,0.1)",
-      color: "#00D4FF",
-      border: "1px solid rgba(0,212,255,0.2)",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontSize: 13,
-      fontWeight: 700
-    }
-  }, "\u21BB Refresh Live Data Now"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      borderTop: "1px solid rgba(255,255,255,0.07)",
-      paddingTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#ef4444",
-      textTransform: "uppercase",
-      letterSpacing: "0.08em",
-      marginBottom: 8
-    }
-  }, "Danger Zone"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (window.confirm("Clear all TTT sign-ups?")) setSignups([]);
-    },
-    style: {
-      width: "100%",
-      padding: "9px 0",
-      background: "rgba(239,68,68,0.1)",
-      color: "#f87171",
-      border: "1px solid rgba(239,68,68,0.25)",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontSize: 13
-    }
-  }, "Clear All TTT Sign-ups"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "14px 20px",
-      borderTop: "1px solid rgba(255,255,255,0.07)"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setAdmin(false),
-    style: {
-      width: "100%",
-      padding: "11px 0",
-      background: "#06b6d4",
-      color: "#000",
-      fontWeight: 700,
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontSize: 14
-    }
-  }, "Close")))), showRide && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.85)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 50,
-      padding: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#0d1322",
-      border: "1px solid rgba(255,255,255,0.12)",
-      borderRadius: 16,
-      width: "100%",
-      maxWidth: 480
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "16px 20px",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 15,
-      color: "white"
-    }
-  }, "Create New Ride"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowRide(false),
-    style: {
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    d: I.x,
-    size: 16,
-    color: "#6b7280"
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 20,
-      display: "flex",
-      flexDirection: "column",
-      gap: 12,
-      maxHeight: "60vh",
-      overflowY: "auto"
-    }
-  }, [{
-    k: "title",
-    lbl: "Title",
-    ph: "e.g. Thursday Night Chaingang"
-  }, {
-    k: "route",
-    lbl: "Route",
-    ph: "e.g. Watopia Hilly"
-  }, {
-    k: "dist",
-    lbl: "Distance",
-    ph: "e.g. 45 km"
-  }, {
-    k: "pace",
-    lbl: "Pace",
-    ph: "e.g. 2.5–3.2 w/kg"
-  }, {
-    k: "desc",
-    lbl: "Description",
-    ph: "Brief description"
-  }].map(({
-    k,
-    lbl,
-    ph
-  }) => /*#__PURE__*/React.createElement("div", {
-    key: k
-  }, /*#__PURE__*/React.createElement("label", {
-    style: S.lbl
-  }, lbl), /*#__PURE__*/React.createElement("input", {
-    value: newRide[k],
-    onChange: e => setNewRide(r => ({
-      ...r,
-      [k]: e.target.value
-    })),
-    placeholder: ph,
-    style: S.inp
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    style: S.lbl
-  }, "Date"), /*#__PURE__*/React.createElement("input", {
-    type: "date",
-    value: newRide.date,
-    onChange: e => setNewRide(r => ({
-      ...r,
-      date: e.target.value
-    })),
-    style: S.inp
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    style: S.lbl
-  }, "Time (UTC)"), /*#__PURE__*/React.createElement("input", {
-    value: newRide.time,
-    onChange: e => setNewRide(r => ({
-      ...r,
-      time: e.target.value
-    })),
-    placeholder: "19:00 UTC",
-    style: S.inp
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    style: S.lbl
-  }, "Max Riders"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: newRide.max,
-    onChange: e => setNewRide(r => ({
-      ...r,
-      max: e.target.value
-    })),
-    style: S.inp
-  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    style: S.lbl
-  }, "Category"), /*#__PURE__*/React.createElement("select", {
-    value: newRide.cat,
-    onChange: e => setNewRide(r => ({
-      ...r,
-      cat: e.target.value
-    })),
-    style: S.inp
-  }, ["All", "A/B", "B/C", "C/D"].map(c => /*#__PURE__*/React.createElement("option", {
-    key: c
-  }, c))))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "14px 20px",
-      borderTop: "1px solid rgba(255,255,255,0.07)",
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: createRide,
-    style: {
-      flex: 1,
-      padding: "10px 0",
-      background: "#06b6d4",
-      color: "#000",
-      fontWeight: 700,
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontSize: 14
-    }
-  }, "Create Ride"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowRide(false),
-    style: {
-      padding: "10px 18px",
-      background: "rgba(255,255,255,0.05)",
-      color: "#9ca3af",
-      border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontSize: 14
-    }
-  }, "Cancel")))));
+function setZRA(status,msg,color){
+  document.getElementById("zra-dot").style.background=color;
+  document.getElementById("zra-msg").textContent=msg;
+  document.getElementById("admin-msg").textContent=msg;
 }
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+
+// ── Render all
+function renderAll(){
+  const data=riders.length?riders:MOCK;
+  const active=data.filter(m=>m.active);
+  const avg=active.length?Math.round(active.reduce((s,m)=>s+m.velo,0)/active.length):0;
+
+  // Stats
+  document.getElementById("stat-riders").textContent=active.length;
+  document.getElementById("stat-riders-sub").textContent=riders.length?`${riders.length} in API roster`:"mock data";
+  document.getElementById("stat-velo").textContent=avg||"—";
+  document.getElementById("stat-velo-sub").textContent=riders.length?"Live from ZwiftRacing.app":"mock data";
+
+  // Top 5
+  const top5=[...active].sort((a,b)=>b.velo-a.velo).slice(0,5);
+  document.getElementById("top5").innerHTML=top5.map((m,i)=>`
+    <div class="row"><div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:#4b5563;width:14px">${i+1}</span>
+      <span style="font-size:13px">${m.name.split(" ")[0]}</span>
+      ${catBadge(m.cat)}
+    </div><span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">${m.velo}</span></div>
+  `).join("");
+
+  // Cat dist
+  const cats={};active.forEach(m=>{cats[m.cat]=(cats[m.cat]||0)+1;});
+  const catArr=["A+","A","B","C","D"].filter(k=>cats[k]).map(k=>({cat:k,n:cats[k]}));
+  const maxN=Math.max(...catArr.map(x=>x.n));
+  document.getElementById("catdist").innerHTML=`<div style="display:flex;gap:10px;align-items:flex-end;height:80px">
+    ${catArr.map(e=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
+      <span style="font-size:11px;color:#9ca3af">${e.n}</span>
+      <div style="width:100%;height:${Math.round(e.n/maxN*56)+8}px;background:${CAT_COLOR[e.cat]};border-radius:4px 4px 0 0;opacity:.85"></div>
+      <span style="font-size:11px;color:#6b7280">${e.cat}</span>
+    </div>`).join("")}
+  </div>`;
+
+  // Results
+  document.getElementById("results-body").innerHTML=RESULTS.map(r=>`<tr>
+    <td><strong>${r.event}</strong></td>
+    <td style="color:#6b7280;font-size:12px">${r.date}</td>
+    <td>${catBadge(r.cat)}</td>
+    <td style="color:${r.pos<=3?"#FBBF24":"#9ca3af"};font-weight:700">${r.pos<=3?"🏆 ":""}${r.pos}/${r.total}</td>
+    <td style="font-family:monospace;color:#9ca3af">${r.time}</td>
+    <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.wkg}</td>
+  </tr>`).join("");
+
+  // Racing leaderboard
+  document.getElementById("live-badge").textContent=riders.length?`${riders.length} riders · live ✓`:"Mock · pending live API";
+  document.getElementById("live-badge").style.color=riders.length?"#10B981":"#4b5563";
+  document.getElementById("racing-body").innerHTML=[...active].sort((a,b)=>b.velo-a.velo).map((m,i)=>{
+    const barW=Math.min(m.velo/3500*100,100);
+    const zraColor=ZRA_COLOR[m.zraCat]||"#9ca3af";
+    return `<tr>
+      <td style="color:#4b5563;font-family:monospace;font-size:11px">${i+1}</td>
+      <td>${toFlag(m.cc)} ${m.name}</td>
+      <td>${catBadge(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${zraColor};font-weight:700;margin-left:4px">${m.zraCat}</span>`:""}</td>
+      <td style="font-family:monospace;font-size:12px;color:#6b7280">${m.ftp}w</td>
+      <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:56px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px">
+          <div style="width:${barW}%;height:100%;background:#00D4FF;border-radius:2px"></div>
+        </div>
+        <span style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</span>
+      </div></td>
+      <td style="font-size:12px;color:#6b7280">${PH_EMOJI[m.ph]||"⭐"} ${m.ph}</td>
+    </tr>`;
+  }).join("");
+
+  renderMembers();
+  renderTTT();
+  renderRides();
+}
+
+// ── Members
+function renderMembers(){
+  const data=riders.length?riders:MOCK;
+  const search=document.getElementById("m-search").value.toLowerCase();
+  const cat=document.getElementById("m-cat").value;
+  let filtered=data.filter(m=>
+    m.name.toLowerCase().includes(search)&&
+    (cat==="All"||m.cat===cat)&&
+    (!mActiveOnly||m.active)
+  );
+  const PER=10, total=Math.ceil(filtered.length/PER)||1;
+  if(mPage>total)mPage=1;
+  const page=filtered.slice((mPage-1)*PER,mPage*PER);
+  document.getElementById("members-sub").textContent=`Showing ${filtered.length}${riders.length?" of "+riders.length+" live riders":" (mock data)"}`;
+  document.getElementById("members-body").innerHTML=page.map(m=>`<tr>
+    <td>${toFlag(m.cc)} ${m.name}</td>
+    <td>${catBadge(m.cat)}</td>
+    <td style="font-family:monospace;font-size:12px;color:#6b7280">${m.ftp}w</td>
+    <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
+    <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</td>
+    <td style="font-size:12px;color:#6b7280">${PH_EMOJI[m.ph]||"⭐"} ${m.ph}</td>
+    <td><span class="badge" style="background:${m.active?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.04)"};color:${m.active?"#10B981":"#4b5563"}">${m.active?"Active":"Inactive"}</span></td>
+  </tr>`).join("");
+  document.getElementById("page-info").textContent=`Page ${mPage} of ${total}`;
+}
+function toggleMActive(){mActiveOnly=!mActiveOnly;mPage=1;renderMembers();document.getElementById("m-active-btn").style.color=mActiveOnly?"#00D4FF":"#9ca3af";}
+function changePage(d){const data=riders.length?riders:MOCK;const PER=10;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
+
+// ── TTT
+function renderTTT(){
+  const max=40;
+  document.getElementById("ttt-count").textContent=`${signups.length} signed up`;
+  document.getElementById("ttt-left").textContent=`${max-signups.length} spots left`;
+  document.getElementById("ttt-bar").style.width=`${Math.min(signups.length/max*100,100)}%`;
+  document.getElementById("stat-ttt").textContent=`${signups.length}/${max}`;
+  const byCat=["A+","A","B","C","D"].reduce((a,cat)=>{const r=signups.filter(s=>s.cat===cat);if(r.length)a.push({cat,r});return a;},[]);
+  document.getElementById("ttt-list").innerHTML=byCat.length?byCat.map(({cat,r})=>`
+    <div class="card" style="margin-bottom:12px">
+      <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px">${catBadge(cat)}<span style="font-size:11px;color:#6b7280">${r.length} rider${r.length!==1?"s":""}</span></div>
+      ${r.map(s=>`<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <div style="display:flex;align-items:center;gap:10px"><span style="color:#10B981">✓</span><span>${s.name}</span></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:11px;color:#4b5563">${new Date(s.ts).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>
+          <button onclick="rmSignup('${s.ts}')" style="background:none;border:none;color:#4b5563;font-size:16px;line-height:1;padding:0">×</button>
+        </div>
+      </div>`).join("")}
+    </div>`).join(""):`<div class="card" style="padding:40px;text-align:center;color:#4b5563;font-size:14px">No riders yet — be the first! 🚴</div>`;
+}
+function doSignup(){
+  const name=document.getElementById("sup-name").value.trim();
+  const cat=document.getElementById("sup-cat").value;
+  if(!name)return;
+  if(tttLocked){alert("Sign-ups are locked.");return;}
+  if(signups.find(s=>s.name.toLowerCase()===name.toLowerCase())){alert("Already signed up!");return;}
+  if(signups.length>=40){alert("Event is full.");return;}
+  signups.push({name,cat,ts:new Date().toISOString()});
+  save("cg_s",signups);
+  document.getElementById("sup-name").value="";
+  renderTTT();
+}
+function rmSignup(ts){signups=signups.filter(s=>s.ts!==ts);save("cg_s",signups);renderTTT();}
+function toggleLock(){tttLocked=!tttLocked;document.getElementById("lock-btn").textContent=tttLocked?"🔒 Locked":"🔓 Lock";document.getElementById("signup-form").style.display=tttLocked?"none":"block";}
+function exportCsv(){
+  const rows=[["Name","Cat","Signed Up"],...signups.map(s=>[s.name,s.cat,new Date(s.ts).toLocaleString()])];
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));a.download="cryogen_ttt.csv";a.click();
+}
+
+// ── Rides
+function renderRides(){
+  document.getElementById("stat-rides").textContent=rides.length;
+  document.getElementById("rides-list").innerHTML=[...rides].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(ride=>{
+    const att=rsvps[ride.id]||[];const left=ride.max-att.length;const pct=Math.min(att.length/ride.max*100,100);
+    const rsvping=window._rsvpId===ride.id;
+    return `<div class="card" style="padding:20px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.06);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);padding:1px 8px;border-radius:99px">${ride.cat}</span>
+            ${left<=0?'<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:1px 8px;border-radius:99px">Full</span>':""}
+            ${left>0&&left<=3?'<span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:1px 8px;border-radius:99px">Almost Full</span>':""}
+          </div>
+          <div style="font-size:15px;font-weight:700">${ride.title}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px">${ride.desc}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700">${new Date(ride.date+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">${ride.time}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;font-size:11px;color:#6b7280">
+        <span>📍 ${ride.route}</span><span>📏 ${ride.dist}</span><span>⚡ ${ride.pace}</span><span>👥 ${att.length}/${ride.max}</span>
+      </div>
+      <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
+        <div style="width:${pct}%;height:100%;background:${pct>85?"#EF4444":"#00D4FF"};border-radius:2px"></div>
+      </div>
+      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+        ${att.slice(0,8).map(r=>`<button onclick="cancelRsvp(${ride.id},'${r.name}')" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${r.name}</button>`).join("")}
+        ${att.length>8?`<span style="font-size:11px;color:#4b5563;align-self:center">+${att.length-8} more</span>`:""}
+      </div>`:""}
+      ${rsvping?`<div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="rsvp-inp-${ride.id}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(0,212,255,0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(${ride.id})"/>
+        <button onclick="confirmRsvp(${ride.id})" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
+        <button onclick="window._rsvpId=null;renderRides()" style="padding:9px 12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:16px">×</button>
+      </div>`:`<button onclick="window._rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?"rgba(255,255,255,0.04)":"rgba(0,212,255,0.1)"};color:${left<=0?"#6b7280":"#00D4FF"};border:1px solid ${left<=0?"rgba(255,255,255,0.06)":"rgba(0,212,255,0.2)"}">${left<=0?"Join Waitlist":"RSVP →"}</button>`}
+    </div>`;
+  }).join("");
+}
+function confirmRsvp(id){
+  const name=document.getElementById(`rsvp-inp-${id}`).value.trim();
+  if(!name)return;
+  const cur=rsvps[id]||[];
+  if(cur.find(r=>r.name.toLowerCase()===name.toLowerCase())){alert("Already RSVP'd!");return;}
+  rsvps[id]=[...cur,{name,ts:new Date().toISOString()}];
+  save("cg_r",rsvps);window._rsvpId=null;renderRides();
+}
+function cancelRsvp(id,name){rsvps[id]=(rsvps[id]||[]).filter(r=>r.name!==name);save("cg_r",rsvps);renderRides();}
+function createRide(){
+  const title=document.getElementById("nr-title").value.trim();
+  const date=document.getElementById("nr-date").value;
+  if(!title||!date){alert("Title and date required.");return;}
+  const ride={id:Date.now(),title,date,time:document.getElementById("nr-time").value,route:document.getElementById("nr-route").value,dist:document.getElementById("nr-dist").value,pace:document.getElementById("nr-pace").value,max:parseInt(document.getElementById("nr-max").value)||20,desc:document.getElementById("nr-desc").value,cat:document.getElementById("nr-cat").value};
+  rides.push(ride);save("cg_ri",rides);
+  document.getElementById("newRideModal").style.display="none";
+  renderRides();
+}
+
+// ── Init
+window._rsvpId=null;
+renderAll();
+loadLive();
 </script>
 </body>
 </html>
