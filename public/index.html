@@ -203,10 +203,26 @@ table{width:100%;border-collapse:collapse}
       </div>
       <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
     </div>
-    <!-- ZwiftHacks live events -->
-    <div id="zwift-events-list" style="display:none;margin-bottom:20px"></div>
-    <!-- Manual rides -->
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">📅 Club Rides</div>
+    <!-- ZwiftHacks live events embed -->
+    <div class="card" style="margin-bottom:24px;overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🚴 CRYO-GEN Club Events — ZwiftHacks</span>
+        </div>
+        <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:12px;color:#00D4FF;font-weight:700;text-decoration:none">Open full page →</a>
+      </div>
+      <iframe
+        src="https://zwifthacks.com/app/events/?key=6a24978d28168"
+        style="width:100%;height:480px;border:none;display:block;background:#0a0e1a"
+        title="CRYO-GEN Zwift Events"
+        loading="lazy">
+      </iframe>
+      <div style="padding:10px 16px;background:rgba(0,0,0,0.3);font-size:11px;color:#4b5563;text-align:center">
+        Powered by <a href="https://zwifthacks.com" target="_blank" style="color:#6b7280">ZwiftHacks</a> · Events update automatically
+      </div>
+    </div>
+    <!-- Manual RSVP rides -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">📋 RSVP Rides</div>
     <div id="rides-list"></div>
   </div>
 
