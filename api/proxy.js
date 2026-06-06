@@ -20,6 +20,30 @@ async function fetchTeam() {
   return null;
 }
 
+// Recursively search parsed JSON for an events array
+function extractEvents(obj, depth = 0) {
+  if (depth > 6 || !obj || typeof obj !== "object") return null;
+  if (Array.isArray(obj)) {
+    // Check if this looks like an events array
+    if (obj.length > 0 && obj[0] && (obj[0].eventStart || obj[0].name || obj[0].eventName)) {
+      return obj;
+    }
+    for (const item of obj) {
+      const found = extractEvents(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  // Check common event container keys
+  for (const key of ["events", "items", "data", "results", "list", "upcoming", "pageProps", "props"]) {
+    if (obj[key]) {
+      const found = extractEvents(obj[key], depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin",  "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -86,32 +110,57 @@ module.exports = async (req, res) => {
     // ── ZwiftHacks club events ────────────────────────────
     if (endpoint === "events") {
       res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=60");
-      const now   = new Date();
-      const today = now.toISOString().split("T")[0];
-      const next7 = new Date(now.getTime() + 7 * 86400000).toISOString().split("T")[0];
+      const ZH_URL = "https://zwifthacks.com/app/events/?key=" + ZWIFTHACKS_KEY;
 
-      // Try ZwiftHacks events API with the key
-      const urls = [
-        `https://zwifthacks.com/api/events/?sport=cycling&start=${today}&end=${next7}&key=${ZWIFTHACKS_KEY}`,
-        `https://www.zwifthacks.com/api/events/?sport=cycling&start=${today}&key=${ZWIFTHACKS_KEY}`,
-        `https://zwifthacks.com/api/events/?start=${today}&key=${ZWIFTHACKS_KEY}`,
+      // Step 1: Fetch the ZwiftHacks page HTML
+      const page = await fetch(ZH_URL, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-GB,en;q=0.9",
+        }
+      });
+      const html = await page.text();
+
+      // Step 2: Look for embedded JSON data (Next.js, Nuxt, inline state)
+      const patterns = [
+        { name: "next",  re: /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/ },
+        { name: "nuxt",  re: /window\.__NUXT__\s*=\s*([\s\S]*?);\s*<\/script>/ },
+        { name: "state", re: /window\.__STATE__\s*=\s*([\s\S]*?);\s*<\/script>/ },
+        { name: "data",  re: /window\.initialData\s*=\s*([\s\S]*?);\s*<\/script>/ },
       ];
 
-      for (const url of urls) {
-        try {
-          const r = await fetch(url, {
-            headers: { "Accept": "application/json", "User-Agent": "CRYO-GEN-App/1.0" }
-          });
-          if (r.ok) {
-            const ct = r.headers.get("content-type") || "";
-            if (ct.includes("json")) {
-              const data = await r.json();
-              return res.status(200).json({ source: url, data });
+      for (const { name, re } of patterns) {
+        const m = html.match(re);
+        if (m) {
+          try {
+            const parsed = JSON.parse(m[1]);
+            // Dig into common structures to find events array
+            const events = extractEvents(parsed);
+            if (events && events.length > 0) {
+              return res.status(200).json({ source: name, events });
             }
-          }
-        } catch(e) { /* try next */ }
+            // Return raw if we can't extract events but found data
+            return res.status(200).json({ source: name, raw: parsed });
+          } catch(e) { /* try next pattern */ }
+        }
       }
-      return res.status(404).json({ error: "Events not available", hint: "ZwiftHacks API format may have changed" });
+
+      // Step 3: Check if page itself returned JSON
+      try {
+        const json = JSON.parse(html);
+        const events = extractEvents(json);
+        return res.status(200).json({ source: "json", events: events || json });
+      } catch(e) { /* not json */ }
+
+      // Step 4: Return page excerpt for debugging
+      return res.status(200).json({
+        source: "debug",
+        pageLength: html.length,
+        hasScript: html.includes("<script"),
+        hint: "ZwiftHacks is a client-side SPA - event data loads after page render. See pagePreview.",
+        pagePreview: html.substring(0, 500),
+      });
     }
 
     // ── Google Sheets ─────────────────────────────────────
