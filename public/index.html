@@ -771,7 +771,7 @@ function renderRides(){
             ${left<=0?'<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:1px 8px;border-radius:99px">Full</span>':''}
             ${left>0&&left<=4?'<span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:1px 8px;border-radius:99px">Almost Full</span>':''}
           </div>
-          <div style="font-size:15px;font-weight:700">${ride.title}${ride.source==='zwifthacks'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">ZWIFTHACKS</span>':''}</div>
+          <div style="font-size:15px;font-weight:700">${ride.title}${ride.source==='sheet'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">SHEET</span>':''}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:4px">${ride.desc||''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -793,7 +793,7 @@ function renderRides(){
           <button onclick="confirmRsvp(${ride.id})" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
           <button onclick="rsvpId=null;renderRides()" style="padding:9px 12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px">×</button>
         </div>`:
-        ride.source==='zwifthacks'
+        ride.source==='sheet'&&ride.link
           ? `<a href="${ride.link}" target="_blank" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
           : `<button onclick="rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
     </div>`;
@@ -944,59 +944,51 @@ function renderResults(){
   if(hdr) hdr.textContent = 'Recent Rider Activity — Live from ZwiftRacing.app';
 }
 
-// ── ZwiftHacks Events ──────────────────────────────────────
-let zwiftEventRides = []; // events fetched from ZwiftHacks, shown in RSVP section
+// ── Club Rides from Google Sheet ───────────────────────────
+let zwiftEventRides = [];
 
 async function loadZwiftEvents(){
-  const syncBtn = document.getElementById('zh-sync-btn');
-  if(syncBtn) syncBtn.textContent = '↻ Syncing…';
+  const btn = document.getElementById('zh-sync-btn');
+  const status = document.getElementById('zh-status');
+  if(btn) { btn.textContent='↻ Syncing…'; btn.disabled=true; }
   try{
-    const r = await fetch('/api/proxy?endpoint=events');
+    const r = await fetch('/api/proxy?endpoint=rides');
     const d = await r.json();
-
-    if(d.source === 'debug'){
-      // ZwiftHacks is a client-side app — data not in page HTML
-      // Fall back to manual rides only
-      console.log('ZwiftHacks: client-side SPA, cannot scrape. Use iframe view.');
-      if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; syncBtn.style.color='#FBBF24'; }
-      showZhStatus('ZwiftHacks events visible in the calendar above. Sync via iframe not supported — add rides manually below.', '#FBBF24');
+    if(d.error){
+      showZhStatus('⚠️ '+d.error, '#FBBF24');
+      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
       return;
     }
-
-    if(d.events && d.events.length > 0){
-      zwiftEventRides = d.events.map(ev=>{
-        const start = ev.eventStart || ev.start || '';
-        const dt = start ? new Date(start) : null;
-        return {
-          id: 'zh_' + (ev.id || Math.random()),
-          title: ev.name || ev.eventName || ev.title || 'Zwift Event',
-          date: dt ? dt.toISOString().split('T')[0] : '',
-          time: dt ? dt.toUTCString().slice(17,22) + ' UTC' : '',
-          route: ev.routeName || ev.route || '',
-          dist: ev.distanceInMeters ? (ev.distanceInMeters/1000).toFixed(1)+' km' : (ev.laps ? ev.laps+' laps' : ''),
-          pace: ev.rulesSet || '',
-          max: ev.totalEntrantCount || ev.maxSize || 50,
-          desc: ev.description || '',
-          cat: ev.category || 'All',
-          link: 'https://www.zwift.com/events/view/' + ev.id,
-          source: 'zwifthacks',
-        };
-      });
-      if(syncBtn){ syncBtn.textContent = `✓ ${zwiftEventRides.length} events synced`; syncBtn.style.color='#10B981'; }
-      showZhStatus(`${zwiftEventRides.length} events loaded from ZwiftHacks`, '#10B981');
+    if(d.rides && d.rides.length > 0){
+      zwiftEventRides = d.rides.map((row,i)=>({
+        id: 'gs_'+i,
+        title:  row['Title']       || row['title']       || 'Club Ride',
+        date:   row['Date']        || row['date']        || '',
+        time:   row['Time']        || row['time']        || '',
+        route:  row['Route']       || row['route']       || '',
+        dist:   row['Distance']    || row['distance']    || '',
+        pace:   row['Pace']        || row['pace']        || '',
+        max:    parseInt(row['Max'] || row['max'] || row['MaxRiders'] || '30'),
+        desc:   row['Description'] || row['description'] || '',
+        cat:    row['Category']    || row['category']    || 'All',
+        link:   row['ZwiftLink']   || row['zwiftlink']   || row['Link'] || '',
+        source: 'sheet',
+      }));
+      showZhStatus(`✓ ${zwiftEventRides.length} rides loaded from Google Sheet · ${new Date(d.updated).toLocaleTimeString()}`, '#10B981');
+      if(btn){ btn.textContent=`✓ ${zwiftEventRides.length} rides synced`; btn.disabled=false; }
       renderRides();
     } else {
-      if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; }
-      showZhStatus('No events found — ZwiftHacks may need a different approach', '#FBBF24');
+      showZhStatus('Sheet tab "Social Rides" is empty — add rides to your Google Sheet', '#FBBF24');
+      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
     }
   } catch(e){
-    if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; }
-    console.log('ZwiftHacks sync error:', e.message);
+    showZhStatus('Sync failed: '+e.message, '#EF4444');
+    if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
   }
 }
-function showZhStatus(msg, color){
-  const el = document.getElementById('zh-status');
-  if(el){ el.textContent = msg; el.style.color = color; el.style.display='block'; }
+function showZhStatus(msg,color){
+  const el=document.getElementById('zh-status');
+  if(el){ el.textContent=msg; el.style.color=color||'#9ca3af'; el.style.display='block'; }
 }
 
 // ── Google Sheet Sync ─────────────────────────────────────
