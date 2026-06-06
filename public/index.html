@@ -203,26 +203,27 @@ table{width:100%;border-collapse:collapse}
       </div>
       <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
     </div>
-    <!-- ZwiftHacks live events embed -->
-    <div class="card" style="margin-bottom:24px;overflow:hidden">
+    <!-- ZwiftHacks calendar + sync -->
+    <div class="card" style="margin-bottom:20px;overflow:hidden">
       <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div>
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🚴 CRYO-GEN Club Events — ZwiftHacks</span>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="zh-sync-btn" onclick="loadZwiftEvents()" style="padding:5px 12px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:6px;color:#00D4FF;font-size:11px;font-weight:700">↻ Sync Events</button>
+          <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#6b7280;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
         </div>
-        <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:12px;color:#00D4FF;font-weight:700;text-decoration:none">Open full page →</a>
       </div>
-      <iframe
-        src="https://zwifthacks.com/app/events/?key=6a24978d28168"
-        style="width:100%;height:480px;border:none;display:block;background:#0a0e1a"
-        title="CRYO-GEN Zwift Events"
-        loading="lazy">
-      </iframe>
-      <div style="padding:10px 16px;background:rgba(0,0,0,0.3);font-size:11px;color:#4b5563;text-align:center">
-        Powered by <a href="https://zwifthacks.com" target="_blank" style="color:#6b7280">ZwiftHacks</a> · Events update automatically
+      <iframe src="https://zwifthacks.com/app/events/?key=6a24978d28168"
+        style="width:100%;height:420px;border:none;display:block;background:#0a0e1a"
+        title="CRYO-GEN Zwift Events" loading="lazy"></iframe>
+      <div style="padding:8px 16px;background:rgba(0,0,0,0.3)">
+        <span id="zh-status" style="font-size:11px;display:none"></span>
       </div>
     </div>
-    <!-- Manual RSVP rides -->
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">📋 RSVP Rides</div>
+    <!-- RSVP section — merges ZwiftHacks events + manual rides -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
+      <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
+    </div>
     <div id="rides-list"></div>
   </div>
 
@@ -441,6 +442,7 @@ function showTab(id,btn){
   btn.classList.add('active');
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
+  if(id==='rides')loadZwiftEvents();
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -757,7 +759,9 @@ function exportSeriesCsv(series){
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
-  document.getElementById('rides-list').innerHTML=[...rides].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(ride=>{
+  // Merge ZwiftHacks events with manual rides, deduplicate by id, sort by date
+  const allRides = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  document.getElementById('rides-list').innerHTML=allRides.map(ride=>{
     const att=rsvps[ride.id]||[];const left=ride.max-att.length;const pct=Math.min(att.length/ride.max*100,100);
     return`<div class="card" style="padding:20px;margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
@@ -767,7 +771,7 @@ function renderRides(){
             ${left<=0?'<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:1px 8px;border-radius:99px">Full</span>':''}
             ${left>0&&left<=4?'<span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:1px 8px;border-radius:99px">Almost Full</span>':''}
           </div>
-          <div style="font-size:15px;font-weight:700">${ride.title}</div>
+          <div style="font-size:15px;font-weight:700">${ride.title}${ride.source==='zwifthacks'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">ZWIFTHACKS</span>':''}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:4px">${ride.desc||''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -789,7 +793,9 @@ function renderRides(){
           <button onclick="confirmRsvp(${ride.id})" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
           <button onclick="rsvpId=null;renderRides()" style="padding:9px 12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px">×</button>
         </div>`:
-        `<button onclick="rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
+        ride.source==='zwifthacks'
+          ? `<a href="${ride.link}" target="_blank" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
+          : `<button onclick="rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
     </div>`;
   }).join('');
 }
@@ -939,41 +945,58 @@ function renderResults(){
 }
 
 // ── ZwiftHacks Events ──────────────────────────────────────
-let zwiftEvents = [];
-async function loadEvents(){
+let zwiftEventRides = []; // events fetched from ZwiftHacks, shown in RSVP section
+
+async function loadZwiftEvents(){
+  const syncBtn = document.getElementById('zh-sync-btn');
+  if(syncBtn) syncBtn.textContent = '↻ Syncing…';
   try{
     const r = await fetch('/api/proxy?endpoint=events');
-    if(!r.ok) return;
     const d = await r.json();
-    const items = d.data?.items || d.data || [];
-    if(Array.isArray(items) && items.length > 0){
-      zwiftEvents = items;
-      renderZwiftEvents();
+
+    if(d.source === 'debug'){
+      // ZwiftHacks is a client-side app — data not in page HTML
+      // Fall back to manual rides only
+      console.log('ZwiftHacks: client-side SPA, cannot scrape. Use iframe view.');
+      if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; syncBtn.style.color='#FBBF24'; }
+      showZhStatus('ZwiftHacks events visible in the calendar above. Sync via iframe not supported — add rides manually below.', '#FBBF24');
+      return;
     }
-  } catch(e){ console.log('Events fetch failed:', e.message); }
+
+    if(d.events && d.events.length > 0){
+      zwiftEventRides = d.events.map(ev=>{
+        const start = ev.eventStart || ev.start || '';
+        const dt = start ? new Date(start) : null;
+        return {
+          id: 'zh_' + (ev.id || Math.random()),
+          title: ev.name || ev.eventName || ev.title || 'Zwift Event',
+          date: dt ? dt.toISOString().split('T')[0] : '',
+          time: dt ? dt.toUTCString().slice(17,22) + ' UTC' : '',
+          route: ev.routeName || ev.route || '',
+          dist: ev.distanceInMeters ? (ev.distanceInMeters/1000).toFixed(1)+' km' : (ev.laps ? ev.laps+' laps' : ''),
+          pace: ev.rulesSet || '',
+          max: ev.totalEntrantCount || ev.maxSize || 50,
+          desc: ev.description || '',
+          cat: ev.category || 'All',
+          link: 'https://www.zwift.com/events/view/' + ev.id,
+          source: 'zwifthacks',
+        };
+      });
+      if(syncBtn){ syncBtn.textContent = `✓ ${zwiftEventRides.length} events synced`; syncBtn.style.color='#10B981'; }
+      showZhStatus(`${zwiftEventRides.length} events loaded from ZwiftHacks`, '#10B981');
+      renderRides();
+    } else {
+      if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; }
+      showZhStatus('No events found — ZwiftHacks may need a different approach', '#FBBF24');
+    }
+  } catch(e){
+    if(syncBtn){ syncBtn.textContent = '↻ Sync Events'; }
+    console.log('ZwiftHacks sync error:', e.message);
+  }
 }
-function renderZwiftEvents(){
-  const el = document.getElementById('zwift-events-list');
-  if(!el || zwiftEvents.length===0) return;
-  el.innerHTML = `
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">
-      🚴 Upcoming Zwift Events — <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="color:#00D4FF">View all on ZwiftHacks →</a>
-    </div>` +
-  zwiftEvents.slice(0,6).map(ev=>{
-    const start = ev.eventStart||ev.start||'';
-    const d = start ? new Date(start).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
-    const name = ev.name||ev.eventName||ev.title||'Zwift Event';
-    const cat  = ev.rulesSet||ev.category||'';
-    const route= ev.routeName||ev.route||'';
-    return`<div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:600">${name}</div>
-        <div style="font-size:11px;color:#6b7280;margin-top:3px">${[d,route,cat].filter(Boolean).join(' · ')}</div>
-      </div>
-      <button onclick="rsvpId=this.dataset.id;renderRides()" data-id="${ev.id||''}" style="padding:6px 14px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:12px;font-weight:700;white-space:nowrap">RSVP →</button>
-    </div>`;
-  }).join('');
-  el.style.display = 'block';
+function showZhStatus(msg, color){
+  const el = document.getElementById('zh-status');
+  if(el){ el.textContent = msg; el.style.color = color; el.style.display='block'; }
 }
 
 // ── Google Sheet Sync ─────────────────────────────────────
