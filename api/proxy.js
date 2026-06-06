@@ -1,11 +1,32 @@
 const BASE    = "https://api.zwiftracing.app/api";
-const ZRA_KEY = process.env.ZRA_API_KEY || "63e32b2550a0742a4aa04923";
 const TEAM_ID = "2740";
 const SHEET_ID  = "1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw";
 const SHEET_GID = "1775447185";
 
-// In-memory cache to survive rate limits within same serverless instance
+// Two API keys — if key 1 is rate-limited, key 2 takes over automatically
+const KEYS = [
+  process.env.ZRA_API_KEY  || "63e32b2550a0742a4aa04923",
+  process.env.ZRA_API_KEY_2,
+].filter(Boolean); // removes undefined if ZRA_API_KEY_2 not set yet
+
+// In-memory cache survives rate limits within the same serverless instance
 let memCache = { data: null, ts: 0 };
+
+async function fetchTeam() {
+  for (let i = 0; i < KEYS.length; i++) {
+    const r = await fetch(
+      `${BASE}/public/clubs/${TEAM_ID}/0`,
+      { headers: { "Authorization": KEYS[i] } }
+    );
+    if (r.status === 429) {
+      console.log(`Key ${i + 1} rate limited, ${i + 1 < KEYS.length ? "trying next key" : "all keys exhausted"}`);
+      continue; // try next key
+    }
+    if (!r.ok) throw new Error(`ZRA returned ${r.status}`);
+    return await r.json(); // success
+  }
+  return null; // all keys rate limited
+}
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin",  "*");
@@ -19,8 +40,9 @@ module.exports = async (req, res) => {
 
     // ── Team roster ──────────────────────────────────────
     if (endpoint === "team") {
-      // Serve from memory cache if fresh (< 11 minutes)
       const age = (Date.now() - memCache.ts) / 1000;
+
+      // Serve from memory cache if < 11 minutes old
       if (memCache.data && age < 660) {
         res.setHeader("Cache-Control", "s-maxage=660, stale-while-revalidate=120");
         res.setHeader("X-Cache", "HIT");
@@ -28,35 +50,25 @@ module.exports = async (req, res) => {
         return;
       }
 
-      const r = await fetch(
-        `${BASE}/public/clubs/${TEAM_ID}/0`,
-        { headers: { "Authorization": ZRA_KEY } }
-      );
+      const data = await fetchTeam();
 
-      if (r.status === 429) {
-        const retry = r.headers.get("Retry-After") || "600";
-        // Return stale cache if we have it
+      if (!data) {
+        // All keys rate limited — return stale cache if available
         if (memCache.data) {
           res.setHeader("Cache-Control", "s-maxage=60");
           res.setHeader("X-Cache", "STALE");
           res.status(200).json(memCache.data);
         } else {
           res.status(429).json({
-            error: "Too many requests",
-            retryAfter: parseInt(retry),
+            error: "All API keys rate limited",
+            retryAfter: 600,
             windowMinutes: 10,
-            limit: 1
+            keysConfigured: KEYS.length,
           });
         }
         return;
       }
 
-      if (!r.ok) {
-        res.status(r.status).json({ error: `ZRA returned ${r.status}` });
-        return;
-      }
-
-      const data = await r.json();
       memCache = { data, ts: Date.now() };
       res.setHeader("Cache-Control", "s-maxage=660, stale-while-revalidate=120");
       res.setHeader("X-Cache", "MISS");
