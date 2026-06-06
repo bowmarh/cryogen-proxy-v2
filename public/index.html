@@ -7,7 +7,6 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#080c18;color:white;font-family:system-ui,sans-serif;min-height:100vh}
@@ -20,605 +19,2566 @@
 </head>
 <body>
 <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6b7280;font-family:system-ui">Loading CRYO-GEN…</div></div>
-<script type="text/babel">
-const { useState, useEffect, useMemo } = React;
-const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } = Recharts;
+<script>
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+var _excluded = ["d", "size", "color"];
+function _toConsumableArray(r) { return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread(); }
+function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _iterableToArray(r) { if ("undefined" != typeof Symbol && null != r[Symbol.iterator] || null != r["@@iterator"]) return Array.from(r); }
+function _arrayWithoutHoles(r) { if (Array.isArray(r)) return _arrayLikeToArray(r); }
+function _regenerator() { /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag"; function i(r, n, o, i) { var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype); return _regeneratorDefine2(u, "_invoke", function (r, n, o) { var i, c, u, f = 0, p = o || [], y = !1, G = { p: 0, n: 0, v: e, a: d, f: d.bind(e, 4), d: function d(t, r) { return i = t, c = 0, u = e, G.n = r, a; } }; function d(r, n) { for (c = r, u = n, t = 0; !y && f && !o && t < p.length; t++) { var o, i = p[t], d = G.p, l = i[2]; r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0)); } if (o || r > 1) return a; throw y = !0, n; } return function (o, p, l) { if (f > 1) throw TypeError("Generator is already running"); for (y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;) { i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u); try { if (f = 2, i) { if (c || (o = "next"), t = i[o]) { if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object"); if (!t.done) return t; u = t.value, c < 2 && (c = 0); } else 1 === c && (t = i.return) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1); i = e; } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break; } catch (t) { i = e, c = 1, u = t; } finally { f = 1; } } return { value: t, done: y }; }; }(r, o, i), !0), u; } var a = {}; function Generator() {} function GeneratorFunction() {} function GeneratorFunctionPrototype() {} t = Object.getPrototypeOf; var c = [][n] ? t(t([][n]())) : (_regeneratorDefine2(t = {}, n, function () { return this; }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c); function f(e) { return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e; } return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function () { return this; }), _regeneratorDefine2(u, "toString", function () { return "[object Generator]"; }), (_regenerator = function _regenerator() { return { w: i, m: f }; })(); }
+function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); } r ? i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n : (o("next", 0), o("throw", 1), o("return", 2)); }, _regeneratorDefine2(e, r, n, t); }
+function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
+function _asyncToGenerator(n) { return function () { var t = this, e = arguments; return new Promise(function (r, o) { var a = n.apply(t, e); function _next(n) { asyncGeneratorStep(a, r, o, _next, _throw, "next", n); } function _throw(n) { asyncGeneratorStep(a, r, o, _next, _throw, "throw", n); } _next(void 0); }); }; }
+function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
+function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
+function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
+function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
+function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _objectWithoutProperties(e, t) { if (null == e) return {}; var o, r, i = _objectWithoutPropertiesLoose(e, t); if (Object.getOwnPropertySymbols) { var n = Object.getOwnPropertySymbols(e); for (r = 0; r < n.length; r++) o = n[r], -1 === t.indexOf(o) && {}.propertyIsEnumerable.call(e, o) && (i[o] = e[o]); } return i; }
+function _objectWithoutPropertiesLoose(r, e) { if (null == r) return {}; var t = {}; for (var n in r) if ({}.hasOwnProperty.call(r, n)) { if (-1 !== e.indexOf(n)) continue; t[n] = r[n]; } return t; }
+var _React = React,
+  useState = _React.useState,
+  useEffect = _React.useEffect,
+  useMemo = _React.useMemo;
+var _Recharts = Recharts,
+  LineChart = _Recharts.LineChart,
+  Line = _Recharts.Line,
+  BarChart = _Recharts.BarChart,
+  Bar = _Recharts.Bar,
+  XAxis = _Recharts.XAxis,
+  YAxis = _Recharts.YAxis,
+  CartesianGrid = _Recharts.CartesianGrid,
+  Tooltip = _Recharts.Tooltip,
+  ResponsiveContainer = _Recharts.ResponsiveContainer,
+  Cell = _Recharts.Cell;
 
 // ── Inline SVG Icons (no CDN needed)
-const Icon = ({ d, size=14, color="currentColor", ...p }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,...(p.style||{})}} {...p}>
-    {Array.isArray(d) ? d.map((path,i)=><path key={i} d={path}/>) : <path d={d}/>}
-  </svg>
-);
-const I = {
-  users:      ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
-  trophy:     ["M8 21h8","M12 17v4","M6 3H3v5c0 5 3 8 9 8s9-3 9-8V3h-3","M6 3c0 4 2 7 6 7s6-3 6-7"],
-  bike:       ["M5 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0","M15 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0","M5 19l3.5-7L12 9l4 3 3-5","M12 9V5l-3 2"],
-  chart:      ["M18 20V10","M12 20V4","M6 20v-6"],
-  settings:   ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6","M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1"],
-  plus:       ["M12 5v14","M5 12h14"],
-  search:     ["M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14","M21 21l-4.35-4.35"],
-  x:          ["M18 6L6 18","M6 6l12 12"],
-  check:      ["M22 11.08V12a10 10 0 1 1-5.93-9.14","M22 4L12 14.01l-3-3"],
-  clock:      ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20","M12 6v6l4 2"],
-  zap:        "M13 2L3 14h9l-1 8 10-12h-9l1-8",
-  activity:   "M22 12h-4l-3 9L9 3l-3 9H2",
-  trending:   ["M23 6l-9.5 9.5-5-5L1 18","M17 6h6v6"],
-  pin:        ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0","M12 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2"],
-  download:   ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
-  lock:       ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2","M7 11V7a5 5 0 0 1 10 0v4"],
-  unlock:     ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2","M7 11V7a5 5 0 0 1 9.9-1"],
-  chevron:    "M9 18l6-6-6-6",
-  shield:     "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10",
-  calendar:   ["M3 4h18v18H3z","M3 9h18","M8 2v4","M16 2v4"],
-  refresh:    ["M23 4v6h-6","M1 20v-6h6","M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"],
-  shield2:    ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"],
+var Icon = function Icon(_ref) {
+  var d = _ref.d,
+    _ref$size = _ref.size,
+    size = _ref$size === void 0 ? 14 : _ref$size,
+    _ref$color = _ref.color,
+    color = _ref$color === void 0 ? "currentColor" : _ref$color,
+    p = _objectWithoutProperties(_ref, _excluded);
+  return /*#__PURE__*/React.createElement("svg", _extends({
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: color,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: _objectSpread({
+      flexShrink: 0
+    }, p.style || {})
+  }, p), Array.isArray(d) ? d.map(function (path, i) {
+    return /*#__PURE__*/React.createElement("path", {
+      key: i,
+      d: path
+    });
+  }) : /*#__PURE__*/React.createElement("path", {
+    d: d
+  }));
+};
+var I = {
+  users: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M23 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
+  trophy: ["M8 21h8", "M12 17v4", "M6 3H3v5c0 5 3 8 9 8s9-3 9-8V3h-3", "M6 3c0 4 2 7 6 7s6-3 6-7"],
+  bike: ["M5 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0", "M15 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0", "M5 19l3.5-7L12 9l4 3 3-5", "M12 9V5l-3 2"],
+  chart: ["M18 20V10", "M12 20V4", "M6 20v-6"],
+  settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1"],
+  plus: ["M12 5v14", "M5 12h14"],
+  search: ["M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14", "M21 21l-4.35-4.35"],
+  x: ["M18 6L6 18", "M6 6l12 12"],
+  check: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4L12 14.01l-3-3"],
+  clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20", "M12 6v6l4 2"],
+  zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8",
+  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+  trending: ["M23 6l-9.5 9.5-5-5L1 18", "M17 6h6v6"],
+  pin: ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0", "M12 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2"],
+  download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"],
+  lock: ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2", "M7 11V7a5 5 0 0 1 10 0v4"],
+  unlock: ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2", "M7 11V7a5 5 0 0 1 9.9-1"],
+  chevron: "M9 18l6-6-6-6",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10",
+  calendar: ["M3 4h18v18H3z", "M3 9h18", "M8 2v4", "M16 2v4"],
+  refresh: ["M23 4v6h-6", "M1 20v-6h6", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"],
+  shield2: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"]
 };
 
 // ── Constants
-const CAT_COLOR = { "A+":"#FFD700", A:"#EF4444", B:"#3B82F6", C:"#10B981", D:"#8B5CF6" };
-const PH_EMOJI  = { climber:"🏔️", sprinter:"⚡", puncheur:"🥊", "all-rounder":"⭐", "time-trialist":"⏱️", pursuiter:"🎯" };
-const ZRA_COLOR = { Diamond:"#00D4FF", Ruby:"#EF4444", Emerald:"#10B981", Sapphire:"#3B82F6", Amethyst:"#8B5CF6", Platinum:"#E2E8F0", Gold:"#FBBF24", Silver:"#9CA3AF", Bronze:"#B45309", Copper:"#92400E" };
-const TT_STYLE  = { background:"#0b1020", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, fontSize:12 };
-const toFlag    = cc => (cc||"").toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt()));
-const fmtDate   = ts => new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
-const cleanCC   = cc => (cc||"gb").split("-")[0];
-const mapPh     = v => (v||"all-rounder").toLowerCase().replace(/\s+/g,"-");
-const mapRiders = data => (data.riders||[]).map(r => ({
-  id:r.riderId, name:r.name, cc:cleanCC(r.country), cat:r.zpCategory||"D",
-  ftp:Math.round(r.zpFTP||0),
-  wkg:r.power ? Math.round((r.power.wkg1200||0)*100)/100 : 0,
-  velo:r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
-  zraCat:r.race?.current?.mixed?.category||"",
-  ph:mapPh(r.phenotype?.value),
-  wins:r.race?.wins||0, podiums:r.race?.podiums||0, finishes:r.race?.finishes||0,
-  active:!!(r.race?.current?.rating>0), gender:r.gender||"M",
-}));
-
-const save = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
-const load = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+var CAT_COLOR = {
+  "A+": "#FFD700",
+  A: "#EF4444",
+  B: "#3B82F6",
+  C: "#10B981",
+  D: "#8B5CF6"
+};
+var PH_EMOJI = {
+  climber: "🏔️",
+  sprinter: "⚡",
+  puncheur: "🥊",
+  "all-rounder": "⭐",
+  "time-trialist": "⏱️",
+  pursuiter: "🎯"
+};
+var ZRA_COLOR = {
+  Diamond: "#00D4FF",
+  Ruby: "#EF4444",
+  Emerald: "#10B981",
+  Sapphire: "#3B82F6",
+  Amethyst: "#8B5CF6",
+  Platinum: "#E2E8F0",
+  Gold: "#FBBF24",
+  Silver: "#9CA3AF",
+  Bronze: "#B45309",
+  Copper: "#92400E"
+};
+var TT_STYLE = {
+  background: "#0b1020",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 10,
+  fontSize: 12
+};
+var toFlag = function toFlag(cc) {
+  return (cc || "").toUpperCase().replace(/./g, function (c) {
+    return String.fromCodePoint(127397 + c.charCodeAt());
+  });
+};
+var fmtDate = function fmtDate(ts) {
+  return new Date(ts).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short"
+  });
+};
+var cleanCC = function cleanCC(cc) {
+  return (cc || "gb").split("-")[0];
+};
+var mapPh = function mapPh(v) {
+  return (v || "all-rounder").toLowerCase().replace(/\s+/g, "-");
+};
+var mapRiders = function mapRiders(data) {
+  return (data.riders || []).map(function (r) {
+    var _r$race, _r$race2, _r$phenotype, _r$race3, _r$race4, _r$race5, _r$race6;
+    return {
+      id: r.riderId,
+      name: r.name,
+      cc: cleanCC(r.country),
+      cat: r.zpCategory || "D",
+      ftp: Math.round(r.zpFTP || 0),
+      wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
+      velo: (_r$race = r.race) !== null && _r$race !== void 0 && (_r$race = _r$race.current) !== null && _r$race !== void 0 && _r$race.rating ? Math.round(r.race.current.rating) : 0,
+      zraCat: ((_r$race2 = r.race) === null || _r$race2 === void 0 || (_r$race2 = _r$race2.current) === null || _r$race2 === void 0 || (_r$race2 = _r$race2.mixed) === null || _r$race2 === void 0 ? void 0 : _r$race2.category) || "",
+      ph: mapPh((_r$phenotype = r.phenotype) === null || _r$phenotype === void 0 ? void 0 : _r$phenotype.value),
+      wins: ((_r$race3 = r.race) === null || _r$race3 === void 0 ? void 0 : _r$race3.wins) || 0,
+      podiums: ((_r$race4 = r.race) === null || _r$race4 === void 0 ? void 0 : _r$race4.podiums) || 0,
+      finishes: ((_r$race5 = r.race) === null || _r$race5 === void 0 ? void 0 : _r$race5.finishes) || 0,
+      active: !!(((_r$race6 = r.race) === null || _r$race6 === void 0 || (_r$race6 = _r$race6.current) === null || _r$race6 === void 0 ? void 0 : _r$race6.rating) > 0),
+      gender: r.gender || "M"
+    };
+  });
+};
+var save = function save(k, v) {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch (_unused) {}
+};
+var load = function load(k) {
+  try {
+    return JSON.parse(localStorage.getItem(k));
+  } catch (_unused2) {
+    return null;
+  }
+};
 
 // ── Mock data (shown if API unavailable)
-const MEMBERS = [
-  {id:1, name:"Michael Mansfield (CRYO)", cc:"us", cat:"A+", ftp:392, wkg:5.35, velo:3044, zraCat:"Diamond",  ph:"all-rounder",  active:true},
-  {id:2, name:"Norman Henderson",         cc:"gb", cat:"A",  ftp:370, wkg:4.73, velo:2409, zraCat:"Diamond",  ph:"all-rounder",  active:true},
-  {id:3, name:"Owen Graham",              cc:"gb", cat:"B",  ftp:287, wkg:4.12, velo:1901, zraCat:"Ruby",     ph:"time-trialist",active:true},
-  {id:4, name:"Rick (CRYO-GEN)",          cc:"ie", cat:"B",  ftp:282, wkg:4.07, velo:1325, zraCat:"Amethyst", ph:"all-rounder",  active:true},
-  {id:5, name:"Roxanne Timmins",          cc:"gb", cat:"D",  ftp:179, wkg:2.15, velo:505,  zraCat:"Copper",   ph:"sprinter",     active:true},
-];
-const VELO_TREND = [{w:"W14",v:1268},{w:"W15",v:1282},{w:"W16",v:1275},{w:"W17",v:1301},{w:"W18",v:1318},{w:"W19",v:1312},{w:"W20",v:1334},{w:"W21",v:1347}];
-const RESULTS = [
-  {event:"WTRL TTT S9 W12",date:"14 May",pos:3,total:18,cat:"B",time:"28:14",wkg:3.68},
-  {event:"ZRL Division 4",  date:"12 May",pos:1,total:24,cat:"C",time:"42:08",wkg:3.11},
-  {event:"Herd Spring R5",  date:"10 May",pos:7,total:45,cat:"A",time:"18:52",wkg:4.31},
-  {event:"CRYO Internal",   date:"7 May", pos:1,total:32,cat:"B",time:"35:20",wkg:3.84},
-  {event:"ZRL Division 4",  date:"5 May", pos:2,total:22,cat:"C",time:"41:55",wkg:3.15},
-];
-const TTT_EVENT = {
-  title:"CRYO-GEN Weekly TTT", date:"Wed 28 May 2026", time:"19:00 UTC",
-  route:"Tempus Fugit", dist:"17.3 km", maxRiders:40, format:"4-rider teams · best 3 times count",
-  desc:"Sign up by Tue 18:00 UTC. Min 4 riders per team.",
+var MEMBERS = [{
+  id: 1,
+  name: "Michael Mansfield (CRYO)",
+  cc: "us",
+  cat: "A+",
+  ftp: 392,
+  wkg: 5.35,
+  velo: 3044,
+  zraCat: "Diamond",
+  ph: "all-rounder",
+  active: true
+}, {
+  id: 2,
+  name: "Norman Henderson",
+  cc: "gb",
+  cat: "A",
+  ftp: 370,
+  wkg: 4.73,
+  velo: 2409,
+  zraCat: "Diamond",
+  ph: "all-rounder",
+  active: true
+}, {
+  id: 3,
+  name: "Owen Graham",
+  cc: "gb",
+  cat: "B",
+  ftp: 287,
+  wkg: 4.12,
+  velo: 1901,
+  zraCat: "Ruby",
+  ph: "time-trialist",
+  active: true
+}, {
+  id: 4,
+  name: "Rick (CRYO-GEN)",
+  cc: "ie",
+  cat: "B",
+  ftp: 282,
+  wkg: 4.07,
+  velo: 1325,
+  zraCat: "Amethyst",
+  ph: "all-rounder",
+  active: true
+}, {
+  id: 5,
+  name: "Roxanne Timmins",
+  cc: "gb",
+  cat: "D",
+  ftp: 179,
+  wkg: 2.15,
+  velo: 505,
+  zraCat: "Copper",
+  ph: "sprinter",
+  active: true
+}];
+var VELO_TREND = [{
+  w: "W14",
+  v: 1268
+}, {
+  w: "W15",
+  v: 1282
+}, {
+  w: "W16",
+  v: 1275
+}, {
+  w: "W17",
+  v: 1301
+}, {
+  w: "W18",
+  v: 1318
+}, {
+  w: "W19",
+  v: 1312
+}, {
+  w: "W20",
+  v: 1334
+}, {
+  w: "W21",
+  v: 1347
+}];
+var RESULTS = [{
+  event: "WTRL TTT S9 W12",
+  date: "14 May",
+  pos: 3,
+  total: 18,
+  cat: "B",
+  time: "28:14",
+  wkg: 3.68
+}, {
+  event: "ZRL Division 4",
+  date: "12 May",
+  pos: 1,
+  total: 24,
+  cat: "C",
+  time: "42:08",
+  wkg: 3.11
+}, {
+  event: "Herd Spring R5",
+  date: "10 May",
+  pos: 7,
+  total: 45,
+  cat: "A",
+  time: "18:52",
+  wkg: 4.31
+}, {
+  event: "CRYO Internal",
+  date: "7 May",
+  pos: 1,
+  total: 32,
+  cat: "B",
+  time: "35:20",
+  wkg: 3.84
+}, {
+  event: "ZRL Division 4",
+  date: "5 May",
+  pos: 2,
+  total: 22,
+  cat: "C",
+  time: "41:55",
+  wkg: 3.15
+}];
+var TTT_EVENT = {
+  title: "CRYO-GEN Weekly TTT",
+  date: "Wed 28 May 2026",
+  time: "19:00 UTC",
+  route: "Tempus Fugit",
+  dist: "17.3 km",
+  maxRiders: 40,
+  format: "4-rider teams · best 3 times count",
+  desc: "Sign up by Tue 18:00 UTC. Min 4 riders per team."
 };
-const INIT_RIDES = [
-  {id:1,title:"Easy Endurance Spin",     date:"2026-05-26",time:"07:00 UTC",route:"Watopia Hilly",       dist:"45 km",pace:"2.0–2.5 w/kg",max:25,desc:"Relaxed social spin. No one gets dropped.",cat:"All"},
-  {id:2,title:"B/C Group Ride",          date:"2026-05-27",time:"18:30 UTC",route:"Richmond UCI Circuit", dist:"32 km",pace:"2.5–3.2 w/kg",max:20,desc:"Steady group ride for B and C riders.",    cat:"B/C"},
-  {id:3,title:"Thursday Night Chaingang",date:"2026-05-29",time:"19:00 UTC",route:"Crit City – Bell Lap", dist:"25 km",pace:"3.5+ w/kg",   max:15,desc:"Fast chaingang. A/B only. No flicking.",   cat:"A/B"},
-  {id:4,title:"Weekend Long Ride",       date:"2026-05-31",time:"09:00 UTC",route:"Epic KOM Reverse",    dist:"85 km",pace:"2.0–3.0 w/kg",max:30,desc:"Big base miles. Coffee stop at the top!",  cat:"All"},
-];
-
-function CatBadge({cat}) {
-  const c = CAT_COLOR[cat]||"#888";
-  return <span style={{background:c+"22",color:c,border:`1px solid ${c}44`,padding:"1px 7px",borderRadius:4,fontSize:11,fontWeight:700}}>{cat}</span>;
+var INIT_RIDES = [{
+  id: 1,
+  title: "Easy Endurance Spin",
+  date: "2026-05-26",
+  time: "07:00 UTC",
+  route: "Watopia Hilly",
+  dist: "45 km",
+  pace: "2.0–2.5 w/kg",
+  max: 25,
+  desc: "Relaxed social spin. No one gets dropped.",
+  cat: "All"
+}, {
+  id: 2,
+  title: "B/C Group Ride",
+  date: "2026-05-27",
+  time: "18:30 UTC",
+  route: "Richmond UCI Circuit",
+  dist: "32 km",
+  pace: "2.5–3.2 w/kg",
+  max: 20,
+  desc: "Steady group ride for B and C riders.",
+  cat: "B/C"
+}, {
+  id: 3,
+  title: "Thursday Night Chaingang",
+  date: "2026-05-29",
+  time: "19:00 UTC",
+  route: "Crit City – Bell Lap",
+  dist: "25 km",
+  pace: "3.5+ w/kg",
+  max: 15,
+  desc: "Fast chaingang. A/B only. No flicking.",
+  cat: "A/B"
+}, {
+  id: 4,
+  title: "Weekend Long Ride",
+  date: "2026-05-31",
+  time: "09:00 UTC",
+  route: "Epic KOM Reverse",
+  dist: "85 km",
+  pace: "2.0–3.0 w/kg",
+  max: 30,
+  desc: "Big base miles. Coffee stop at the top!",
+  cat: "All"
+}];
+function CatBadge(_ref2) {
+  var cat = _ref2.cat;
+  var c = CAT_COLOR[cat] || "#888";
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: c + "22",
+      color: c,
+      border: "1px solid ".concat(c, "44"),
+      padding: "1px 7px",
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, cat);
 }
-function StatCard({d,label,value,sub,color="#00D4FF"}) {
-  return (
-    <div style={{background:"#0f1623",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:16}}>
-      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-        <Icon d={d} size={13} color={color}/>
-        <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color,opacity:0.8}}>{label}</span>
-      </div>
-      <div style={{fontSize:22,fontWeight:900}}>{value}</div>
-      {sub&&<div style={{fontSize:11,color:"#6b7280",marginTop:3}}>{sub}</div>}
-    </div>
-  );
+function StatCard(_ref3) {
+  var d = _ref3.d,
+    label = _ref3.label,
+    value = _ref3.value,
+    sub = _ref3.sub,
+    _ref3$color = _ref3.color,
+    color = _ref3$color === void 0 ? "#00D4FF" : _ref3$color;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#0f1623",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 12,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: d,
+    size: 13,
+    color: color
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: color,
+      opacity: 0.8
+    }
+  }, label)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 22,
+      fontWeight: 900
+    }
+  }, value), sub && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#6b7280",
+      marginTop: 3
+    }
+  }, sub));
 }
-
 function App() {
-  const [tab,setTab]           = useState("dashboard");
-  const [sideOpen,setSide]     = useState(true);
-  const [showAdmin,setAdmin]   = useState(false);
-  const [showRide,setShowRide] = useState(false);
-  const [signups,setSignupsRaw]= useState([]);
-  const [tttLocked,setLocked]  = useState(false);
-  const [supName,setSupName]   = useState("");
-  const [supCat,setSupCat]     = useState("B");
-  const [rides,setRidesRaw]    = useState(INIT_RIDES);
-  const [rsvps,setRsvpsRaw]    = useState({});
-  const [rsvpId,setRsvpId]     = useState(null);
-  const [rsvpName,setRsvpName] = useState("");
-  const [newRide,setNewRide]   = useState({title:"",date:"",time:"",route:"",dist:"",pace:"",max:"20",desc:"",cat:"All"});
-  const [mSearch,setMSearch]   = useState("");
-  const [mCat,setMCat]         = useState("All");
-  const [mActive,setMActive]   = useState(false);
-  const [mPage,setMPage]       = useState(1);
-  const [liveRiders,setLive]   = useState([]);
-  const [liveStatus,setLS]     = useState("loading");
-  const [liveMsg,setLM]        = useState("Connecting…");
-  const PER = 10;
-
-  useEffect(() => {
-    const s=load("cg_s"); if(s) setSignupsRaw(s);
-    const r=load("cg_r"); if(r) setRsvpsRaw(r);
-    const ri=load("cg_ri"); if(ri) setRidesRaw(ri);
+  var _useState = useState("dashboard"),
+    _useState2 = _slicedToArray(_useState, 2),
+    tab = _useState2[0],
+    setTab = _useState2[1];
+  var _useState3 = useState(true),
+    _useState4 = _slicedToArray(_useState3, 2),
+    sideOpen = _useState4[0],
+    setSide = _useState4[1];
+  var _useState5 = useState(false),
+    _useState6 = _slicedToArray(_useState5, 2),
+    showAdmin = _useState6[0],
+    setAdmin = _useState6[1];
+  var _useState7 = useState(false),
+    _useState8 = _slicedToArray(_useState7, 2),
+    showRide = _useState8[0],
+    setShowRide = _useState8[1];
+  var _useState9 = useState([]),
+    _useState0 = _slicedToArray(_useState9, 2),
+    signups = _useState0[0],
+    setSignupsRaw = _useState0[1];
+  var _useState1 = useState(false),
+    _useState10 = _slicedToArray(_useState1, 2),
+    tttLocked = _useState10[0],
+    setLocked = _useState10[1];
+  var _useState11 = useState(""),
+    _useState12 = _slicedToArray(_useState11, 2),
+    supName = _useState12[0],
+    setSupName = _useState12[1];
+  var _useState13 = useState("B"),
+    _useState14 = _slicedToArray(_useState13, 2),
+    supCat = _useState14[0],
+    setSupCat = _useState14[1];
+  var _useState15 = useState(INIT_RIDES),
+    _useState16 = _slicedToArray(_useState15, 2),
+    rides = _useState16[0],
+    setRidesRaw = _useState16[1];
+  var _useState17 = useState({}),
+    _useState18 = _slicedToArray(_useState17, 2),
+    rsvps = _useState18[0],
+    setRsvpsRaw = _useState18[1];
+  var _useState19 = useState(null),
+    _useState20 = _slicedToArray(_useState19, 2),
+    rsvpId = _useState20[0],
+    setRsvpId = _useState20[1];
+  var _useState21 = useState(""),
+    _useState22 = _slicedToArray(_useState21, 2),
+    rsvpName = _useState22[0],
+    setRsvpName = _useState22[1];
+  var _useState23 = useState({
+      title: "",
+      date: "",
+      time: "",
+      route: "",
+      dist: "",
+      pace: "",
+      max: "20",
+      desc: "",
+      cat: "All"
+    }),
+    _useState24 = _slicedToArray(_useState23, 2),
+    newRide = _useState24[0],
+    setNewRide = _useState24[1];
+  var _useState25 = useState(""),
+    _useState26 = _slicedToArray(_useState25, 2),
+    mSearch = _useState26[0],
+    setMSearch = _useState26[1];
+  var _useState27 = useState("All"),
+    _useState28 = _slicedToArray(_useState27, 2),
+    mCat = _useState28[0],
+    setMCat = _useState28[1];
+  var _useState29 = useState(false),
+    _useState30 = _slicedToArray(_useState29, 2),
+    mActive = _useState30[0],
+    setMActive = _useState30[1];
+  var _useState31 = useState(1),
+    _useState32 = _slicedToArray(_useState31, 2),
+    mPage = _useState32[0],
+    setMPage = _useState32[1];
+  var _useState33 = useState([]),
+    _useState34 = _slicedToArray(_useState33, 2),
+    liveRiders = _useState34[0],
+    setLive = _useState34[1];
+  var _useState35 = useState("loading"),
+    _useState36 = _slicedToArray(_useState35, 2),
+    liveStatus = _useState36[0],
+    setLS = _useState36[1];
+  var _useState37 = useState("Connecting…"),
+    _useState38 = _slicedToArray(_useState37, 2),
+    liveMsg = _useState38[0],
+    setLM = _useState38[1];
+  var PER = 10;
+  useEffect(function () {
+    var s = load("cg_s");
+    if (s) setSignupsRaw(s);
+    var r = load("cg_r");
+    if (r) setRsvpsRaw(r);
+    var ri = load("cg_ri");
+    if (ri) setRidesRaw(ri);
     fetchLive();
   }, []);
-
-  const setSignups = v => { setSignupsRaw(v); save("cg_s",v); };
-  const setRsvps   = v => { setRsvpsRaw(v);  save("cg_r",v); };
-  const setRides   = v => { setRidesRaw(v);  save("cg_ri",v); };
-
-  const fetchLive = async () => {
-    setLS("loading"); setLM("Connecting to ZwiftRacing.app…");
-    try {
-      const r = await fetch("/api/proxy?endpoint=team");
-      if (r.ok) {
-        const d = await r.json();
-        if (d.riders && Array.isArray(d.riders)) {
-          const mapped = mapRiders(d);
-          setLive(mapped); setLS("ok");
-          setLM(`Live · ${mapped.length} CRYO-GEN riders loaded ✓`);
-        } else { setLS("error"); setLM("Unexpected response from proxy"); }
-      } else { setLS("error"); setLM(`Proxy error ${r.status}`); }
-    } catch(e) { setLS("error"); setLM(`${e.message}`); }
+  var setSignups = function setSignups(v) {
+    setSignupsRaw(v);
+    save("cg_s", v);
   };
-
-  const members = liveRiders.length > 0 ? liveRiders : MEMBERS;
-  const active  = members.filter(m => m.active);
-  const avgVelo = active.length ? Math.round(active.reduce((s,m)=>s+m.velo,0)/active.length) : 0;
-  const catDist = useMemo(()=>{
-    const c={};
-    active.forEach(m=>{ c[m.cat]=(c[m.cat]||0)+1; });
-    return ["A+","A","B","C","D"].filter(k=>c[k]).map(cat=>({cat,count:c[cat]}));
-  },[active]);
-  const filteredM = useMemo(()=>members.filter(m=>
-    m.name.toLowerCase().includes(mSearch.toLowerCase())&&(mCat==="All"||m.cat===mCat)&&(!mActive||m.active)
-  ),[members,mSearch,mCat,mActive]);
-  const pagedM  = filteredM.slice((mPage-1)*PER, mPage*PER);
-  const totalPg = Math.ceil(filteredM.length/PER)||1;
-
-  const doSignup = () => {
+  var setRsvps = function setRsvps(v) {
+    setRsvpsRaw(v);
+    save("cg_r", v);
+  };
+  var setRides = function setRides(v) {
+    setRidesRaw(v);
+    save("cg_ri", v);
+  };
+  var fetchLive = /*#__PURE__*/function () {
+    var _ref4 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee() {
+      var r, d, mapped, _t;
+      return _regenerator().w(function (_context) {
+        while (1) switch (_context.p = _context.n) {
+          case 0:
+            setLS("loading");
+            setLM("Connecting to ZwiftRacing.app…");
+            _context.p = 1;
+            _context.n = 2;
+            return fetch("/api/proxy?endpoint=team");
+          case 2:
+            r = _context.v;
+            if (!r.ok) {
+              _context.n = 4;
+              break;
+            }
+            _context.n = 3;
+            return r.json();
+          case 3:
+            d = _context.v;
+            if (d.riders && Array.isArray(d.riders)) {
+              mapped = mapRiders(d);
+              setLive(mapped);
+              setLS("ok");
+              setLM("Live \xB7 ".concat(mapped.length, " CRYO-GEN riders loaded \u2713"));
+            } else {
+              setLS("error");
+              setLM("Unexpected response from proxy");
+            }
+            _context.n = 5;
+            break;
+          case 4:
+            setLS("error");
+            setLM("Proxy error ".concat(r.status));
+          case 5:
+            _context.n = 7;
+            break;
+          case 6:
+            _context.p = 6;
+            _t = _context.v;
+            setLS("error");
+            setLM("".concat(_t.message));
+          case 7:
+            return _context.a(2);
+        }
+      }, _callee, null, [[1, 6]]);
+    }));
+    return function fetchLive() {
+      return _ref4.apply(this, arguments);
+    };
+  }();
+  var members = liveRiders.length > 0 ? liveRiders : MEMBERS;
+  var active = members.filter(function (m) {
+    return m.active;
+  });
+  var avgVelo = active.length ? Math.round(active.reduce(function (s, m) {
+    return s + m.velo;
+  }, 0) / active.length) : 0;
+  var catDist = useMemo(function () {
+    var c = {};
+    active.forEach(function (m) {
+      c[m.cat] = (c[m.cat] || 0) + 1;
+    });
+    return ["A+", "A", "B", "C", "D"].filter(function (k) {
+      return c[k];
+    }).map(function (cat) {
+      return {
+        cat: cat,
+        count: c[cat]
+      };
+    });
+  }, [active]);
+  var filteredM = useMemo(function () {
+    return members.filter(function (m) {
+      return m.name.toLowerCase().includes(mSearch.toLowerCase()) && (mCat === "All" || m.cat === mCat) && (!mActive || m.active);
+    });
+  }, [members, mSearch, mCat, mActive]);
+  var pagedM = filteredM.slice((mPage - 1) * PER, mPage * PER);
+  var totalPg = Math.ceil(filteredM.length / PER) || 1;
+  var doSignup = function doSignup() {
     if (!supName.trim()) return;
-    if (tttLocked) { alert("Sign-ups are locked."); return; }
-    if (signups.find(s=>s.name.toLowerCase()===supName.toLowerCase())) { alert("Already signed up!"); return; }
-    if (signups.length>=TTT_EVENT.maxRiders) { alert("Event is full."); return; }
-    setSignups([...signups,{name:supName.trim(),cat:supCat,ts:new Date().toISOString()}]);
+    if (tttLocked) {
+      alert("Sign-ups are locked.");
+      return;
+    }
+    if (signups.find(function (s) {
+      return s.name.toLowerCase() === supName.toLowerCase();
+    })) {
+      alert("Already signed up!");
+      return;
+    }
+    if (signups.length >= TTT_EVENT.maxRiders) {
+      alert("Event is full.");
+      return;
+    }
+    setSignups([].concat(_toConsumableArray(signups), [{
+      name: supName.trim(),
+      cat: supCat,
+      ts: new Date().toISOString()
+    }]));
     setSupName("");
   };
-  const rmSignup    = ts => setSignups(signups.filter(s=>s.ts!==ts));
-  const confirmRsvp = id => {
+  var rmSignup = function rmSignup(ts) {
+    return setSignups(signups.filter(function (s) {
+      return s.ts !== ts;
+    }));
+  };
+  var confirmRsvp = function confirmRsvp(id) {
     if (!rsvpName.trim()) return;
-    const cur=rsvps[id]||[];
-    if (cur.find(r=>r.name.toLowerCase()===rsvpName.toLowerCase())) { alert("Already RSVP'd!"); return; }
-    setRsvps({...rsvps,[id]:[...cur,{name:rsvpName.trim(),ts:new Date().toISOString()}]});
-    setRsvpId(null); setRsvpName("");
+    var cur = rsvps[id] || [];
+    if (cur.find(function (r) {
+      return r.name.toLowerCase() === rsvpName.toLowerCase();
+    })) {
+      alert("Already RSVP'd!");
+      return;
+    }
+    setRsvps(_objectSpread(_objectSpread({}, rsvps), {}, _defineProperty({}, id, [].concat(_toConsumableArray(cur), [{
+      name: rsvpName.trim(),
+      ts: new Date().toISOString()
+    }]))));
+    setRsvpId(null);
+    setRsvpName("");
   };
-  const cancelRsvp = (id,name) => setRsvps({...rsvps,[id]:(rsvps[id]||[]).filter(r=>r.name!==name)});
-  const createRide = () => {
-    if (!newRide.title||!newRide.date) { alert("Title and date required."); return; }
-    setRides([...rides,{...newRide,id:Date.now(),max:parseInt(newRide.max)||20}]);
+  var cancelRsvp = function cancelRsvp(id, name) {
+    return setRsvps(_objectSpread(_objectSpread({}, rsvps), {}, _defineProperty({}, id, (rsvps[id] || []).filter(function (r) {
+      return r.name !== name;
+    }))));
+  };
+  var createRide = function createRide() {
+    if (!newRide.title || !newRide.date) {
+      alert("Title and date required.");
+      return;
+    }
+    setRides([].concat(_toConsumableArray(rides), [_objectSpread(_objectSpread({}, newRide), {}, {
+      id: Date.now(),
+      max: parseInt(newRide.max) || 20
+    })]));
     setShowRide(false);
-    setNewRide({title:"",date:"",time:"",route:"",dist:"",pace:"",max:"20",desc:"",cat:"All"});
+    setNewRide({
+      title: "",
+      date: "",
+      time: "",
+      route: "",
+      dist: "",
+      pace: "",
+      max: "20",
+      desc: "",
+      cat: "All"
+    });
   };
-  const exportCsv = () => {
-    const rows=[["Name","Cat","Signed Up"],...signups.map(s=>[s.name,s.cat,new Date(s.ts).toLocaleString()])];
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
-    a.download="cryogen_ttt.csv"; a.click();
+  var exportCsv = function exportCsv() {
+    var rows = [["Name", "Cat", "Signed Up"]].concat(_toConsumableArray(signups.map(function (s) {
+      return [s.name, s.cat, new Date(s.ts).toLocaleString()];
+    })));
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([rows.map(function (r) {
+      return r.join(",");
+    }).join("\n")], {
+      type: "text/csv"
+    }));
+    a.download = "cryogen_ttt.csv";
+    a.click();
   };
-
-  const scol={idle:"#6b7280",loading:"#FBBF24",ok:"#10B981",error:"#EF4444"}[liveStatus];
-  const NAV=[
-    {id:"dashboard",label:"Dashboard",   d:I.chart},
-    {id:"racing",   label:"Racing",      d:I.trophy},
-    {id:"ttt",      label:"TTT Sign-Up", d:I.clock},
-    {id:"rides",    label:"Social Rides",d:I.bike},
-    {id:"members",  label:"Members",     d:I.users},
-  ];
-  const S={
-    card:{background:"#0f1623",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12},
-    inp:{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"white",fontSize:13,outline:"none"},
-    td:{padding:"11px 18px",borderBottom:"1px solid rgba(255,255,255,0.04)",color:"white"},
-    th:{padding:"9px 18px",textAlign:"left",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"#6b7280",borderBottom:"1px solid rgba(255,255,255,0.07)"},
-    lbl:{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"#6b7280",display:"block",marginBottom:5},
-    btn:(active)=>({display:"flex",alignItems:"center",gap:6,padding:"7px 14px",background:active?"rgba(0,212,255,0.1)":"rgba(255,255,255,0.05)",border:active?"1px solid rgba(0,212,255,0.2)":"1px solid rgba(255,255,255,0.1)",borderRadius:8,color:active?"#00D4FF":"#9ca3af",fontSize:12,cursor:"pointer"}),
+  var scol = {
+    idle: "#6b7280",
+    loading: "#FBBF24",
+    ok: "#10B981",
+    error: "#EF4444"
+  }[liveStatus];
+  var NAV = [{
+    id: "dashboard",
+    label: "Dashboard",
+    d: I.chart
+  }, {
+    id: "racing",
+    label: "Racing",
+    d: I.trophy
+  }, {
+    id: "ttt",
+    label: "TTT Sign-Up",
+    d: I.clock
+  }, {
+    id: "rides",
+    label: "Social Rides",
+    d: I.bike
+  }, {
+    id: "members",
+    label: "Members",
+    d: I.users
+  }];
+  var S = {
+    card: {
+      background: "#0f1623",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 12
+    },
+    inp: {
+      width: "100%",
+      background: "rgba(255,255,255,0.06)",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 8,
+      padding: "9px 12px",
+      color: "white",
+      fontSize: 13,
+      outline: "none"
+    },
+    td: {
+      padding: "11px 18px",
+      borderBottom: "1px solid rgba(255,255,255,0.04)",
+      color: "white"
+    },
+    th: {
+      padding: "9px 18px",
+      textAlign: "left",
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+      color: "#6b7280",
+      borderBottom: "1px solid rgba(255,255,255,0.07)"
+    },
+    lbl: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+      color: "#6b7280",
+      display: "block",
+      marginBottom: 5
+    },
+    btn: function btn(active) {
+      return {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "7px 14px",
+        background: active ? "rgba(0,212,255,0.1)" : "rgba(255,255,255,0.05)",
+        border: active ? "1px solid rgba(0,212,255,0.2)" : "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        color: active ? "#00D4FF" : "#9ca3af",
+        fontSize: 12,
+        cursor: "pointer"
+      };
+    }
   };
-
-  return (
-    <div style={{minHeight:"100vh",display:"flex",background:"#080c18"}}>
-      {/* SIDEBAR */}
-      <aside style={{display:"flex",flexDirection:"column",flexShrink:0,width:sideOpen?220:52,background:"#070b17",borderRight:"1px solid rgba(255,255,255,0.07)",transition:"width 0.2s",overflow:"hidden"}}>
-        <div style={{padding:14,borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:10,minWidth:52}}>
-          <div style={{width:28,height:28,borderRadius:8,background:"linear-gradient(135deg,#00D4FF,#0066CC)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#000",flexShrink:0}}>CG</div>
-          {sideOpen&&<div style={{whiteSpace:"nowrap"}}><div style={{fontSize:13,fontWeight:900,color:"white"}}>CRYO-GEN</div><div style={{fontSize:10,color:"#4b5563"}}>Cycling Club</div></div>}
-        </div>
-        <nav style={{flex:1,padding:8}}>
-          {NAV.map(({id,label,d})=>(
-            <button key={id} onClick={()=>setTab(id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:8,border:tab===id?"1px solid rgba(0,212,255,0.2)":"1px solid transparent",background:tab===id?"rgba(0,212,255,0.08)":"transparent",color:tab===id?"#00D4FF":"#6b7280",cursor:"pointer",marginBottom:2,textAlign:"left",whiteSpace:"nowrap"}}>
-              <Icon d={d} size={15} color={tab===id?"#00D4FF":"#6b7280"}/>
-              {sideOpen&&<span style={{fontSize:12,fontWeight:600}}>{label}</span>}
-            </button>
-          ))}
-        </nav>
-        <div style={{padding:8,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-          <button onClick={()=>setAdmin(true)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:8,border:"1px solid transparent",background:"transparent",color:"#4b5563",cursor:"pointer",whiteSpace:"nowrap"}}>
-            <Icon d={I.settings} size={15} color="#4b5563"/>
-            {sideOpen&&<span style={{fontSize:12,fontWeight:600}}>Admin</span>}
-          </button>
-          <button onClick={()=>setSide(o=>!o)} style={{width:"100%",display:"flex",justifyContent:"center",padding:8,border:"none",background:"transparent",color:"#374151",cursor:"pointer",marginTop:4}}>
-            <Icon d={I.chevron} size={13} color="#374151" style={{transform:sideOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}/>
-          </button>
-        </div>
-      </aside>
-
-      {/* MAIN */}
-      <main style={{flex:1,overflow:"auto",padding:32}}>
-        <div style={{maxWidth:960,margin:"0 auto"}}>
-
-        {/* ── DASHBOARD ── */}
-        {tab==="dashboard"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:24}}>
-            <div>
-              <h2 style={{fontSize:20,fontWeight:900,margin:0,color:"white"}}>Team Overview</h2>
-              <p style={{fontSize:13,color:"#6b7280",marginTop:4}}>ZwiftPower · ZwiftRacing.app{liveRiders.length>0?" · live ✓":""}</p>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-              <StatCard d={I.users}    label="Active Riders"  value={active.length}               sub={liveRiders.length>0?`${liveRiders.length} in API`:"mock data"} color="#00D4FF"/>
-              <StatCard d={I.clock}   label="TTT Signups"    value={`${signups.length}/${TTT_EVENT.maxRiders}`} sub="Wed 28 May · 19:00 UTC"                        color="#10B981"/>
-              <StatCard d={I.bike}    label="Upcoming Rides" value={rides.length}                 sub="Next ride coming up"                                          color="#8B5CF6"/>
-              <StatCard d={I.trending}label="Avg Team vELO"  value={avgVelo||"—"}                 sub={liveRiders.length>0?"Live":"mock data"}                       color="#F59E0B"/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
-              <div style={{...S.card,padding:20}}>
-                <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#6b7280",marginBottom:16}}>Team Avg vELO — Last 8 Weeks</div>
-                <ResponsiveContainer width="100%" height={150}>
-                  <LineChart data={VELO_TREND} margin={{top:5,right:10,left:0,bottom:5}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
-                    <XAxis dataKey="w" axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#6b7280"}}/>
-                    <YAxis domain={[1200,1400]} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#6b7280"}}/>
-                    <Tooltip contentStyle={TT_STYLE} labelStyle={{color:"#fff"}} itemStyle={{color:"#00D4FF"}}/>
-                    <Line type="monotone" dataKey="v" name="vELO" stroke="#00D4FF" strokeWidth={2.5} dot={{fill:"#00D4FF",r:3,strokeWidth:0}}/>
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{...S.card,padding:20}}>
-                <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#6b7280",marginBottom:12}}>Top 5 by vELO</div>
-                {[...active].sort((a,b)=>b.velo-a.velo).slice(0,5).map((m,i)=>(
-                  <div key={m.id||i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:11,color:"#4b5563",width:14}}>{i+1}</span>
-                      <span style={{fontSize:13,color:"white"}}>{m.name.split(" ")[0]}</span>
-                      <CatBadge cat={m.cat}/>
-                    </div>
-                    <span style={{fontSize:12,fontFamily:"monospace",color:"#00D4FF",fontWeight:700}}>{m.velo}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={S.card}>
-              <div style={{padding:"12px 18px",borderBottom:"1px solid rgba(255,255,255,0.07)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#6b7280"}}>Recent Team Results</div>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr>{["Event","Date","Cat","Result","Time","W/kg"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
-                <tbody>{RESULTS.map((r,i)=>(
-                  <tr key={i}>
-                    <td style={S.td}><strong>{r.event}</strong></td>
-                    <td style={{...S.td,color:"#6b7280",fontSize:12}}>{r.date}</td>
-                    <td style={S.td}><CatBadge cat={r.cat}/></td>
-                    <td style={{...S.td,color:r.pos<=3?"#FBBF24":"#9ca3af",fontWeight:700}}>{r.pos<=3?"🏆 ":""}{r.pos}/{r.total}</td>
-                    <td style={{...S.td,fontFamily:"monospace",color:"#9ca3af"}}>{r.time}</td>
-                    <td style={{...S.td,fontFamily:"monospace",color:"#00D4FF",fontWeight:700}}>{r.wkg}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── RACING ── */}
-        {tab==="racing"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:24}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div><h2 style={{fontSize:20,fontWeight:900,margin:0,color:"white"}}>Racing Dashboard</h2><p style={{fontSize:13,color:"#6b7280",marginTop:4}}>ZwiftPower · ZwiftRacing.app</p></div>
-              <button onClick={fetchLive} style={S.btn(false)}><Icon d={I.refresh} size={12} color="#9ca3af"/> Refresh</button>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div style={{...S.card,padding:16,display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:10,height:10,borderRadius:"50%",background:"#FBBF24",flexShrink:0}}/>
-                <div><div style={{fontSize:13,fontWeight:700,color:"white"}}>ZwiftPower <span style={{color:"#6b7280",fontWeight:400,fontSize:11}}>· Team 2740</span></div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>Engineering API access in progress · mock data</div></div>
-              </div>
-              <div style={{...S.card,padding:16,display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:10,height:10,borderRadius:"50%",background:scol,flexShrink:0}}/>
-                <div><div style={{fontSize:13,fontWeight:700,color:"white"}}>ZwiftRacing.app <span style={{color:"#6b7280",fontWeight:400,fontSize:11}}>· {liveStatus}</span></div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{liveMsg}</div></div>
-              </div>
-            </div>
-            <div style={S.card}>
-              <div style={{padding:"12px 18px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#6b7280"}}>Rider Rankings — vELO</span>
-                <span style={{fontSize:10,color:liveRiders.length>0?"#10B981":"#4b5563",background:"rgba(255,255,255,0.04)",padding:"2px 8px",borderRadius:99}}>{liveRiders.length>0?`${liveRiders.length} riders · live ✓`:"Mock · pending live API"}</span>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["#","Rider","Cat","FTP","W/kg","vELO","Phenotype"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
-                  <tbody>{[...active].sort((a,b)=>b.velo-a.velo).map((m,i)=>(
-                    <tr key={m.id||i}>
-                      <td style={{...S.td,color:"#4b5563",fontSize:11,fontFamily:"monospace"}}>{i+1}</td>
-                      <td style={S.td}><span style={{marginRight:6}}>{toFlag(m.cc)}</span>{m.name}</td>
-                      <td style={S.td}>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <CatBadge cat={m.cat}/>
-                          {m.zraCat&&<span style={{fontSize:10,color:ZRA_COLOR[m.zraCat]||"#9ca3af",fontWeight:700}}>{m.zraCat}</span>}
-                        </div>
-                      </td>
-                      <td style={{...S.td,fontFamily:"monospace",fontSize:12,color:"#6b7280"}}>{m.ftp}w</td>
-                      <td style={{...S.td,fontFamily:"monospace",fontSize:12,color:"#00D4FF",fontWeight:700}}>{m.wkg}</td>
-                      <td style={S.td}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{width:56,height:4,background:"rgba(255,255,255,0.08)",borderRadius:2}}>
-                            <div style={{width:`${Math.min(m.velo/3500*100,100)}%`,height:"100%",background:"#00D4FF",borderRadius:2}}/>
-                          </div>
-                          <span style={{fontFamily:"monospace",fontSize:12,color:"#9ca3af"}}>{m.velo}</span>
-                        </div>
-                      </td>
-                      <td style={{...S.td,fontSize:12,color:"#6b7280"}}>{PH_EMOJI[m.ph]||"⭐"} {m.ph}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-            {catDist.length>0&&(
-              <div style={{...S.card,padding:20}}>
-                <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#6b7280",marginBottom:12}}>Category Distribution</div>
-                <ResponsiveContainer width="100%" height={120}>
-                  <BarChart data={catDist} margin={{top:0,right:0,left:0,bottom:0}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false}/>
-                    <XAxis dataKey="cat" axisLine={false} tickLine={false} tick={{fontSize:11,fill:"#6b7280"}}/>
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#6b7280"}} allowDecimals={false}/>
-                    <Tooltip contentStyle={TT_STYLE} labelStyle={{color:"#fff"}} itemStyle={{color:"#ccc"}}/>
-                    <Bar dataKey="count" name="Riders" radius={[4,4,0,0]}>{catDist.map(e=><Cell key={e.cat} fill={CAT_COLOR[e.cat]}/>)}</Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── TTT ── */}
-        {tab==="ttt"&&(()=>{
-          const byCat=["A+","A","B","C","D"].reduce((a,cat)=>{const r=signups.filter(s=>s.cat===cat);if(r.length)a.push({cat,r});return a;},[]);
-          const pct=Math.min(signups.length/TTT_EVENT.maxRiders*100,100);
-          return (
-            <div style={{display:"flex",flexDirection:"column",gap:24}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-                <div><h2 style={{fontSize:20,fontWeight:900,margin:0,color:"white"}}>TTT Sign-Up</h2><p style={{fontSize:13,color:"#6b7280",marginTop:4}}>Weekly Team Time Trial</p></div>
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>setLocked(l=>!l)} style={S.btn(tttLocked)}><Icon d={tttLocked?I.lock:I.unlock} size={11}/>{tttLocked?"Locked":"Lock"}</button>
-                  <button onClick={exportCsv} style={S.btn(false)}><Icon d={I.download} size={11}/>Export CSV</button>
-                </div>
-              </div>
-              <div style={{background:"rgba(0,80,120,0.2)",border:"1px solid rgba(0,212,255,0.15)",borderRadius:12,padding:20}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:700,color:"#00D4FF",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>This Week</div>
-                    <div style={{fontSize:18,fontWeight:900,color:"white"}}>{TTT_EVENT.title}</div>
-                    <div style={{fontSize:13,color:"#9ca3af",marginTop:4}}>{TTT_EVENT.desc}</div>
-                  </div>
-                  {tttLocked&&<span style={{fontSize:10,fontWeight:700,background:"rgba(239,68,68,0.15)",color:"#f87171",border:"1px solid rgba(239,68,68,0.3)",padding:"4px 10px",borderRadius:6}}>LOCKED</span>}
-                </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:"6px 20px",marginBottom:16}}>
-                  {[{d:I.calendar,v:TTT_EVENT.date},{d:I.clock,v:TTT_EVENT.time},{d:I.pin,v:TTT_EVENT.route},{d:I.activity,v:TTT_EVENT.dist},{d:I.zap,v:TTT_EVENT.format}].map(({d,v})=>(
-                    <span key={v} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#9ca3af"}}><Icon d={d} size={11} color="#00D4FF"/>{v}</span>
-                  ))}
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",marginBottom:6}}>
-                  <span>{signups.length} signed up</span><span>{TTT_EVENT.maxRiders-signups.length} spots left</span>
-                </div>
-                <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3}}>
-                  <div style={{width:`${pct}%`,height:"100%",background:"#00D4FF",borderRadius:3,transition:"width 0.3s"}}/>
-                </div>
-              </div>
-              {!tttLocked&&(
-                <div style={{...S.card,padding:16}}>
-                  <label style={{...S.lbl,marginBottom:10}}>Sign Me Up</label>
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                    <input value={supName} onChange={e=>setSupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSignup()} placeholder="Your Zwift display name" style={{...S.inp,flex:1,minWidth:180}}/>
-                    <select value={supCat} onChange={e=>setSupCat(e.target.value)} style={{...S.inp,width:65}}>{["A+","A","B","C","D"].map(c=><option key={c}>{c}</option>)}</select>
-                    <button onClick={doSignup} style={{padding:"9px 20px",background:"#06b6d4",color:"#000",fontWeight:700,borderRadius:8,border:"none",cursor:"pointer",fontSize:13}}>Sign Up</button>
-                  </div>
-                </div>
-              )}
-              {signups.length===0
-                ?<div style={{...S.card,padding:40,textAlign:"center",color:"#4b5563",fontSize:14}}>No riders yet — be the first! 🚴</div>
-                :byCat.map(({cat,r})=>(
-                  <div key={cat} style={S.card}>
-                    <div style={{padding:"10px 16px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",gap:8}}>
-                      <CatBadge cat={cat}/><span style={{fontSize:11,color:"#6b7280"}}>{r.length} rider{r.length!==1?"s":""}</span>
-                    </div>
-                    {r.map(s=>(
-                      <div key={s.ts} style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:10}}><Icon d={I.check} size={13} color="#10B981"/><span style={{fontSize:13,color:"white"}}>{s.name}</span></div>
-                        <div style={{display:"flex",alignItems:"center",gap:12}}>
-                          <span style={{fontSize:11,color:"#4b5563"}}>{fmtDate(s.ts)}</span>
-                          <button onClick={()=>rmSignup(s.ts)} style={{background:"none",border:"none",cursor:"pointer",color:"#4b5563",padding:0,display:"flex"}}><Icon d={I.x} size={13} color="#4b5563"/></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))
-              }
-            </div>
-          );
-        })()}
-
-        {/* ── RIDES ── */}
-        {tab==="rides"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:24}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div><h2 style={{fontSize:20,fontWeight:900,margin:0,color:"white"}}>Social Rides</h2><p style={{fontSize:13,color:"#6b7280",marginTop:4}}>Sign up · replaces WhatsApp</p></div>
-              <button onClick={()=>setShowRide(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",background:"#06b6d4",color:"#000",fontWeight:700,borderRadius:8,border:"none",cursor:"pointer",fontSize:13}}><Icon d={I.plus} size={14} color="#000"/> New Ride</button>
-            </div>
-            {[...rides].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(ride=>{
-              const att=rsvps[ride.id]||[]; const left=ride.max-att.length; const pct=Math.min(att.length/ride.max*100,100);
-              return (
-                <div key={ride.id} style={{...S.card,padding:20}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:16,marginBottom:10,flexWrap:"wrap"}}>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
-                        <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#9ca3af",border:"1px solid rgba(255,255,255,0.1)",padding:"1px 8px",borderRadius:99}}>{ride.cat}</span>
-                        {left<=0&&<span style={{fontSize:10,fontWeight:700,background:"rgba(239,68,68,0.12)",color:"#f87171",border:"1px solid rgba(239,68,68,0.25)",padding:"1px 8px",borderRadius:99}}>Full</span>}
-                        {left>0&&left<=3&&<span style={{fontSize:10,fontWeight:700,background:"rgba(251,191,36,0.12)",color:"#fbbf24",border:"1px solid rgba(251,191,36,0.25)",padding:"1px 8px",borderRadius:99}}>Almost Full</span>}
-                      </div>
-                      <div style={{fontSize:15,fontWeight:700,color:"white"}}>{ride.title}</div>
-                      <div style={{fontSize:12,color:"#6b7280",marginTop:4}}>{ride.desc}</div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"white"}}>{new Date(ride.date+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</div>
-                      <div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{ride.time}</div>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"4px 16px",marginBottom:10}}>
-                    {[{d:I.pin,v:ride.route},{d:I.activity,v:ride.dist},{d:I.zap,v:ride.pace},{d:I.users,v:`${att.length}/${ride.max}`}].map(({d,v})=>(
-                      <span key={v} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#6b7280"}}><Icon d={d} size={10} color="#00D4FF"/>{v}</span>
-                    ))}
-                  </div>
-                  <div style={{height:3,background:"rgba(255,255,255,0.07)",borderRadius:2,marginBottom:10}}>
-                    <div style={{width:`${pct}%`,height:"100%",background:pct>85?"#EF4444":"#00D4FF",borderRadius:2}}/>
-                  </div>
-                  {att.length>0&&(
-                    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
-                      {att.slice(0,8).map((r,i)=>(
-                        <button key={i} onClick={()=>cancelRsvp(ride.id,r.name)} title="Click to cancel" style={{fontSize:11,background:"rgba(255,255,255,0.05)",color:"#9ca3af",border:"1px solid rgba(255,255,255,0.08)",padding:"2px 10px",borderRadius:99,cursor:"pointer"}}>{r.name}</button>
-                      ))}
-                      {att.length>8&&<span style={{fontSize:11,color:"#4b5563",alignSelf:"center"}}>+{att.length-8} more</span>}
-                    </div>
-                  )}
-                  {rsvpId===ride.id?(
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                      <input value={rsvpName} onChange={e=>setRsvpName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmRsvp(ride.id)} placeholder="Your name" autoFocus style={{...S.inp,flex:1,minWidth:150,borderColor:"rgba(0,212,255,0.4)"}}/>
-                      <button onClick={()=>confirmRsvp(ride.id)} style={{padding:"9px 18px",background:"#06b6d4",color:"#000",fontWeight:700,borderRadius:8,border:"none",cursor:"pointer",fontSize:13}}>Confirm</button>
-                      <button onClick={()=>{setRsvpId(null);setRsvpName("");}} style={{padding:"9px 12px",background:"rgba(255,255,255,0.05)",color:"#9ca3af",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,cursor:"pointer"}}><Icon d={I.x} size={14} color="#9ca3af"/></button>
-                    </div>
-                  ):(
-                    <button onClick={()=>{setRsvpId(ride.id);setRsvpName("");}} style={{width:"100%",padding:"9px 0",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",background:left<=0?"rgba(255,255,255,0.04)":"rgba(0,212,255,0.1)",color:left<=0?"#6b7280":"#00D4FF",border:`1px solid ${left<=0?"rgba(255,255,255,0.06)":"rgba(0,212,255,0.2)"}`}}>
-                      {left<=0?"Join Waitlist":"RSVP →"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── MEMBERS ── */}
-        {tab==="members"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:24}}>
-            <div><h2 style={{fontSize:20,fontWeight:900,margin:0,color:"white"}}>Members</h2><p style={{fontSize:13,color:"#6b7280",marginTop:4}}>Showing {filteredM.length}{liveRiders.length>0?` of ${liveRiders.length} live riders`:" (mock data)"}</p></div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <div style={{position:"relative",flex:1,minWidth:180}}>
-                <Icon d={I.search} size={13} color="#6b7280" style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}/>
-                <input value={mSearch} onChange={e=>{setMSearch(e.target.value);setMPage(1);}} placeholder="Search by name…" style={{...S.inp,paddingLeft:30}}/>
-              </div>
-              <select value={mCat} onChange={e=>{setMCat(e.target.value);setMPage(1);}} style={{...S.inp,width:80}}>{["All","A+","A","B","C","D"].map(c=><option key={c}>{c}</option>)}</select>
-              <button onClick={()=>{setMActive(a=>!a);setMPage(1);}} style={S.btn(mActive)}><Icon d={I.activity} size={13} color={mActive?"#00D4FF":"#9ca3af"}/> Active only</button>
-            </div>
-            <div style={S.card}>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Rider","Cat","FTP","W/kg","vELO","Phenotype","Status"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
-                  <tbody>{pagedM.map((m,i)=>(
-                    <tr key={m.id||i}>
-                      <td style={S.td}><span style={{marginRight:6}}>{toFlag(m.cc)}</span>{m.name}</td>
-                      <td style={S.td}><CatBadge cat={m.cat}/></td>
-                      <td style={{...S.td,fontFamily:"monospace",fontSize:12,color:"#6b7280"}}>{m.ftp}w</td>
-                      <td style={{...S.td,fontFamily:"monospace",fontSize:12,color:"#00D4FF",fontWeight:700}}>{m.wkg}</td>
-                      <td style={{...S.td,fontFamily:"monospace",fontSize:12,color:"#9ca3af"}}>{m.velo}</td>
-                      <td style={{...S.td,fontSize:12,color:"#6b7280"}}>{PH_EMOJI[m.ph]||"⭐"} {m.ph}</td>
-                      <td style={S.td}><span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,background:m.active?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.04)",color:m.active?"#10B981":"#4b5563"}}>{m.active?"Active":"Inactive"}</span></td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-              <div style={{padding:"12px 18px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:12,color:"#4b5563"}}>Page {mPage} of {totalPg}</span>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>setMPage(p=>Math.max(1,p-1))} disabled={mPage===1} style={{padding:"5px 12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:6,color:"#9ca3af",cursor:"pointer",opacity:mPage===1?0.3:1}}>←</button>
-                  <button onClick={()=>setMPage(p=>Math.min(totalPg,p+1))} disabled={mPage>=totalPg} style={{padding:"5px 12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:6,color:"#9ca3af",cursor:"pointer",opacity:mPage>=totalPg?0.3:1}}>→</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        </div>
-      </main>
-
-      {/* ADMIN MODAL */}
-      {showAdmin&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
-          <div style={{background:"#0d1322",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,width:"100%",maxWidth:420}}>
-            <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><Icon d={I.shield} size={15} color="#00D4FF"/><span style={{fontWeight:700,fontSize:15,color:"white"}}>Admin</span></div>
-              <button onClick={()=>setAdmin(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#6b7280",display:"flex"}}><Icon d={I.x} size={16} color="#6b7280"/></button>
-            </div>
-            <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{background:"rgba(16,185,129,0.07)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14}}>
-                <div style={{fontSize:11,fontWeight:700,color:"#10B981",marginBottom:4}}>📡 Live Data Status</div>
-                <div style={{fontSize:12,color:"#9ca3af"}}>{liveMsg}</div>
-              </div>
-              <button onClick={fetchLive} style={{padding:"10px 0",background:"rgba(0,212,255,0.1)",color:"#00D4FF",border:"1px solid rgba(0,212,255,0.2)",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>↻ Refresh Live Data Now</button>
-              <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#ef4444",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Danger Zone</div>
-                <button onClick={()=>{if(window.confirm("Clear all TTT sign-ups?"))setSignups([]);}} style={{width:"100%",padding:"9px 0",background:"rgba(239,68,68,0.1)",color:"#f87171",border:"1px solid rgba(239,68,68,0.25)",borderRadius:8,cursor:"pointer",fontSize:13}}>Clear All TTT Sign-ups</button>
-              </div>
-            </div>
-            <div style={{padding:"14px 20px",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              <button onClick={()=>setAdmin(false)} style={{width:"100%",padding:"11px 0",background:"#06b6d4",color:"#000",fontWeight:700,borderRadius:8,border:"none",cursor:"pointer",fontSize:14}}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW RIDE MODAL */}
-      {showRide&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
-          <div style={{background:"#0d1322",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,width:"100%",maxWidth:480}}>
-            <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontWeight:700,fontSize:15,color:"white"}}>Create New Ride</span>
-              <button onClick={()=>setShowRide(false)} style={{background:"none",border:"none",cursor:"pointer",display:"flex"}}><Icon d={I.x} size={16} color="#6b7280"/></button>
-            </div>
-            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12,maxHeight:"60vh",overflowY:"auto"}}>
-              {[{k:"title",lbl:"Title",ph:"e.g. Thursday Night Chaingang"},{k:"route",lbl:"Route",ph:"e.g. Watopia Hilly"},{k:"dist",lbl:"Distance",ph:"e.g. 45 km"},{k:"pace",lbl:"Pace",ph:"e.g. 2.5–3.2 w/kg"},{k:"desc",lbl:"Description",ph:"Brief description"}].map(({k,lbl,ph})=>(
-                <div key={k}><label style={S.lbl}>{lbl}</label><input value={newRide[k]} onChange={e=>setNewRide(r=>({...r,[k]:e.target.value}))} placeholder={ph} style={S.inp}/></div>
-              ))}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <div><label style={S.lbl}>Date</label><input type="date" value={newRide.date} onChange={e=>setNewRide(r=>({...r,date:e.target.value}))} style={S.inp}/></div>
-                <div><label style={S.lbl}>Time (UTC)</label><input value={newRide.time} onChange={e=>setNewRide(r=>({...r,time:e.target.value}))} placeholder="19:00 UTC" style={S.inp}/></div>
-                <div><label style={S.lbl}>Max Riders</label><input type="number" value={newRide.max} onChange={e=>setNewRide(r=>({...r,max:e.target.value}))} style={S.inp}/></div>
-              </div>
-              <div><label style={S.lbl}>Category</label>
-                <select value={newRide.cat} onChange={e=>setNewRide(r=>({...r,cat:e.target.value}))} style={S.inp}>{["All","A/B","B/C","C/D"].map(c=><option key={c}>{c}</option>)}</select>
-              </div>
-            </div>
-            <div style={{padding:"14px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:8}}>
-              <button onClick={createRide} style={{flex:1,padding:"10px 0",background:"#06b6d4",color:"#000",fontWeight:700,borderRadius:8,border:"none",cursor:"pointer",fontSize:14}}>Create Ride</button>
-              <button onClick={()=>setShowRide(false)} style={{padding:"10px 18px",background:"rgba(255,255,255,0.05)",color:"#9ca3af",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,cursor:"pointer",fontSize:14}}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      display: "flex",
+      background: "#080c18"
+    }
+  }, /*#__PURE__*/React.createElement("aside", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      flexShrink: 0,
+      width: sideOpen ? 220 : 52,
+      background: "#070b17",
+      borderRight: "1px solid rgba(255,255,255,0.07)",
+      transition: "width 0.2s",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 14,
+      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      minWidth: 52
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      background: "linear-gradient(135deg,#00D4FF,#0066CC)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 10,
+      fontWeight: 900,
+      color: "#000",
+      flexShrink: 0
+    }
+  }, "CG"), sideOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      whiteSpace: "nowrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 900,
+      color: "white"
+    }
+  }, "CRYO-GEN"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: "#4b5563"
+    }
+  }, "Cycling Club"))), /*#__PURE__*/React.createElement("nav", {
+    style: {
+      flex: 1,
+      padding: 8
+    }
+  }, NAV.map(function (_ref5) {
+    var id = _ref5.id,
+      label = _ref5.label,
+      d = _ref5.d;
+    return /*#__PURE__*/React.createElement("button", {
+      key: id,
+      onClick: function onClick() {
+        return setTab(id);
+      },
+      style: {
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 12px",
+        borderRadius: 8,
+        border: tab === id ? "1px solid rgba(0,212,255,0.2)" : "1px solid transparent",
+        background: tab === id ? "rgba(0,212,255,0.08)" : "transparent",
+        color: tab === id ? "#00D4FF" : "#6b7280",
+        cursor: "pointer",
+        marginBottom: 2,
+        textAlign: "left",
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      d: d,
+      size: 15,
+      color: tab === id ? "#00D4FF" : "#6b7280"
+    }), sideOpen && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, label));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 8,
+      borderTop: "1px solid rgba(255,255,255,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setAdmin(true);
+    },
+    style: {
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      padding: "10px 12px",
+      borderRadius: 8,
+      border: "1px solid transparent",
+      background: "transparent",
+      color: "#4b5563",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.settings,
+    size: 15,
+    color: "#4b5563"
+  }), sideOpen && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600
+    }
+  }, "Admin")), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setSide(function (o) {
+        return !o;
+      });
+    },
+    style: {
+      width: "100%",
+      display: "flex",
+      justifyContent: "center",
+      padding: 8,
+      border: "none",
+      background: "transparent",
+      color: "#374151",
+      cursor: "pointer",
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.chevron,
+    size: 13,
+    color: "#374151",
+    style: {
+      transform: sideOpen ? "rotate(180deg)" : "none",
+      transition: "transform 0.2s"
+    }
+  })))), /*#__PURE__*/React.createElement("main", {
+    style: {
+      flex: 1,
+      overflow: "auto",
+      padding: 32
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 960,
+      margin: "0 auto"
+    }
+  }, tab === "dashboard" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 20,
+      fontWeight: 900,
+      margin: 0,
+      color: "white"
+    }
+  }, "Team Overview"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "#6b7280",
+      marginTop: 4
+    }
+  }, "ZwiftPower \xB7 ZwiftRacing.app", liveRiders.length > 0 ? " · live ✓" : "")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4,1fr)",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement(StatCard, {
+    d: I.users,
+    label: "Active Riders",
+    value: active.length,
+    sub: liveRiders.length > 0 ? "".concat(liveRiders.length, " in API") : "mock data",
+    color: "#00D4FF"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    d: I.clock,
+    label: "TTT Signups",
+    value: "".concat(signups.length, "/").concat(TTT_EVENT.maxRiders),
+    sub: "Wed 28 May \xB7 19:00 UTC",
+    color: "#10B981"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    d: I.bike,
+    label: "Upcoming Rides",
+    value: rides.length,
+    sub: "Next ride coming up",
+    color: "#8B5CF6"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    d: I.trending,
+    label: "Avg Team vELO",
+    value: avgVelo || "—",
+    sub: liveRiders.length > 0 ? "Live" : "mock data",
+    color: "#F59E0B"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "2fr 1fr",
+      gap: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, S.card), {}, {
+      padding: 20
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: "#6b7280",
+      marginBottom: 16
+    }
+  }, "Team Avg vELO \u2014 Last 8 Weeks"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 150
+  }, /*#__PURE__*/React.createElement(LineChart, {
+    data: VELO_TREND,
+    margin: {
+      top: 5,
+      right: 10,
+      left: 0,
+      bottom: 5
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: "rgba(255,255,255,0.05)"
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "w",
+    axisLine: false,
+    tickLine: false,
+    tick: {
+      fontSize: 10,
+      fill: "#6b7280"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [1200, 1400],
+    axisLine: false,
+    tickLine: false,
+    tick: {
+      fontSize: 10,
+      fill: "#6b7280"
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, {
+    contentStyle: TT_STYLE,
+    labelStyle: {
+      color: "#fff"
+    },
+    itemStyle: {
+      color: "#00D4FF"
+    }
+  }), /*#__PURE__*/React.createElement(Line, {
+    type: "monotone",
+    dataKey: "v",
+    name: "vELO",
+    stroke: "#00D4FF",
+    strokeWidth: 2.5,
+    dot: {
+      fill: "#00D4FF",
+      r: 3,
+      strokeWidth: 0
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, S.card), {}, {
+      padding: 20
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: "#6b7280",
+      marginBottom: 12
+    }
+  }, "Top 5 by vELO"), _toConsumableArray(active).sort(function (a, b) {
+    return b.velo - a.velo;
+  }).slice(0, 5).map(function (m, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id || i,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 9
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#4b5563",
+        width: 14
+      }
+    }, i + 1), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: "white"
+      }
+    }, m.name.split(" ")[0]), /*#__PURE__*/React.createElement(CatBadge, {
+      cat: m.cat
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontFamily: "monospace",
+        color: "#00D4FF",
+        fontWeight: 700
+      }
+    }, m.velo));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: S.card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "12px 18px",
+      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: "#6b7280"
+    }
+  }, "Recent Team Results"), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse"
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Event", "Date", "Cat", "Result", "Time", "W/kg"].map(function (h) {
+    return /*#__PURE__*/React.createElement("th", {
+      key: h,
+      style: S.th
+    }, h);
+  }))), /*#__PURE__*/React.createElement("tbody", null, RESULTS.map(function (r, i) {
+    return /*#__PURE__*/React.createElement("tr", {
+      key: i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("strong", null, r.event)), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        color: "#6b7280",
+        fontSize: 12
+      })
+    }, r.date), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement(CatBadge, {
+      cat: r.cat
+    })), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        color: r.pos <= 3 ? "#FBBF24" : "#9ca3af",
+        fontWeight: 700
+      })
+    }, r.pos <= 3 ? "🏆 " : "", r.pos, "/", r.total), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        color: "#9ca3af"
+      })
+    }, r.time), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        color: "#00D4FF",
+        fontWeight: 700
+      })
+    }, r.wkg));
+  }))))), tab === "racing" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 20,
+      fontWeight: 900,
+      margin: 0,
+      color: "white"
+    }
+  }, "Racing Dashboard"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "#6b7280",
+      marginTop: 4
+    }
+  }, "ZwiftPower \xB7 ZwiftRacing.app")), /*#__PURE__*/React.createElement("button", {
+    onClick: fetchLive,
+    style: S.btn(false)
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.refresh,
+    size: 12,
+    color: "#9ca3af"
+  }), " Refresh")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, S.card), {}, {
+      padding: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 10,
+      height: 10,
+      borderRadius: "50%",
+      background: "#FBBF24",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: "white"
+    }
+  }, "ZwiftPower ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#6b7280",
+      fontWeight: 400,
+      fontSize: 11
+    }
+  }, "\xB7 Team 2740")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#6b7280",
+      marginTop: 2
+    }
+  }, "Engineering API access in progress \xB7 mock data"))), /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, S.card), {}, {
+      padding: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 10,
+      height: 10,
+      borderRadius: "50%",
+      background: scol,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: "white"
+    }
+  }, "ZwiftRacing.app ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#6b7280",
+      fontWeight: 400,
+      fontSize: 11
+    }
+  }, "\xB7 ", liveStatus)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#6b7280",
+      marginTop: 2
+    }
+  }, liveMsg)))), /*#__PURE__*/React.createElement("div", {
+    style: S.card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "12px 18px",
+      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: "#6b7280"
+    }
+  }, "Rider Rankings \u2014 vELO"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      color: liveRiders.length > 0 ? "#10B981" : "#4b5563",
+      background: "rgba(255,255,255,0.04)",
+      padding: "2px 8px",
+      borderRadius: 99
+    }
+  }, liveRiders.length > 0 ? "".concat(liveRiders.length, " riders \xB7 live \u2713") : "Mock · pending live API")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse"
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["#", "Rider", "Cat", "FTP", "W/kg", "vELO", "Phenotype"].map(function (h) {
+    return /*#__PURE__*/React.createElement("th", {
+      key: h,
+      style: S.th
+    }, h);
+  }))), /*#__PURE__*/React.createElement("tbody", null, _toConsumableArray(active).sort(function (a, b) {
+    return b.velo - a.velo;
+  }).map(function (m, i) {
+    return /*#__PURE__*/React.createElement("tr", {
+      key: m.id || i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        color: "#4b5563",
+        fontSize: 11,
+        fontFamily: "monospace"
+      })
+    }, i + 1), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginRight: 6
+      }
+    }, toFlag(m.cc)), m.name), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement(CatBadge, {
+      cat: m.cat
+    }), m.zraCat && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: ZRA_COLOR[m.zraCat] || "#9ca3af",
+        fontWeight: 700
+      }
+    }, m.zraCat))), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#6b7280"
+      })
+    }, m.ftp, "w"), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#00D4FF",
+        fontWeight: 700
+      })
+    }, m.wkg), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 56,
+        height: 4,
+        background: "rgba(255,255,255,0.08)",
+        borderRadius: 2
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "".concat(Math.min(m.velo / 3500 * 100, 100), "%"),
+        height: "100%",
+        background: "#00D4FF",
+        borderRadius: 2
+      }
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#9ca3af"
+      }
+    }, m.velo))), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontSize: 12,
+        color: "#6b7280"
+      })
+    }, PH_EMOJI[m.ph] || "⭐", " ", m.ph));
+  }))))), catDist.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, S.card), {}, {
+      padding: 20
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.1em",
+      color: "#6b7280",
+      marginBottom: 12
+    }
+  }, "Category Distribution"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 120
+  }, /*#__PURE__*/React.createElement(BarChart, {
+    data: catDist,
+    margin: {
+      top: 0,
+      right: 0,
+      left: 0,
+      bottom: 0
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: "rgba(255,255,255,0.05)",
+    vertical: false
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "cat",
+    axisLine: false,
+    tickLine: false,
+    tick: {
+      fontSize: 11,
+      fill: "#6b7280"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    axisLine: false,
+    tickLine: false,
+    tick: {
+      fontSize: 10,
+      fill: "#6b7280"
+    },
+    allowDecimals: false
+  }), /*#__PURE__*/React.createElement(Tooltip, {
+    contentStyle: TT_STYLE,
+    labelStyle: {
+      color: "#fff"
+    },
+    itemStyle: {
+      color: "#ccc"
+    }
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "count",
+    name: "Riders",
+    radius: [4, 4, 0, 0]
+  }, catDist.map(function (e) {
+    return /*#__PURE__*/React.createElement(Cell, {
+      key: e.cat,
+      fill: CAT_COLOR[e.cat]
+    });
+  })))))), tab === "ttt" && function () {
+    var byCat = ["A+", "A", "B", "C", "D"].reduce(function (a, cat) {
+      var r = signups.filter(function (s) {
+        return s.cat === cat;
+      });
+      if (r.length) a.push({
+        cat: cat,
+        r: r
+      });
+      return a;
+    }, []);
+    var pct = Math.min(signups.length / TTT_EVENT.maxRiders * 100, 100);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 24
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+      style: {
+        fontSize: 20,
+        fontWeight: 900,
+        margin: 0,
+        color: "white"
+      }
+    }, "TTT Sign-Up"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: "#6b7280",
+        marginTop: 4
+      }
+    }, "Weekly Team Time Trial")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return setLocked(function (l) {
+          return !l;
+        });
+      },
+      style: S.btn(tttLocked)
+    }, /*#__PURE__*/React.createElement(Icon, {
+      d: tttLocked ? I.lock : I.unlock,
+      size: 11
+    }), tttLocked ? "Locked" : "Lock"), /*#__PURE__*/React.createElement("button", {
+      onClick: exportCsv,
+      style: S.btn(false)
+    }, /*#__PURE__*/React.createElement(Icon, {
+      d: I.download,
+      size: 11
+    }), "Export CSV"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "rgba(0,80,120,0.2)",
+        border: "1px solid rgba(0,212,255,0.15)",
+        borderRadius: 12,
+        padding: 20
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        marginBottom: 12,
+        flexWrap: "wrap",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        color: "#00D4FF",
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        marginBottom: 4
+      }
+    }, "This Week"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        fontWeight: 900,
+        color: "white"
+      }
+    }, TTT_EVENT.title), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: "#9ca3af",
+        marginTop: 4
+      }
+    }, TTT_EVENT.desc)), tttLocked && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        background: "rgba(239,68,68,0.15)",
+        color: "#f87171",
+        border: "1px solid rgba(239,68,68,0.3)",
+        padding: "4px 10px",
+        borderRadius: 6
+      }
+    }, "LOCKED")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "6px 20px",
+        marginBottom: 16
+      }
+    }, [{
+      d: I.calendar,
+      v: TTT_EVENT.date
+    }, {
+      d: I.clock,
+      v: TTT_EVENT.time
+    }, {
+      d: I.pin,
+      v: TTT_EVENT.route
+    }, {
+      d: I.activity,
+      v: TTT_EVENT.dist
+    }, {
+      d: I.zap,
+      v: TTT_EVENT.format
+    }].map(function (_ref6) {
+      var d = _ref6.d,
+        v = _ref6.v;
+      return /*#__PURE__*/React.createElement("span", {
+        key: v,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          fontSize: 12,
+          color: "#9ca3af"
+        }
+      }, /*#__PURE__*/React.createElement(Icon, {
+        d: d,
+        size: 11,
+        color: "#00D4FF"
+      }), v);
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: 11,
+        color: "#6b7280",
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", null, signups.length, " signed up"), /*#__PURE__*/React.createElement("span", null, TTT_EVENT.maxRiders - signups.length, " spots left")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 6,
+        background: "rgba(255,255,255,0.08)",
+        borderRadius: 3
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "".concat(pct, "%"),
+        height: "100%",
+        background: "#00D4FF",
+        borderRadius: 3,
+        transition: "width 0.3s"
+      }
+    }))), !tttLocked && /*#__PURE__*/React.createElement("div", {
+      style: _objectSpread(_objectSpread({}, S.card), {}, {
+        padding: 16
+      })
+    }, /*#__PURE__*/React.createElement("label", {
+      style: _objectSpread(_objectSpread({}, S.lbl), {}, {
+        marginBottom: 10
+      })
+    }, "Sign Me Up"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      value: supName,
+      onChange: function onChange(e) {
+        return setSupName(e.target.value);
+      },
+      onKeyDown: function onKeyDown(e) {
+        return e.key === "Enter" && doSignup();
+      },
+      placeholder: "Your Zwift display name",
+      style: _objectSpread(_objectSpread({}, S.inp), {}, {
+        flex: 1,
+        minWidth: 180
+      })
+    }), /*#__PURE__*/React.createElement("select", {
+      value: supCat,
+      onChange: function onChange(e) {
+        return setSupCat(e.target.value);
+      },
+      style: _objectSpread(_objectSpread({}, S.inp), {}, {
+        width: 65
+      })
+    }, ["A+", "A", "B", "C", "D"].map(function (c) {
+      return /*#__PURE__*/React.createElement("option", {
+        key: c
+      }, c);
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: doSignup,
+      style: {
+        padding: "9px 20px",
+        background: "#06b6d4",
+        color: "#000",
+        fontWeight: 700,
+        borderRadius: 8,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 13
+      }
+    }, "Sign Up"))), signups.length === 0 ? /*#__PURE__*/React.createElement("div", {
+      style: _objectSpread(_objectSpread({}, S.card), {}, {
+        padding: 40,
+        textAlign: "center",
+        color: "#4b5563",
+        fontSize: 14
+      })
+    }, "No riders yet \u2014 be the first! \uD83D\uDEB4") : byCat.map(function (_ref7) {
+      var cat = _ref7.cat,
+        r = _ref7.r;
+      return /*#__PURE__*/React.createElement("div", {
+        key: cat,
+        style: S.card
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          padding: "10px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8
+        }
+      }, /*#__PURE__*/React.createElement(CatBadge, {
+        cat: cat
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          color: "#6b7280"
+        }
+      }, r.length, " rider", r.length !== 1 ? "s" : "")), r.map(function (s) {
+        return /*#__PURE__*/React.createElement("div", {
+          key: s.ts,
+          style: {
+            padding: "10px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid rgba(255,255,255,0.04)"
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 10
+          }
+        }, /*#__PURE__*/React.createElement(Icon, {
+          d: I.check,
+          size: 13,
+          color: "#10B981"
+        }), /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 13,
+            color: "white"
+          }
+        }, s.name)), /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 12
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 11,
+            color: "#4b5563"
+          }
+        }, fmtDate(s.ts)), /*#__PURE__*/React.createElement("button", {
+          onClick: function onClick() {
+            return rmSignup(s.ts);
+          },
+          style: {
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "#4b5563",
+            padding: 0,
+            display: "flex"
+          }
+        }, /*#__PURE__*/React.createElement(Icon, {
+          d: I.x,
+          size: 13,
+          color: "#4b5563"
+        }))));
+      }));
+    }));
+  }(), tab === "rides" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 20,
+      fontWeight: 900,
+      margin: 0,
+      color: "white"
+    }
+  }, "Social Rides"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "#6b7280",
+      marginTop: 4
+    }
+  }, "Sign up \xB7 replaces WhatsApp")), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowRide(true);
+    },
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "8px 16px",
+      background: "#06b6d4",
+      color: "#000",
+      fontWeight: 700,
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.plus,
+    size: 14,
+    color: "#000"
+  }), " New Ride")), _toConsumableArray(rides).sort(function (a, b) {
+    return new Date(a.date) - new Date(b.date);
+  }).map(function (ride) {
+    var att = rsvps[ride.id] || [];
+    var left = ride.max - att.length;
+    var pct = Math.min(att.length / ride.max * 100, 100);
+    return /*#__PURE__*/React.createElement("div", {
+      key: ride.id,
+      style: _objectSpread(_objectSpread({}, S.card), {}, {
+        padding: 20
+      })
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 16,
+        marginBottom: 10,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        marginBottom: 6,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        background: "rgba(255,255,255,0.06)",
+        color: "#9ca3af",
+        border: "1px solid rgba(255,255,255,0.1)",
+        padding: "1px 8px",
+        borderRadius: 99
+      }
+    }, ride.cat), left <= 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        background: "rgba(239,68,68,0.12)",
+        color: "#f87171",
+        border: "1px solid rgba(239,68,68,0.25)",
+        padding: "1px 8px",
+        borderRadius: 99
+      }
+    }, "Full"), left > 0 && left <= 3 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        background: "rgba(251,191,36,0.12)",
+        color: "#fbbf24",
+        border: "1px solid rgba(251,191,36,0.25)",
+        padding: "1px 8px",
+        borderRadius: 99
+      }
+    }, "Almost Full")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 15,
+        fontWeight: 700,
+        color: "white"
+      }
+    }, ride.title), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "#6b7280",
+        marginTop: 4
+      }
+    }, ride.desc)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "right"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: "white"
+      }
+    }, new Date(ride.date + "T00:00:00").toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short"
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#6b7280",
+        marginTop: 2
+      }
+    }, ride.time))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "4px 16px",
+        marginBottom: 10
+      }
+    }, [{
+      d: I.pin,
+      v: ride.route
+    }, {
+      d: I.activity,
+      v: ride.dist
+    }, {
+      d: I.zap,
+      v: ride.pace
+    }, {
+      d: I.users,
+      v: "".concat(att.length, "/").concat(ride.max)
+    }].map(function (_ref8) {
+      var d = _ref8.d,
+        v = _ref8.v;
+      return /*#__PURE__*/React.createElement("span", {
+        key: v,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 11,
+          color: "#6b7280"
+        }
+      }, /*#__PURE__*/React.createElement(Icon, {
+        d: d,
+        size: 10,
+        color: "#00D4FF"
+      }), v);
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 3,
+        background: "rgba(255,255,255,0.07)",
+        borderRadius: 2,
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "".concat(pct, "%"),
+        height: "100%",
+        background: pct > 85 ? "#EF4444" : "#00D4FF",
+        borderRadius: 2
+      }
+    })), att.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 5,
+        marginBottom: 10
+      }
+    }, att.slice(0, 8).map(function (r, i) {
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: function onClick() {
+          return cancelRsvp(ride.id, r.name);
+        },
+        title: "Click to cancel",
+        style: {
+          fontSize: 11,
+          background: "rgba(255,255,255,0.05)",
+          color: "#9ca3af",
+          border: "1px solid rgba(255,255,255,0.08)",
+          padding: "2px 10px",
+          borderRadius: 99,
+          cursor: "pointer"
+        }
+      }, r.name);
+    }), att.length > 8 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#4b5563",
+        alignSelf: "center"
+      }
+    }, "+", att.length - 8, " more")), rsvpId === ride.id ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      value: rsvpName,
+      onChange: function onChange(e) {
+        return setRsvpName(e.target.value);
+      },
+      onKeyDown: function onKeyDown(e) {
+        return e.key === "Enter" && confirmRsvp(ride.id);
+      },
+      placeholder: "Your name",
+      autoFocus: true,
+      style: _objectSpread(_objectSpread({}, S.inp), {}, {
+        flex: 1,
+        minWidth: 150,
+        borderColor: "rgba(0,212,255,0.4)"
+      })
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return confirmRsvp(ride.id);
+      },
+      style: {
+        padding: "9px 18px",
+        background: "#06b6d4",
+        color: "#000",
+        fontWeight: 700,
+        borderRadius: 8,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 13
+      }
+    }, "Confirm"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        setRsvpId(null);
+        setRsvpName("");
+      },
+      style: {
+        padding: "9px 12px",
+        background: "rgba(255,255,255,0.05)",
+        color: "#9ca3af",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      d: I.x,
+      size: 14,
+      color: "#9ca3af"
+    }))) : /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        setRsvpId(ride.id);
+        setRsvpName("");
+      },
+      style: {
+        width: "100%",
+        padding: "9px 0",
+        borderRadius: 8,
+        fontWeight: 700,
+        fontSize: 13,
+        cursor: "pointer",
+        background: left <= 0 ? "rgba(255,255,255,0.04)" : "rgba(0,212,255,0.1)",
+        color: left <= 0 ? "#6b7280" : "#00D4FF",
+        border: "1px solid ".concat(left <= 0 ? "rgba(255,255,255,0.06)" : "rgba(0,212,255,0.2)")
+      }
+    }, left <= 0 ? "Join Waitlist" : "RSVP →"));
+  })), tab === "members" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 20,
+      fontWeight: 900,
+      margin: 0,
+      color: "white"
+    }
+  }, "Members"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "#6b7280",
+      marginTop: 4
+    }
+  }, "Showing ", filteredM.length, liveRiders.length > 0 ? " of ".concat(liveRiders.length, " live riders") : " (mock data)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      flex: 1,
+      minWidth: 180
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.search,
+    size: 13,
+    color: "#6b7280",
+    style: {
+      position: "absolute",
+      left: 10,
+      top: "50%",
+      transform: "translateY(-50%)"
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    value: mSearch,
+    onChange: function onChange(e) {
+      setMSearch(e.target.value);
+      setMPage(1);
+    },
+    placeholder: "Search by name\u2026",
+    style: _objectSpread(_objectSpread({}, S.inp), {}, {
+      paddingLeft: 30
+    })
+  })), /*#__PURE__*/React.createElement("select", {
+    value: mCat,
+    onChange: function onChange(e) {
+      setMCat(e.target.value);
+      setMPage(1);
+    },
+    style: _objectSpread(_objectSpread({}, S.inp), {}, {
+      width: 80
+    })
+  }, ["All", "A+", "A", "B", "C", "D"].map(function (c) {
+    return /*#__PURE__*/React.createElement("option", {
+      key: c
+    }, c);
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      setMActive(function (a) {
+        return !a;
+      });
+      setMPage(1);
+    },
+    style: S.btn(mActive)
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.activity,
+    size: 13,
+    color: mActive ? "#00D4FF" : "#9ca3af"
+  }), " Active only")), /*#__PURE__*/React.createElement("div", {
+    style: S.card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse"
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Rider", "Cat", "FTP", "W/kg", "vELO", "Phenotype", "Status"].map(function (h) {
+    return /*#__PURE__*/React.createElement("th", {
+      key: h,
+      style: S.th
+    }, h);
+  }))), /*#__PURE__*/React.createElement("tbody", null, pagedM.map(function (m, i) {
+    return /*#__PURE__*/React.createElement("tr", {
+      key: m.id || i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginRight: 6
+      }
+    }, toFlag(m.cc)), m.name), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement(CatBadge, {
+      cat: m.cat
+    })), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#6b7280"
+      })
+    }, m.ftp, "w"), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#00D4FF",
+        fontWeight: 700
+      })
+    }, m.wkg), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontFamily: "monospace",
+        fontSize: 12,
+        color: "#9ca3af"
+      })
+    }, m.velo), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, S.td), {}, {
+        fontSize: 12,
+        color: "#6b7280"
+      })
+    }, PH_EMOJI[m.ph] || "⭐", " ", m.ph), /*#__PURE__*/React.createElement("td", {
+      style: S.td
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        padding: "2px 8px",
+        borderRadius: 99,
+        background: m.active ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)",
+        color: m.active ? "#10B981" : "#4b5563"
+      }
+    }, m.active ? "Active" : "Inactive")));
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "12px 18px",
+      borderTop: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: "#4b5563"
+    }
+  }, "Page ", mPage, " of ", totalPg), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setMPage(function (p) {
+        return Math.max(1, p - 1);
+      });
+    },
+    disabled: mPage === 1,
+    style: {
+      padding: "5px 12px",
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 6,
+      color: "#9ca3af",
+      cursor: "pointer",
+      opacity: mPage === 1 ? 0.3 : 1
+    }
+  }, "\u2190"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setMPage(function (p) {
+        return Math.min(totalPg, p + 1);
+      });
+    },
+    disabled: mPage >= totalPg,
+    style: {
+      padding: "5px 12px",
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 6,
+      color: "#9ca3af",
+      cursor: "pointer",
+      opacity: mPage >= totalPg ? 0.3 : 1
+    }
+  }, "\u2192"))))))), showAdmin && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.85)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 50,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#0d1322",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 16,
+      width: "100%",
+      maxWidth: 420
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 20px",
+      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.shield,
+    size: 15,
+    color: "#00D4FF"
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 15,
+      color: "white"
+    }
+  }, "Admin")), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setAdmin(false);
+    },
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "#6b7280",
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.x,
+    size: 16,
+    color: "#6b7280"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 20,
+      display: "flex",
+      flexDirection: "column",
+      gap: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(16,185,129,0.07)",
+      border: "1px solid rgba(16,185,129,0.2)",
+      borderRadius: 10,
+      padding: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: "#10B981",
+      marginBottom: 4
+    }
+  }, "\uD83D\uDCE1 Live Data Status"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#9ca3af"
+    }
+  }, liveMsg)), /*#__PURE__*/React.createElement("button", {
+    onClick: fetchLive,
+    style: {
+      padding: "10px 0",
+      background: "rgba(0,212,255,0.1)",
+      color: "#00D4FF",
+      border: "1px solid rgba(0,212,255,0.2)",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 700
+    }
+  }, "\u21BB Refresh Live Data Now"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "1px solid rgba(255,255,255,0.07)",
+      paddingTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      color: "#ef4444",
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+      marginBottom: 8
+    }
+  }, "Danger Zone"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      if (window.confirm("Clear all TTT sign-ups?")) setSignups([]);
+    },
+    style: {
+      width: "100%",
+      padding: "9px 0",
+      background: "rgba(239,68,68,0.1)",
+      color: "#f87171",
+      border: "1px solid rgba(239,68,68,0.25)",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 13
+    }
+  }, "Clear All TTT Sign-ups"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 20px",
+      borderTop: "1px solid rgba(255,255,255,0.07)"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setAdmin(false);
+    },
+    style: {
+      width: "100%",
+      padding: "11px 0",
+      background: "#06b6d4",
+      color: "#000",
+      fontWeight: 700,
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontSize: 14
+    }
+  }, "Close")))), showRide && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.85)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 50,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#0d1322",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 16,
+      width: "100%",
+      maxWidth: 480
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 20px",
+      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 15,
+      color: "white"
+    }
+  }, "Create New Ride"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowRide(false);
+    },
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: I.x,
+    size: 16,
+    color: "#6b7280"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 20,
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      maxHeight: "60vh",
+      overflowY: "auto"
+    }
+  }, [{
+    k: "title",
+    lbl: "Title",
+    ph: "e.g. Thursday Night Chaingang"
+  }, {
+    k: "route",
+    lbl: "Route",
+    ph: "e.g. Watopia Hilly"
+  }, {
+    k: "dist",
+    lbl: "Distance",
+    ph: "e.g. 45 km"
+  }, {
+    k: "pace",
+    lbl: "Pace",
+    ph: "e.g. 2.5–3.2 w/kg"
+  }, {
+    k: "desc",
+    lbl: "Description",
+    ph: "Brief description"
+  }].map(function (_ref9) {
+    var k = _ref9.k,
+      lbl = _ref9.lbl,
+      ph = _ref9.ph;
+    return /*#__PURE__*/React.createElement("div", {
+      key: k
+    }, /*#__PURE__*/React.createElement("label", {
+      style: S.lbl
+    }, lbl), /*#__PURE__*/React.createElement("input", {
+      value: newRide[k],
+      onChange: function onChange(e) {
+        return setNewRide(function (r) {
+          return _objectSpread(_objectSpread({}, r), {}, _defineProperty({}, k, e.target.value));
+        });
+      },
+      placeholder: ph,
+      style: S.inp
+    }));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: S.lbl
+  }, "Date"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: newRide.date,
+    onChange: function onChange(e) {
+      return setNewRide(function (r) {
+        return _objectSpread(_objectSpread({}, r), {}, {
+          date: e.target.value
+        });
+      });
+    },
+    style: S.inp
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: S.lbl
+  }, "Time (UTC)"), /*#__PURE__*/React.createElement("input", {
+    value: newRide.time,
+    onChange: function onChange(e) {
+      return setNewRide(function (r) {
+        return _objectSpread(_objectSpread({}, r), {}, {
+          time: e.target.value
+        });
+      });
+    },
+    placeholder: "19:00 UTC",
+    style: S.inp
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: S.lbl
+  }, "Max Riders"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: newRide.max,
+    onChange: function onChange(e) {
+      return setNewRide(function (r) {
+        return _objectSpread(_objectSpread({}, r), {}, {
+          max: e.target.value
+        });
+      });
+    },
+    style: S.inp
+  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: S.lbl
+  }, "Category"), /*#__PURE__*/React.createElement("select", {
+    value: newRide.cat,
+    onChange: function onChange(e) {
+      return setNewRide(function (r) {
+        return _objectSpread(_objectSpread({}, r), {}, {
+          cat: e.target.value
+        });
+      });
+    },
+    style: S.inp
+  }, ["All", "A/B", "B/C", "C/D"].map(function (c) {
+    return /*#__PURE__*/React.createElement("option", {
+      key: c
+    }, c);
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 20px",
+      borderTop: "1px solid rgba(255,255,255,0.07)",
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: createRide,
+    style: {
+      flex: 1,
+      padding: "10px 0",
+      background: "#06b6d4",
+      color: "#000",
+      fontWeight: 700,
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontSize: 14
+    }
+  }, "Create Ride"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowRide(false);
+    },
+    style: {
+      padding: "10px 18px",
+      background: "rgba(255,255,255,0.05)",
+      color: "#9ca3af",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 14
+    }
+  }, "Cancel")))));
 }
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 </script>
 </body>
 </html>
