@@ -149,7 +149,7 @@ table{width:100%;border-collapse:collapse}
       <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Top 10 by vELO</div><div id="top10"></div></div>
       <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Category Breakdown</div><div id="catdist"></div></div>
     </div>
-    <div class="card"><div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Recent Results</div><table><thead><tr><th>Event</th><th>Date</th><th>Cat</th><th>Result</th><th>Time</th><th>W/kg</th></tr></thead><tbody id="results-body"></tbody></table></div>
+    <div class="card"><div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280" id="results-header">Recent Results</div><table><thead><tr><th>Rider</th><th>Date</th><th>ZRA Tier</th><th>Rating</th><th>Record</th><th>Podiums/Races</th></tr></thead><tbody id="results-body"></tbody></table></div>
   </div>
 
   <!-- RACING -->
@@ -203,6 +203,10 @@ table{width:100%;border-collapse:collapse}
       </div>
       <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
     </div>
+    <!-- ZwiftHacks live events -->
+    <div id="zwift-events-list" style="display:none;margin-bottom:20px"></div>
+    <!-- Manual rides -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">📅 Club Rides</div>
     <div id="rides-list"></div>
   </div>
 
@@ -868,6 +872,92 @@ function renderProfile(){
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}`
   ;
+}
+
+// ── Live Results ──────────────────────────────────────────
+let liveResults = [];
+async function loadResults(){
+  try{
+    const r = await fetch('/api/proxy?endpoint=results');
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d.source==='derived' && d.results){
+      liveResults = d.results;
+    } else if(Array.isArray(d)){
+      liveResults = d;
+    }
+    renderResults();
+  } catch(e){ console.log('Results fetch failed:', e.message); }
+}
+function renderResults(){
+  const el = document.getElementById('results-body');
+  if(!el) return;
+  if(liveResults.length===0){
+    // Fall back to mock results
+    el.innerHTML = RESULTS.map(r=>`<tr>
+      <td><strong>${r.event}</strong></td>
+      <td style="color:#6b7280;font-size:12px">${r.date}</td>
+      <td>${catB(r.cat)}</td>
+      <td style="color:${r.pos<=3?'#FBBF24':'#9ca3af'};font-weight:700">${r.pos<=3?'🏆 ':''}${r.pos}/${r.total}</td>
+      <td style="font-family:monospace;color:#9ca3af">${r.time}</td>
+      <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.wkg}</td>
+    </tr>`).join('');
+    return;
+  }
+  // Show live results derived from ZwiftRacing.app
+  el.innerHTML = liveResults.slice(0,10).map(r=>{
+    const d = new Date(r.date*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    const zraC = ZRA_COLOR[r.category]||'#9ca3af';
+    return`<tr>
+      <td style="color:white">${r.name}</td>
+      <td style="color:#6b7280;font-size:12px">${d}</td>
+      <td>${r.category?`<span style="font-size:11px;color:${zraC};font-weight:700;background:${zraC}18;border:1px solid ${zraC}44;padding:1px 8px;border-radius:4px">${r.category}</span>`:'-'}</td>
+      <td style="color:#FBBF24;font-weight:700">vELO ${Math.round(r.rating||0)}</td>
+      <td style="font-family:monospace;color:#10B981">🏆 ${r.wins} wins</td>
+      <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.podiums} podiums / ${r.finishes} races</td>
+    </tr>`;
+  }).join('');
+  // Update results header
+  const hdr = document.getElementById('results-header');
+  if(hdr) hdr.textContent = 'Recent Rider Activity — Live from ZwiftRacing.app';
+}
+
+// ── ZwiftHacks Events ──────────────────────────────────────
+let zwiftEvents = [];
+async function loadEvents(){
+  try{
+    const r = await fetch('/api/proxy?endpoint=events');
+    if(!r.ok) return;
+    const d = await r.json();
+    const items = d.data?.items || d.data || [];
+    if(Array.isArray(items) && items.length > 0){
+      zwiftEvents = items;
+      renderZwiftEvents();
+    }
+  } catch(e){ console.log('Events fetch failed:', e.message); }
+}
+function renderZwiftEvents(){
+  const el = document.getElementById('zwift-events-list');
+  if(!el || zwiftEvents.length===0) return;
+  el.innerHTML = `
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:12px;letter-spacing:.08em">
+      🚴 Upcoming Zwift Events — <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="color:#00D4FF">View all on ZwiftHacks →</a>
+    </div>` +
+  zwiftEvents.slice(0,6).map(ev=>{
+    const start = ev.eventStart||ev.start||'';
+    const d = start ? new Date(start).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+    const name = ev.name||ev.eventName||ev.title||'Zwift Event';
+    const cat  = ev.rulesSet||ev.category||'';
+    const route= ev.routeName||ev.route||'';
+    return`<div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${name}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:3px">${[d,route,cat].filter(Boolean).join(' · ')}</div>
+      </div>
+      <button onclick="rsvpId=this.dataset.id;renderRides()" data-id="${ev.id||''}" style="padding:6px 14px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:12px;font-weight:700;white-space:nowrap">RSVP →</button>
+    </div>`;
+  }).join('');
+  el.style.display = 'block';
 }
 
 // ── Google Sheet Sync ─────────────────────────────────────
