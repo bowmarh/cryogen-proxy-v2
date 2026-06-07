@@ -466,6 +466,7 @@ function showTab(id,btn){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
+  if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
   if(id==='rides')loadZwiftEvents();
