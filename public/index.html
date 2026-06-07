@@ -280,6 +280,7 @@ table{width:100%;border-collapse:collapse}
       <th onclick="mSortBy('wkg')">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
       <th onclick="mSortBy('velo')">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
       <th onclick="mSortBy('ph')">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
+      <th>ZRA Club</th>
       <th>Status</th>
     </tr></thead><tbody id="members-body"></tbody></table></div>
     <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
@@ -474,6 +475,7 @@ function showTab(id,btn){
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
   if(id==='rides')loadZwiftEvents();
+  if(id==='members')renderAffiliationPanel();
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -694,10 +696,55 @@ function renderMembers(){
       <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
       <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</td>
       <td style="font-size:12px;color:#6b7280">${PH_EMOJI[m.ph]||'⭐'} ${m.ph}</td>
+      <td style="font-size:11px;max-width:160px">${(()=>{
+        const log = affiliationLog['r'+m.id];
+        const club = m.raw?.club?.name || log?.club || 'CRYO-GEN';
+        const firstSeen = log?.firstSeen ? new Date(log.firstSeen).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        const changed = log?.changed ? new Date(log.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : null;
+        const isCryo = club.toLowerCase().includes('cryo');
+        return `<div style="color:${isCryo?'#10B981':'#FBBF24'};font-weight:600">${club}</div>
+          <div style="color:#4b5563;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
+          ${changed?`<div style="font-size:9px;color:#EF4444">⚠️ Recently changed</div>`:''}`;
+      })()}</td>
       <td><span class="badge" style="background:${m.active?'rgba(16,185,129,0.12)':'rgba(255,255,255,0.04)'};color:${m.active?'#10B981':'#4b5563'}">${m.active?'Active':'Inactive'}</span></td>
     </tr>`;
   }).join('');
 }
+function renderAffiliationPanel() {
+  const el = document.getElementById('affiliation-panel');
+  if (!el) return;
+  const changes = Object.entries(affiliationLog)
+    .filter(([k,v]) => v.changed)
+    .map(([k,v]) => {
+      const rider = (riders.length ? riders : MOCK).find(r => 'r'+r.id === k);
+      return { name: rider?.name || k, ...v };
+    })
+    .sort((a,b) => new Date(b.changed) - new Date(a.changed));
+
+  if (changes.length === 0) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<div class="card" style="margin-top:4px">
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#EF4444;letter-spacing:.08em">
+      ⚠️ Recent Club Affiliation Changes
+    </div>
+    ${changes.slice(0,10).map(c => {
+      const prev = c.history?.[c.history.length-1]?.club || '—';
+      const d = new Date(c.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      return `<div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:600">${c.name}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">
+            <span style="color:#EF4444">${prev}</span>
+            <span style="color:#4b5563"> → </span>
+            <span style="color:#10B981">${c.club}</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#4b5563;flex-shrink:0">Changed ${d}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 function changeMPage(d){const data=riders.length?riders:MOCK;const PER=15;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
 
 // ── Events & Sign-Up ───────────────────────────────────────
@@ -955,6 +1002,27 @@ function renderProfile(){
 
 // ── Live Results ──────────────────────────────────────────
 let liveResults = [];
+let affiliationLog = JSON.parse(localStorage.getItem('cg_aff') || '{}');
+
+function trackAffiliations(riders) {
+  let changed = false;
+  riders.forEach(r => {
+    const key = 'r' + r.id;
+    const club = r.raw?.club?.name || 'Team CRYO-GEN';
+    const zpCat = r.cat || '';
+    if (!affiliationLog[key]) {
+      affiliationLog[key] = { club, zpCat, firstSeen: new Date().toISOString(), history: [] };
+      changed = true;
+    } else if (affiliationLog[key].club !== club) {
+      affiliationLog[key].history = affiliationLog[key].history || [];
+      affiliationLog[key].history.push({ club: affiliationLog[key].club, until: new Date().toISOString() });
+      affiliationLog[key].club = club;
+      affiliationLog[key].changed = new Date().toISOString();
+      changed = true;
+    }
+  });
+  if (changed) localStorage.setItem('cg_aff', JSON.stringify(affiliationLog));
+}
 async function loadResults(){
   try{
     const r = await fetch('/api/proxy?endpoint=results');
