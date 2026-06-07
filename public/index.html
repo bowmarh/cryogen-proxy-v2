@@ -600,6 +600,32 @@ function renderAll(){
   renderRides();
 }
 
+// ── Rider profile links ────────────────────────────────────
+function riderLinks(m){
+  if(!m.id||m.id<1) return m.name;
+  const zra = `https://www.zwiftracing.app/riders/${m.id}`;
+  const zp  = `https://zwiftpower.com/profile.php?z=${m.id}`;
+  return `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <a href="${zra}" target="_blank" title="View on ZwiftRacing.app"
+       style="color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,0.2)"
+       onmouseover="this.style.color='#00D4FF';this.style.borderBottomColor='#00D4FF'"
+       onmouseout="this.style.color='inherit';this.style.borderBottomColor='rgba(255,255,255,0.2)'"
+    >${m.name}</a>
+    <span style="display:inline-flex;gap:3px;flex-shrink:0">
+      <a href="${zra}" target="_blank" title="ZwiftRacing.app profile"
+         style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);text-decoration:none;white-space:nowrap"
+         onmouseover="this.style.background='rgba(0,212,255,0.25)'"
+         onmouseout="this.style.background='rgba(0,212,255,0.12)'"
+      >ZRA</a>
+      <a href="${zp}" target="_blank" title="ZwiftPower profile"
+         style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);text-decoration:none;white-space:nowrap"
+         onmouseover="this.style.background='rgba(251,191,36,0.25)'"
+         onmouseout="this.style.background='rgba(251,191,36,0.12)'"
+      >ZP</a>
+    </span>
+  </span>`;
+}
+
 // ── Racing ─────────────────────────────────────────────────
 function renderRacing(){
   const data=riders.length?riders:MOCK;
@@ -621,7 +647,7 @@ function renderRacing(){
     const barW=Math.min(m.velo/3500*100,100);
     return`<tr>
       <td style="color:#4b5563;font-family:monospace;font-size:11px">${i+1}</td>
-      <td>${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:#00D4FF">${m.name} ★</strong>`:m.name}</td>
+      <td style="white-space:nowrap">${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td>${catB(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700;margin-left:4px">${m.zraCat}</span>`:''}</td>
       <td style="font-family:monospace;font-size:12px;color:#6b7280">${m.ftp}w</td>
       <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
@@ -660,7 +686,7 @@ function renderMembers(){
     const isMe=role==='member'&&memberRider&&m.id===memberRider.id;
     const zraC=ZRA_COLOR[m.zraCat]||'#9ca3af';
     return`<tr style="${isMe?'background:rgba(0,212,255,0.05)':''}">
-      <td>${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${m.name} ★</strong>`:m.name}</td>
+      <td style="white-space:nowrap">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td style="color:#6b7280;font-size:12px">${m.cc.toUpperCase()}</td>
       <td>${catB(m.cat)}</td>
       <td>${m.zraCat?`<span style="font-size:11px;color:${zraC};font-weight:700">${m.zraCat}</span>`:'-'}</td>
