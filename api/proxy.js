@@ -48,13 +48,24 @@ module.exports = async (req, res) => {
     // ── Club rides from Google Apps Script ───────────────
     if (endpoint === "rides") {
       if (!RIDES_URL) {
-        return res.status(404).json({ error: "RIDES_SCRIPT_URL not set in Vercel env vars" });
+        return res.status(404).json({ error: "RIDES_SCRIPT_URL not set in Vercel env vars. Add it in Vercel → Settings → Environment Variables." });
       }
       res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=60");
       const r = await fetch(RIDES_URL, { redirect: "follow" });
-      if (!r.ok) return res.status(r.status).json({ error: `Script returned ${r.status}` });
-      const data = await r.json();
-      return res.status(200).json(data);
+      const text = await r.text();
+      // Check if Google returned a login page instead of JSON
+      if (text.trim().startsWith("<")) {
+        return res.status(401).json({
+          error: "Script returned HTML — re-deploy with: Execute as = Me, Who has access = Anyone",
+          hint: "In Apps Script: Deploy → Manage deployments → Edit → set access to Anyone (not Google account)"
+        });
+      }
+      try {
+        const data = JSON.parse(text);
+        return res.status(200).json(data);
+      } catch(e) {
+        return res.status(500).json({ error: "Invalid JSON from script: " + text.substring(0, 100) });
+      }
     }
 
     // ── Google Sheets TTT data ───────────────────────────
