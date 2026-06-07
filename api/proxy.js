@@ -119,14 +119,18 @@ module.exports = async (req, res) => {
       return res.status(200).json({ sheetResults, derived });
     }
 
-    // ── Debug: inspect raw rider race.last structure ─────
+    // ── Debug: inspect raw rider structure ───────────────
     if (endpoint === "rawrider") {
       if (memCache.team && memCache.team.riders && memCache.team.riders.length > 0) {
-        const sample = memCache.team.riders
-          .filter(r => r.raw && r.raw.race && r.raw.race.last)
-          .slice(0, 3)
-          .map(r => ({ name: r.name, race_last: r.raw.race.last, race_keys: Object.keys(r.raw.race||{}) }));
-        return res.status(200).json({ sample, total: memCache.team.riders.length });
+        // Show first rider's full raw API keys and race data
+        const first = memCache.team.riders[0];
+        const withRace = memCache.team.riders.find(r => r.race && r.race.last);
+        return res.status(200).json({
+          total: memCache.team.riders.length,
+          first_keys: Object.keys(first),
+          first_sample: first,
+          with_race_sample: withRace ? { keys: Object.keys(withRace), race: withRace.race } : null
+        });
       }
       return res.status(404).json({ error: "No cached data — load Racing tab first" });
     }
