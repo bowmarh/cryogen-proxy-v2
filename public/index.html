@@ -1012,16 +1012,57 @@ function trackAffiliations(riders) {
 }
 async function loadResults(){
   try{
-    const r = await fetch('/api/proxy?endpoint=results');
+    const r=await fetch('/api/proxy?endpoint=results');
     if(!r.ok) return;
-    const d = await r.json();
-    if(d.source==='derived' && d.results){
-      liveResults = d.results;
-    } else if(Array.isArray(d)){
-      liveResults = d;
-    }
-    renderResults();
-  } catch(e){ console.log('Results fetch failed:', e.message); }
+    const d=await r.json();
+    if(d.results&&d.results.length>0){ renderAutoResults(d.results); }
+    else { renderHybridResults([],d.derived||[]); }
+  } catch(e){ console.log('Results failed:',e.message); }
+}
+
+function renderAutoResults(results){
+  const el=document.getElementById('results-body');
+  const hdr=document.getElementById('results-header');
+  if(!el) return;
+  if(hdr) hdr.textContent='Recent Results — Live from ZwiftPower';
+  el.innerHTML=results.map(ev=>{
+    const type=ev.eventType||'';
+    const icon=type.includes('TEAM_TIME')?'⏱️ TTT':type.includes('TIME_TRIAL')?'⏱️ TT':type.includes('RACE')?'🏁':'🚴';
+    const cats=(ev.categories||[]).map(c=>{
+      const col=catColor(c.cat);
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin:1px 2px;padding:2px 7px;border-radius:4px;background:'+col+'18;border:1px solid '+col+'44;font-size:11px"><span style="color:'+col+';font-weight:700">'+c.cat+'</span><span style="color:#9ca3af">'+(c.pos<=3?'🏆 ':'')+c.pos+'/'+c.total+'</span><span style="font-family:monospace;color:#6b7280">'+c.time+'</span><span style="color:#00D4FF">'+c.wkg+' w/kg</span></span>';
+    }).join('');
+    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#6b7280;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#6b7280">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#4b5563">'+ev.riders+' riders</td></tr>';
+  }).join('');
+}
+
+function renderHybridResults(sheet,derived){
+  const el=document.getElementById('results-body');
+  const hdr=document.getElementById('results-header');
+  if(!el) return;
+  if(hdr) hdr.textContent='Recent Results';
+  let rows='';
+  if(sheet.length>0){
+    rows+=sheet.map(r=>{
+      const col=catColor(r.Cat||r.cat||'?');
+      const pos=parseInt(r.Pos||r.pos||'0');
+      const podium=pos>0&&pos<=3;
+      return '<tr><td><strong>'+(r.Event||r.event||'—')+'</strong>'+(r.ZPLink?'<a href="'+r.ZPLink+'" target="_blank" style="font-size:10px;color:#00D4FF"> ↗</a>':'')+'</td><td style="color:#6b7280;font-size:11px">'+(r.Date||r.date||'—')+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.Cat||r.cat||'?')+'</span></td><td style="color:'+(podium?'#FBBF24':'#9ca3af')+';font-weight:700">'+(podium?'🏆 ':'')+(pos||'—')+'/'+(r.Total||r.total||'?')+'</td><td style="font-family:monospace;color:#9ca3af">'+(r.Time||r.time||'—')+'</td><td style="font-family:monospace;color:#00D4FF;font-weight:700">'+(r['W/kg']||r.wkg||'—')+'</td></tr>';
+    }).join('');
+  }
+  if(derived.length>0){
+    rows+='<tr><td colspan="6" style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:#374151;background:rgba(255,255,255,0.02)">Recent Rider Activity — ZwiftRacing.app</td></tr>';
+    rows+=derived.slice(0,8).map(r=>{
+      const col=catColor(r.category||'?');
+      const dt=r.date?new Date(r.date*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—';
+      return '<tr><td><a href="https://zwiftpower.com/profile.php?z='+r.id+'" target="_blank" style="color:white;text-decoration:none">'+r.name+'</a></td><td style="color:#6b7280;font-size:11px">'+dt+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.category||'?')+'</span></td><td style="color:#9ca3af">vELO '+r.rating+'</td><td style="color:#10B981;font-size:11px">🏆 '+r.wins+'W / '+r.podiums+'P</td><td style="color:#00D4FF;font-family:monospace">'+r.finishes+' races</td></tr>';
+    }).join('');
+  }
+  el.innerHTML=rows||'<tr><td colspan="6" style="color:#4b5563;text-align:center;padding:20px">No results yet</td></tr>';
+}
+
+function catColor(c){
+  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#6b7280',F:'#ec4899'}[c]||'#6b7280';
 }
 
 
