@@ -82,23 +82,41 @@ module.exports = async (req, res) => {
       return res.status(200).json({ headers, rows, count: rows.length });
     }
 
-    // ── Derived results from roster cache ────────────────
+    // ── Hybrid results: Sheet + ZRA derived ─────────────
     if (endpoint === "results") {
-      res.setHeader("Cache-Control", "s-maxage=300");
-      if (memCache.team?.riders) {
-        const recent = memCache.team.riders
-          .filter(r => r.race?.last?.date)
+      res.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=60");
+
+      // Source 1: Admin sheet (GID 1171447419)
+      let sheetResults = [];
+      try {
+        const sUrl = "https://docs.google.com/spreadsheets/d/1wAB2cojD3UgHDEbosb5xTQR6_X95ZlVrt4iRedDCD18/export?format=csv&gid=1171447419";
+        const sr = await fetch(sUrl, { redirect: "follow" });
+        if (sr.ok) {
+          const csv = await sr.text();
+          const lines = csv.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g,"").trim()));
+          const heads = lines[0];
+          sheetResults = lines.slice(1).filter(row => row[0])
+            .map(row => Object.fromEntries(heads.map((h,i) => [h, row[i]||""])));
+        }
+      } catch(e) {}
+
+      // Source 2: Derived from ZRA roster cache
+      let derived = [];
+      if (memCache.team && memCache.team.riders) {
+        derived = memCache.team.riders
+          .filter(r => r.race && r.race.last && r.race.last.date)
           .sort((a,b) => b.race.last.date - a.race.last.date)
-          .slice(0,15)
+          .slice(0, 20)
           .map(r => ({
-            name: r.name, date: r.race.last.date,
-            rating: r.race.last.rating,
-            category: r.race.last.mixed?.category,
+            name: r.name, id: r.id,
+            date: r.race.last.date,
+            category: (r.race.last.mixed && r.race.last.mixed.category) || r.cat,
+            rating: Math.round(r.race.last.rating || 0),
             wins: r.race.wins||0, podiums: r.race.podiums||0, finishes: r.race.finishes||0,
           }));
-        return res.status(200).json({ source: "derived", results: recent });
       }
-      return res.status(404).json({ error: "No cached data yet" });
+
+      return res.status(200).json({ sheetResults, derived });
     }
 
     res.status(400).json({ error: "Unknown endpoint" });
