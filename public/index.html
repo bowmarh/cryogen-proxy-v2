@@ -10,14 +10,24 @@ button{cursor:pointer;font-family:inherit}input,select{font-family:inherit;outli
 select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0f1623}::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}input,select{color-scheme:dark}
 
 /* ── Mobile ─────────────────────────────────────────────── */
-@media(max-width:768px){
-  #app{height:100vh!important;height:100dvh!important}
-  #app-inner{flex-direction:column!important;flex:1!important;min-height:0!important}
+/* Portrait mobile — fixed height, internal scroll */
+@media(max-width:768px) and (orientation:portrait){
+  #app{height:100dvh!important;overflow:hidden!important}
+  #app-inner{flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
   #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
+  main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
+}
+/* Landscape mobile — sidebar as top bar, content scrolls freely */
+@media(max-width:900px) and (orientation:landscape){
+  #app-inner{flex-direction:column!important}
+  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:44px!important;min-height:44px!important;max-height:44px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
+  main{padding:12px!important;overflow:auto!important}
+}
+/* All mobile — shared nav bar styles */
+@media(max-width:900px){
   #sidebar>div:first-child,#sidebar>div:last-child{display:none!important}
   #sidebar nav{display:flex!important;flex-direction:row!important;padding:4px 8px!important;gap:2px!important;flex:1!important;overflow-x:auto!important;align-items:center!important;height:100%!important}
-  .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:38px!important}
-  main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
+  .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:36px!important}
   .stat4{grid-template-columns:1fr 1fr!important;gap:8px!important}
   .grid2{grid-template-columns:1fr!important}
   .brand-bar{padding:8px 12px!important;flex-shrink:0!important}
@@ -29,7 +39,7 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   #role-display span:first-child{display:none!important}
 }
 @media(max-width:480px){
-  .navbtn{padding:6px 10px!important;font-size:11px!important}
+  .navbtn{padding:6px 8px!important;font-size:11px!important}
   main{padding:10px!important}
 }
 .card{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px}
@@ -120,7 +130,7 @@ table{width:100%;border-collapse:collapse}
 </div>
 
 <!-- MAIN APP -->
-<div id="app" style="display:none;height:100vh;flex-direction:column;overflow:hidden">
+<div id="app" style="display:none;min-height:100vh;flex-direction:column">
 
   <!-- BRAND BAR -->
   <div class="brand-bar">
@@ -156,7 +166,7 @@ table{width:100%;border-collapse:collapse}
   </aside>
 
   <!-- MAIN CONTENT -->
-  <main style="flex:1;overflow-y:auto;overflow-x:hidden;padding:28px">
+  <main style="flex:1;overflow:auto;padding:28px">
   <div style="max-width:980px;margin:0 auto">
 
   <!-- DASHBOARD -->
