@@ -391,13 +391,7 @@ const MOCK=[
   {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null},
   {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null},
 ];
-const RESULTS=[
-  {event:"WTRL TTT S9 W12",date:"14 May",pos:3,total:18,cat:"B",time:"28:14",wkg:3.68},
-  {event:"ZRL Division 4",date:"12 May",pos:1,total:24,cat:"C",time:"42:08",wkg:3.11},
-  {event:"Herd Spring R5",date:"10 May",pos:7,total:45,cat:"A",time:"18:52",wkg:4.31},
-  {event:"CRYO Internal TTT",date:"7 May",pos:1,total:32,cat:"B",time:"35:20",wkg:3.84},
-  {event:"Ladder League W8",date:"5 May",pos:2,total:22,cat:"C",time:"41:55",wkg:3.15},
-];
+// Results loaded live from ZwiftPower
 
 // ── Login ──────────────────────────────────────────────────
 function loginStep(type){
@@ -587,15 +581,7 @@ function renderAll(){
       <span style="font-size:10px;color:#6b7280">${e.cat}</span>
     </div>`).join('')}</div>`;
 
-  // Results
-  document.getElementById('results-body').innerHTML=RESULTS.map(r=>`<tr>
-    <td><strong>${r.event}</strong></td>
-    <td style="color:#6b7280;font-size:12px">${r.date}</td>
-    <td>${catB(r.cat)}</td>
-    <td style="color:${r.pos<=3?'#FBBF24':'#9ca3af'};font-weight:700">${r.pos<=3?'🏆 ':''}${r.pos}/${r.total}</td>
-    <td style="font-family:monospace;color:#9ca3af">${r.time}</td>
-    <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.wkg}</td>
-  </tr>`).join('');
+  // Results — loaded by loadResults() on init
 
   renderRacing();
   renderMembers();
@@ -1036,38 +1022,7 @@ async function loadResults(){
     renderResults();
   } catch(e){ console.log('Results fetch failed:', e.message); }
 }
-function renderResults(){
-  const el = document.getElementById('results-body');
-  if(!el) return;
-  if(liveResults.length===0){
-    // Fall back to mock results
-    el.innerHTML = RESULTS.map(r=>`<tr>
-      <td><strong>${r.event}</strong></td>
-      <td style="color:#6b7280;font-size:12px">${r.date}</td>
-      <td>${catB(r.cat)}</td>
-      <td style="color:${r.pos<=3?'#FBBF24':'#9ca3af'};font-weight:700">${r.pos<=3?'🏆 ':''}${r.pos}/${r.total}</td>
-      <td style="font-family:monospace;color:#9ca3af">${r.time}</td>
-      <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.wkg}</td>
-    </tr>`).join('');
-    return;
-  }
-  // Show live results derived from ZwiftRacing.app
-  el.innerHTML = liveResults.slice(0,10).map(r=>{
-    const d = new Date(r.date*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-    const zraC = ZRA_COLOR[r.category]||'#9ca3af';
-    return`<tr>
-      <td style="color:white">${r.name}</td>
-      <td style="color:#6b7280;font-size:12px">${d}</td>
-      <td>${r.category?`<span style="font-size:11px;color:${zraC};font-weight:700;background:${zraC}18;border:1px solid ${zraC}44;padding:1px 8px;border-radius:4px">${r.category}</span>`:'-'}</td>
-      <td style="color:#FBBF24;font-weight:700">vELO ${Math.round(r.rating||0)}</td>
-      <td style="font-family:monospace;color:#10B981">🏆 ${r.wins} wins</td>
-      <td style="font-family:monospace;color:#00D4FF;font-weight:700">${r.podiums} podiums / ${r.finishes} races</td>
-    </tr>`;
-  }).join('');
-  // Update results header
-  const hdr = document.getElementById('results-header');
-  if(hdr) hdr.textContent = 'Recent Rider Activity — Live from ZwiftRacing.app';
-}
+
 
 // ── Club Rides from Google Sheet ───────────────────────────
 let zwiftEventRides = [];
