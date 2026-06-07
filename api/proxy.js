@@ -119,6 +119,18 @@ module.exports = async (req, res) => {
       return res.status(200).json({ sheetResults, derived });
     }
 
+    // ── Debug: inspect raw rider race.last structure ─────
+    if (endpoint === "rawrider") {
+      if (memCache.team && memCache.team.riders && memCache.team.riders.length > 0) {
+        const sample = memCache.team.riders
+          .filter(r => r.raw && r.raw.race && r.raw.race.last)
+          .slice(0, 3)
+          .map(r => ({ name: r.name, race_last: r.raw.race.last, race_keys: Object.keys(r.raw.race||{}) }));
+        return res.status(200).json({ sample, total: memCache.team.riders.length });
+      }
+      return res.status(404).json({ error: "No cached data — load Racing tab first" });
+    }
+
     res.status(400).json({ error: "Unknown endpoint" });
   } catch(err) {
     res.status(500).json({ error: err.message });
