@@ -86,19 +86,19 @@ module.exports = async (req, res) => {
     if (endpoint === "results") {
       res.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=60");
 
-      // Source 1: Admin sheet (GID 1171447419)
+      // Source 1: Google Apps Script → ZwiftPower auto-results
       let sheetResults = [];
-      try {
-        const sUrl = "https://docs.google.com/spreadsheets/d/1wAB2cojD3UgHDEbosb5xTQR6_X95ZlVrt4iRedDCD18/export?format=csv&gid=1171447419";
-        const sr = await fetch(sUrl, { redirect: "follow" });
-        if (sr.ok) {
-          const csv = await sr.text();
-          const lines = csv.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g,"").trim()));
-          const heads = lines[0];
-          sheetResults = lines.slice(1).filter(row => row[0])
-            .map(row => Object.fromEntries(heads.map((h,i) => [h, row[i]||""])));
-        }
-      } catch(e) {}
+      if (RIDES_URL) {
+        try {
+          const sr = await fetch(RIDES_URL + "?action=results", { redirect: "follow" });
+          if (sr.ok) {
+            const sd = await sr.json();
+            if (sd.results && sd.results.length > 0) {
+              return res.status(200).json({ source: sd.source, results: sd.results, derived: [] });
+            }
+          }
+        } catch(e) { console.log("GAS results error:", e.message); }
+      }
 
       // Source 2: Derived from ZRA roster cache
       let derived = [];
@@ -117,22 +117,6 @@ module.exports = async (req, res) => {
       }
 
       return res.status(200).json({ sheetResults, derived });
-    }
-
-    // ── Debug: inspect raw rider structure ───────────────
-    if (endpoint === "rawrider") {
-      if (memCache.team && memCache.team.riders && memCache.team.riders.length > 0) {
-        // Show first rider's full raw API keys and race data
-        const first = memCache.team.riders[0];
-        const withRace = memCache.team.riders.find(r => r.race && r.race.last);
-        return res.status(200).json({
-          total: memCache.team.riders.length,
-          first_keys: Object.keys(first),
-          first_sample: first,
-          with_race_sample: withRace ? { keys: Object.keys(withRace), race: withRace.race } : null
-        });
-      }
-      return res.status(404).json({ error: "No cached data — load Racing tab first" });
     }
 
     res.status(400).json({ error: "Unknown endpoint" });
