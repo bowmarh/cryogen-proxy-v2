@@ -367,11 +367,8 @@ let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
 let allSignups=load('cg_signups')||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
 let lockedSeries=load('cg_locked')||{};
-let rides=load('cg_ri')||[
-  {id:1,title:"Easy Endurance Spin",date:"2026-05-26",time:"07:00 UTC",route:"Watopia Hilly",dist:"45 km",pace:"2.0–2.5 w/kg",max:25,desc:"Relaxed social spin. No one gets dropped.",cat:"All",link:""},
-  {id:2,title:"B/C Group Ride",date:"2026-05-27",time:"18:30 UTC",route:"Richmond UCI Circuit",dist:"32 km",pace:"2.5–3.2 w/kg",max:20,desc:"Steady group ride.",cat:"B/C",link:""},
-  {id:3,title:"Thursday Night Chaingang",date:"2026-05-29",time:"19:00 UTC",route:"Crit City – Bell Lap",dist:"25 km",pace:"3.5+ w/kg",max:15,desc:"Fast chaingang. A/B only.",cat:"A/B",link:""},
-];
+localStorage.removeItem('cg_ri');
+let rides=[];
 let rsvps=load('cg_r')||{};
 let mPage=1,mActive=false,rsvpId=null;
 let activeSeries='ttt';
