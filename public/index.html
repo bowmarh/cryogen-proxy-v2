@@ -82,7 +82,6 @@ table{width:100%;border-collapse:collapse}
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
 <div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:url(/images/banner.jpg) center/cover no-repeat;position:relative"><div style="position:absolute;inset:0;background:rgba(6,10,20,0.82)"></div><div style="position:relative;z-index:1;width:100%;max-width:420px;padding:24px">
   <div style="width:100%;max-width:420px;padding:24px">
     <div style="text-align:center;margin-bottom:32px">
@@ -129,10 +128,8 @@ table{width:100%;border-collapse:collapse}
   </div></div>
 </div>
 
-<!-- MAIN APP -->
 <div id="app" style="display:none;min-height:100vh;flex-direction:column">
 
-  <!-- BRAND BAR -->
   <div class="brand-bar">
     <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
     <div style="flex:1">
@@ -147,7 +144,6 @@ table{width:100%;border-collapse:collapse}
 
   <div style="display:flex;flex:1" id="app-inner">
 
-  <!-- SIDEBAR -->
   <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
     <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
       <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
@@ -165,11 +161,9 @@ table{width:100%;border-collapse:collapse}
     </div>
   </aside>
 
-  <!-- MAIN CONTENT -->
   <main style="flex:1;overflow:auto;padding:28px">
   <div style="max-width:980px;margin:0 auto">
 
-  <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
     <p style="font-size:13px;color:#6b7280;margin-bottom:20px">ZwiftPower · ZwiftRacing.app</p>
@@ -186,7 +180,6 @@ table{width:100%;border-collapse:collapse}
     <div class="card"><div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280" id="results-header">Recent Results</div><table><thead><tr><th>Event / Rider</th><th>Date</th><th>Cat</th><th>Result / vELO</th><th>Time / Record</th><th>W/kg / Races</th></tr></thead><tbody id="results-body"></tbody></table></div>
   </div>
 
-  <!-- RACING -->
   <div id="page-racing" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Racing Dashboard</h2><p style="font-size:13px;color:#6b7280">ZwiftRacing.app live data</p></div>
@@ -196,7 +189,6 @@ table{width:100%;border-collapse:collapse}
         <button onclick="loadLive()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh</button>
       </div>
     </div>
-    <!-- Filters -->
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <input id="r-search" class="inp" placeholder="Search rider…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
       <select id="r-cat" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
@@ -215,21 +207,16 @@ table{width:100%;border-collapse:collapse}
     </tr></thead><tbody id="racing-body"></tbody></table></div></div>
   </div>
 
-  <!-- EVENTS & SIGN-UP -->
   <div id="page-events" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Events & Sign-Up</h2><p style="font-size:13px;color:#6b7280">Race series · team events</p></div>
       <div style="display:flex;gap:8px" id="event-admin-btns"></div>
     </div>
-    <!-- Series tabs -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
-    <!-- Active series content -->
     <div id="series-content"></div>
-    <!-- Google Sheet data panel -->
     <div id="sheet-panel"></div>
   </div>
 
-  <!-- RIDES -->
   <div id="page-rides" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Social Rides</h2>
@@ -237,7 +224,6 @@ table{width:100%;border-collapse:collapse}
       </div>
       <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
     </div>
-    <!-- ZwiftHacks calendar + sync -->
     <div class="card" style="margin-bottom:20px;overflow:hidden">
       <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
@@ -253,7 +239,6 @@ table{width:100%;border-collapse:collapse}
         <span id="zh-status" style="font-size:11px;display:none"></span>
       </div>
     </div>
-    <!-- RSVP section — merges ZwiftHacks events + manual rides -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
       <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
@@ -261,7 +246,6 @@ table{width:100%;border-collapse:collapse}
     <div id="rides-list"></div>
   </div>
 
-  <!-- MEMBERS -->
   <div id="page-members" class="page">
     <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -271,18 +255,8 @@ table{width:100%;border-collapse:collapse}
       <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
       <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'#00D4FF':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table><thead><tr>
-      <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
-      <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
-      <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
-      <th onclick="mSortBy('zraCat')">ZRA Tier<span class="sortarrow" id="msa-zraCat"></span></th>
-      <th onclick="mSortBy('ftp')">FTP<span class="sortarrow" id="msa-ftp"></span></th>
-      <th onclick="mSortBy('wkg')">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
-      <th onclick="mSortBy('velo')">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
-      <th onclick="mSortBy('ph')">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
-      <th>ZRA Club</th>
-      <th>Status</th>
-    </tr></thead><tbody id="members-body"></tbody></table></div>
+    <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
+      </tr></thead><tbody id="members-body"></tbody></table></div>
     <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
       <span id="m-page-info" style="font-size:12px;color:#4b5563"></span>
       <div style="display:flex;gap:6px">
@@ -292,7 +266,6 @@ table{width:100%;border-collapse:collapse}
     </div></div>
   </div>
 
-  <!-- MY PROFILE -->
   <div id="page-profile" class="page">
     <div id="profile-content"></div>
   </div>
@@ -301,7 +274,6 @@ table{width:100%;border-collapse:collapse}
   </div>
 </div>
 
-<!-- ADMIN MODAL -->
 <div id="adminModal" class="modal-bg" style="display:none">
   <div class="modal">
     <div class="modal-head">⚙️ Admin <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
@@ -322,7 +294,6 @@ table{width:100%;border-collapse:collapse}
   </div>
 </div>
 
-<!-- NEW RIDE MODAL -->
 <div id="newRideModal" class="modal-bg" style="display:none">
   <div class="modal" style="max-width:480px">
     <div class="modal-head">Create New Ride <button onclick="document.getElementById('newRideModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
@@ -377,6 +348,7 @@ let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
 let allSignups=load('cg_signups')||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
 let lockedSeries=load('cg_locked')||{};
+let localMemberState = load('cg_member_state') || {}; // NEW: Tracker for tiers and status overrides
 localStorage.removeItem('cg_ri');
 let rides=[];
 let rsvps=load('cg_r')||{};
@@ -385,13 +357,12 @@ let activeSeries='ttt';
 let mSort={col:'velo',dir:'desc'};
 let rSort={col:'velo',dir:'desc'};
 const MOCK=[
-  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null},
-  {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null},
-  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null},
-  {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null},
-  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null},
+  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"half",status:"active"},
+  {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
+  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"half",status:"suspended"},
+  {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
+  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"half",status:"active"},
 ];
-// Results loaded live from ZwiftPower
 
 // ── Login ──────────────────────────────────────────────────
 function loginStep(type){
@@ -470,7 +441,7 @@ function showTab(id,btn){
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
   if(id==='rides')loadZwiftEvents();
-  if(id==='members')renderAffiliationPanel();
+  if(id==='members')renderMembers(); // Updated to renderMembers instead of renderAffiliationPanel
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -481,17 +452,26 @@ async function loadLive(){
     if(r.ok){
       const d=await r.json();
       if(d.riders&&Array.isArray(d.riders)){
-        riders=d.riders.map(r=>({
-          id:r.riderId, name:r.name, cc:ccClean(r.country), cat:r.zpCategory||'D',
-          ftp:Math.round(r.zpFTP||0),
-          wkg:r.power?Math.round((r.power.wkg1200||0)*100)/100:0,
-          velo:r.race?.current?.rating?Math.round(r.race.current.rating):0,
-          zraCat:r.race?.current?.mixed?.category||'',
-          ph:phClean(r.phenotype?.value),
-          active:!!(r.race?.current?.rating>0),
-          wins:r.race?.wins||0, podiums:r.race?.podiums||0, finishes:r.race?.finishes||0, dnfs:r.race?.dnfs||0,
-          raw:r,
-        }));
+        riders=d.riders.map(r=>{
+          // Override logic with local state
+          const state = localMemberState[r.riderId] || {};
+          const isZraActive = !!(r.race?.current?.rating>0);
+          const currentStatus = state.status || (isZraActive ? 'active' : 'inactive');
+
+          return {
+            id:r.riderId, name:r.name, cc:ccClean(r.country), cat:r.zpCategory||'D',
+            ftp:Math.round(r.zpFTP||0),
+            wkg:r.power?Math.round((r.power.wkg1200||0)*100)/100:0,
+            velo:r.race?.current?.rating?Math.round(r.race.current.rating):0,
+            zraCat:r.race?.current?.mixed?.category||'',
+            ph:phClean(r.phenotype?.value),
+            active: (currentStatus === 'active'),
+            tier: state.tier || 'half',
+            status: currentStatus,
+            wins:r.race?.wins||0, podiums:r.race?.podiums||0, finishes:r.race?.finishes||0, dnfs:r.race?.dnfs||0,
+            raw:r,
+          };
+        });
         setZRA('#10B981',`Live · ${riders.length} riders ✓`);
         // update memberRider if logged in as member
         if(role==='member'&&memberRider){
@@ -511,6 +491,37 @@ function setZRA(color,msg){
   document.getElementById('zra-dot').style.background=color;
   document.getElementById('zra-msg').textContent=msg;
   document.getElementById('admin-msg').textContent=msg;
+}
+
+// ── Action Functions (Tier Toggle & Off-boarding) ──────────
+function changeTier(id, tier) {
+  localMemberState[id] = localMemberState[id] || {};
+  localMemberState[id].tier = tier;
+  save('cg_member_state', localMemberState);
+  
+  // Update in-memory arrays so UI refects instantly without full refresh
+  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
+  if(r) r.tier = tier;
+  
+  renderMembers();
+}
+
+function updateStatus(id, action, days) {
+  let msg = action === 'left' ? 'Permanently offboard this rider?' : (action === 'suspended' ? `Suspend rider for ${days} days?` : 'Unsuspend rider?');
+  if(!confirm(msg)) return;
+
+  localMemberState[id] = localMemberState[id] || {};
+  localMemberState[id].status = action;
+  save('cg_member_state', localMemberState);
+  
+  // Update in-memory array
+  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
+  if(r) {
+      r.status = action;
+      r.active = (action === 'active');
+  }
+  
+  renderMembers();
 }
 
 // ── Sort helpers ───────────────────────────────────────────
@@ -581,8 +592,6 @@ function renderAll(){
       <div style="width:100%;height:${Math.round(e.n/maxN*64)+8}px;background:${CAT_COLOR[e.cat]};border-radius:4px 4px 0 0;opacity:.85"></div>
       <span style="font-size:10px;color:#6b7280">${e.cat}</span>
     </div>`).join('')}</div>`;
-
-  // Results — loaded by loadResults() on init
 
   renderRacing();
   renderMembers();
@@ -663,7 +672,7 @@ function renderMembers(){
     (!zra||m.zraCat===zra)&&
     (!mActive||m.active)
   );
-  // member role: can only see full detail for themselves
+  
   const sorted=sortData(filtered,mSort);
   const PER=15, total=Math.ceil(sorted.length/PER)||1;
   if(mPage>total)mPage=1;
@@ -671,9 +680,34 @@ function renderMembers(){
   document.getElementById('members-sub').textContent=`Showing ${filtered.length}${riders.length?' of '+riders.length+' live riders':' (mock data)'}`;
   document.getElementById('m-page-info').textContent=`Page ${mPage} of ${total}`;
   updateSortArrows('m',mSort);
+  
+  // Render Dynamic Headers based on Role
+  document.getElementById('members-table-head').innerHTML = `
+      <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
+      <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
+      <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
+      <th onclick="mSortBy('zraCat')">ZRA Tier<span class="sortarrow" id="msa-zraCat"></span></th>
+      <th onclick="mSortBy('ftp')">FTP<span class="sortarrow" id="msa-ftp"></span></th>
+      <th onclick="mSortBy('wkg')">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
+      <th onclick="mSortBy('velo')">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
+      <th onclick="mSortBy('ph')">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
+      <th>ZRA Club</th>
+      <th>Status</th>
+      ${(role === 'admin' || role === 'mod') ? '<th>Actions</th>' : ''}
+  `;
+  
   document.getElementById('members-body').innerHTML=page.map(m=>{
     const isMe=role==='member'&&memberRider&&m.id===memberRider.id;
     const zraC=ZRA_COLOR[m.zraCat]||'#9ca3af';
+    
+    // Status visual mapping
+    let statusBadgeColor = m.active ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)';
+    let statusTextColor = m.active ? '#10B981' : '#4b5563';
+    let statusText = m.status.charAt(0).toUpperCase() + m.status.slice(1);
+    
+    if(m.status === 'suspended') { statusBadgeColor = 'rgba(245,158,11,0.12)'; statusTextColor = '#F59E0B'; }
+    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#EF4444'; }
+    
     return`<tr style="${isMe?'background:rgba(0,212,255,0.05)':''}">
       <td style="white-space:nowrap">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td style="color:#6b7280;font-size:12px">${m.cc.toUpperCase()}</td>
@@ -693,43 +727,22 @@ function renderMembers(){
           <div style="color:#4b5563;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
           ${changed?`<div style="font-size:9px;color:#EF4444">⚠️ Recently changed</div>`:''}`;
       })()}</td>
-      <td><span class="badge" style="background:${m.active?'rgba(16,185,129,0.12)':'rgba(255,255,255,0.04)'};color:${m.active?'#10B981':'#4b5563'}">${m.active?'Active':'Inactive'}</span></td>
+      <td><span class="badge" style="background:${statusBadgeColor};color:${statusTextColor}">${statusText}</span></td>
+      
+      ${(role === 'admin' || role === 'mod') ? `
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <select onchange="changeTier(${m.id}, this.value)" style="width:auto;padding:2px 4px;font-size:11px;background:#0f1623;color:white;border:1px solid rgba(255,255,255,0.1);border-radius:4px">
+              <option value="half" ${m.tier==='half'?'selected':''}>Half</option>
+              <option value="full" ${m.tier==='full'?'selected':''}>Full</option>
+            </select>
+            ${m.status === 'active' ? `<button onclick="updateStatus(${m.id}, 'suspended', 7)" style="padding:4px 8px;font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:4px">Suspend</button>` : ''}
+            ${m.status === 'suspended' ? `<button onclick="updateStatus(${m.id}, 'active', 0)" style="padding:4px 8px;font-size:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:4px">Unsuspend</button>` : ''}
+            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
+          </div>
+        </td>` : ''}
     </tr>`;
   }).join('');
-}
-function renderAffiliationPanel() {
-  const el = document.getElementById('affiliation-panel');
-  if (!el) return;
-  const changes = Object.entries(affiliationLog)
-    .filter(([k,v]) => v.changed)
-    .map(([k,v]) => {
-      const rider = (riders.length ? riders : MOCK).find(r => 'r'+r.id === k);
-      return { name: rider?.name || k, ...v };
-    })
-    .sort((a,b) => new Date(b.changed) - new Date(a.changed));
-
-  if (changes.length === 0) { el.innerHTML = ''; return; }
-
-  el.innerHTML = `<div class="card" style="margin-top:4px">
-    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#EF4444;letter-spacing:.08em">
-      ⚠️ Recent Club Affiliation Changes
-    </div>
-    ${changes.slice(0,10).map(c => {
-      const prev = c.history?.[c.history.length-1]?.club || '—';
-      const d = new Date(c.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-      return `<div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:13px;font-weight:600">${c.name}</div>
-          <div style="font-size:11px;color:#6b7280;margin-top:2px">
-            <span style="color:#EF4444">${prev}</span>
-            <span style="color:#4b5563"> → </span>
-            <span style="color:#10B981">${c.club}</span>
-          </div>
-        </div>
-        <div style="font-size:11px;color:#4b5563;flex-shrink:0">Changed ${d}</div>
-      </div>`;
-    }).join('')}
-  </div>`;
 }
 
 function changeMPage(d){const data=riders.length?riders:MOCK;const PER=15;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
