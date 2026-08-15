@@ -248,6 +248,7 @@ table{width:100%;border-collapse:collapse}
 
   <div id="page-members" class="page">
     <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
+   <div id="offboarding-panel"></div>   
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
       <select id="m-cat" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
@@ -523,7 +524,79 @@ function updateStatus(id, action, days) {
   
   renderMembers();
 }
+// ── Off-boarding Checklist ─────────────────────────────────
+function renderOffboarding() {
+  const el = document.getElementById('offboarding-panel');
+  if (!el) return;
 
+  // Find riders who are marked as 'left'
+  const pendingOffboard = (riders.length ? riders : MOCK).filter(r => r.status === 'left');
+  
+  if (pendingOffboard.length === 0) {
+    el.innerHTML = ''; // Hide panel if no one is pending
+    return;
+  }
+
+  // Filter out those who have ALL 3 boxes checked
+  const incomplete = pendingOffboard.filter(r => {
+    const state = localMemberState[r.id] || {};
+    return !(state.ob_discord && state.ob_fb && state.ob_zp);
+  });
+
+  if (incomplete.length === 0) {
+    el.innerHTML = ''; 
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
+      <div style="padding:12px 16px; background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.2); border-radius:12px 12px 0 0; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">⚠️</span>
+        <span style="font-size:12px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
+      </div>
+      <div style="padding:16px;">
+        <table style="width:100%; text-align:left; font-size:13px;">
+          <thead>
+            <tr style="color:#6b7280; font-size:11px; text-transform:uppercase;">
+              <th style="padding-bottom:8px;">Rider</th>
+              <th style="padding-bottom:8px; text-align:center;">Discord</th>
+              <th style="padding-bottom:8px; text-align:center;">Facebook</th>
+              <th style="padding-bottom:8px; text-align:center;">ZwiftPower</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${incomplete.map(r => {
+              const state = localMemberState[r.id] || {};
+              return `
+              <tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 0; font-weight:600;">${r.name}</td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+              </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function toggleOffboard(id, platform, isChecked) {
+  localMemberState[id] = localMemberState[id] || {};
+  localMemberState[id][platform] = isChecked;
+  save('cg_member_state', localMemberState);
+  
+  // Re-render to see if they should be removed from the list
+  renderOffboarding();
+}
 // ── Sort helpers ───────────────────────────────────────────
 function sortData(data,sort){
   const col=sort.col, dir=sort.dir;
@@ -660,6 +733,7 @@ function renderRacing(){
 
 // ── Members ────────────────────────────────────────────────
 function renderMembers(){
+   renderOffboarding(); 
   const data=riders.length?riders:MOCK;
   const search=(document.getElementById('m-search')||{value:''}).value.toLowerCase();
   const cat=(document.getElementById('m-cat')||{value:'All'}).value;
