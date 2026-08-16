@@ -3,6 +3,6 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "node api/proxy.js"
+    "start": "node server.js"
   }
 }
