@@ -1,110 +1,1302 @@
-// api/proxy.js
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CRYO-GEN Club</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060a14;color:white;font-family:system-ui,sans-serif;min-height:100vh}
+button{cursor:pointer;font-family:inherit}input,select{font-family:inherit;outline:none;color:white}
+select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0f1623}::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}input,select{color-scheme:dark}
 
-// 1. Explicitly configure the Vercel maximum duration (up to 300s on Hobby tier)
-export const config = {
-  maxDuration: 60, // Set to 60 seconds
-};
+/* ── Mobile ─────────────────────────────────────────────── */
+@media(max-width:768px) and (orientation:portrait){
+  #app{height:100dvh!important;overflow:hidden!important}
+  #app-inner{flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
+  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
+  main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
+}
+@media(max-width:900px) and (orientation:landscape){
+  #app-inner{flex-direction:column!important}
+  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:44px!important;min-height:44px!important;max-height:44px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
+  main{padding:12px!important;overflow:auto!important}
+}
+@media(max-width:900px){
+  #sidebar>div:first-child,#sidebar>div:last-child{display:none!important}
+  #sidebar nav{display:flex!important;flex-direction:row!important;padding:4px 8px!important;gap:2px!important;flex:1!important;overflow-x:auto!important;align-items:center!important;height:100%!important}
+  .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:36px!important}
+  .stat4{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .grid2{grid-template-columns:1fr!important}
+  .brand-bar{padding:8px 12px!important;flex-shrink:0!important}
+  .brand-bar img{width:34px!important;height:34px!important}
+  table{font-size:12px!important}
+  td,th{padding:7px 8px!important;font-size:11px!important}
+  .modal{margin:8px!important;max-height:92vh!important;overflow-y:auto!important}
+  .modal-body{max-height:65vh!important;overflow-y:auto!important}
+  #role-display span:first-child{display:none!important}
+}
+@media(max-width:480px){
+  .navbtn{padding:6px 8px!important;font-size:11px!important}
+  main{padding:10px!important}
+}
+.card{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px}
+.inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px}
+.inp:focus{border-color:rgba(0,212,255,0.4)}
+th{padding:9px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;border-bottom:1px solid rgba(255,255,255,0.07);cursor:pointer;white-space:nowrap;user-select:none}
+th:hover{color:#9ca3af}
+td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:white;font-size:13px}
+table{width:100%;border-collapse:collapse}
+.page{display:none}.page.active{display:block}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal{background:#0d1322;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:440px}
+.modal-head{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px}
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
+.btn-cyan{padding:10px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;width:100%;font-size:14px}
+.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
+.cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.navbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:#6b7280;text-align:left;font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap}
+.navbtn.active{border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:#00D4FF}
+.navbtn:hover:not(.active){background:rgba(255,255,255,0.03);color:#9ca3af}
+.tab{padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#6b7280;font-size:12px;font-weight:600}
+.tab.active{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.2);color:#00D4FF}
+.sortarrow{font-size:9px;margin-left:3px;opacity:0.5}
+.sortarrow.active{opacity:1;color:#00D4FF}
+.brand-bar{background:linear-gradient(135deg,#0d1f3c 0%,#1a3a6b 40%,#0d1f3c 100%);border-bottom:2px solid rgba(0,180,255,0.3);padding:8px 16px;display:flex;align-items:center;gap:12px}
+.snowflake{color:#00D4FF;font-size:20px;animation:spin 20s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase}
+.stat4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:700px){.stat4{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr!important}}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.pbar-wrap{margin-bottom:8px}
+.pbar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#9ca3af}
+.pbar{height:6px;background:rgba(255,255,255,0.08);border-radius:3px}
+.pbar-fill{height:100%;border-radius:3px;transition:width .4s}
+</style>
+</head>
+<body>
 
-export default async function handler(req, res) {
-  // CORS Headers for secure cross-origin requests
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
-  );
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:url(/images/banner.jpg) center/cover no-repeat;position:relative"><div style="position:absolute;inset:0;background:rgba(6,10,20,0.82)"></div><div style="position:relative;z-index:1;width:100%;max-width:420px;padding:24px">
+  <div style="width:100%;max-width:420px;padding:24px">
+    <div style="text-align:center;margin-bottom:32px">
+      <img src="/logo.png" alt="Team CRYO-GEN" style="width:180px;height:180px;object-fit:contain;margin-bottom:8px"/>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">Zwift Cycling Club · Member Portal</div>
+    </div>
+    <div id="login-step1" class="card" style="padding:24px">
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:20px;text-align:center">Select your access level</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="loginStep('admin')" style="padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">🔑</span><div><div>Administrator</div><div style="font-size:11px;color:#6b7280;font-weight:400">Full access · manage all settings</div></div>
+        </button>
+        <button onclick="loginStep('mod')" style="padding:14px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">🛡️</span><div><div>Moderator</div><div style="font-size:11px;color:#6b7280;font-weight:400">View all riders · manage events</div></div>
+        </button>
+        <button onclick="loginStep('member')" style="padding:14px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">🚴</span><div><div>Member</div><div style="font-size:11px;color:#6b7280;font-weight:400">Your profile · sign up for events</div></div>
+        </button>
+      </div>
+    </div>
+    <div id="login-step2" style="display:none">
+      <div class="card" style="padding:24px">
+        <button onclick="backToStep1()" style="background:none;border:none;color:#6b7280;font-size:13px;margin-bottom:16px;padding:0;display:flex;align-items:center;gap:4px">← Back</button>
+        <div id="login-form-admin" style="display:none">
+          <label class="lbl">Administrator Password</label>
+          <input id="admin-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAdminLogin()" style="margin-bottom:12px"/>
+          <button class="btn-cyan" onclick="doAdminLogin()">Login as Administrator</button>
+        </div>
+        <div id="login-form-mod" style="display:none">
+          <label class="lbl">Moderator Password</label>
+          <input id="mod-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doModLogin()" style="margin-bottom:12px"/>
+          <button class="btn-cyan" onclick="doModLogin()">Login as Moderator</button>
+        </div>
+        <div id="login-form-member" style="display:none">
+          <label class="lbl">Your Zwift Name or Rider ID</label>
+          <input id="member-search" class="inp" placeholder="e.g. Rick or 24650" onkeydown="if(event.key==='Enter')doMemberLogin()" style="margin-bottom:6px"/>
+          <div style="font-size:11px;color:#4b5563;margin-bottom:12px">Data loads from ZwiftRacing.app — make sure you've refreshed first</div>
+          <button class="btn-cyan" onclick="doMemberLogin()">Find My Profile</button>
+          <div id="member-results" style="margin-top:12px"></div>
+        </div>
+        <div id="login-err" style="margin-top:10px;font-size:12px;color:#f87171;display:none"></div>
+      </div>
+    </div>
+  </div></div>
+</div>
 
-  // Pre-flight request handling
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+<div id="app" style="display:none;min-height:100vh;flex-direction:column">
+
+  <div class="brand-bar">
+    <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
+      <div style="font-size:10px;color:#4b5563">Cycling Club · Member Portal</div>
+    </div>
+    <div id="role-display" style="display:flex;align-items:center;gap:10px">
+      <span id="role-badge" class="role-badge"></span>
+      <button onclick="doLogout()" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#6b7280;font-size:11px">Logout</button>
+    </div>
+  </div>
+
+  <div style="display:flex;flex:1" id="app-inner">
+
+  <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
+    <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
+      <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
+    </div>
+    <nav style="flex:1;padding:8px" id="main-nav">
+      <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+      <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
+      <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
+      <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
+      <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
+      <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
+    </nav>
+    <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
+      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex'">⚙️ Admin</button>
+    </div>
+  </aside>
+
+  <main style="flex:1;overflow:auto;padding:28px">
+  <div style="max-width:980px;margin:0 auto">
+
+  <div id="page-dashboard" class="page active">
+    <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:20px">ZwiftPower · ZwiftRacing.app</p>
+    <div class="stat4">
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#00D4FF;margin-bottom:8px">👥 Roster</div><div id="s-riders" style="font-size:22px;font-weight:900">—</div><div id="s-riders-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">📈 Avg vELO</div><div id="s-velo" style="font-size:22px;font-weight:900">—</div><div id="s-velo-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">0/40</div><div style="font-size:11px;color:#6b7280;margin-top:3px">Wed 28 May</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#F59E0B;margin-bottom:8px">🚴 Rides</div><div id="s-rides" style="font-size:22px;font-weight:900">—</div><div style="font-size:11px;color:#6b7280;margin-top:3px">upcoming</div></div>
+    </div>
+    <div class="grid2" style="margin-bottom:20px">
+      <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Top 10 by vELO</div><div id="top10"></div></div>
+      <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Category Breakdown</div><div id="catdist"></div></div>
+    </div>
+    <div class="card"><div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280" id="results-header">Recent Results</div><table><thead><tr><th>Event / Rider</th><th>Date</th><th>Cat</th><th>Result / vELO</th><th>Time / Record</th><th>W/kg / Races</th></tr></thead><tbody id="results-body"></tbody></table></div>
+  </div>
+
+  <div id="page-racing" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Racing Dashboard</h2><p style="font-size:13px;color:#6b7280">ZwiftRacing.app live data</p></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="zra-dot" style="width:8px;height:8px;border-radius:50%;background:#FBBF24"></div>
+        <span id="zra-msg" style="font-size:12px;color:#6b7280">Connecting…</span>
+        <button onclick="loadLive()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <input id="r-search" class="inp" placeholder="Search rider…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
+      <select id="r-cat" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+      <select id="r-zra" class="inp" style="width:110px" onchange="renderRacing()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
+      <select id="r-ph" class="inp" style="width:120px" onchange="renderRacing()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
+    </div>
+    <div class="card"><div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Rider Rankings — vELO</span><span id="r-badge" style="font-size:10px;color:#4b5563;background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:99px">—</span></div>
+    <div style="overflow-x:auto"><table><thead><tr>
+      <th onclick="rSortBy('rank')">#<span class="sortarrow" id="rsa-rank"></span></th>
+      <th onclick="rSortBy('name')">Rider<span class="sortarrow" id="rsa-name"></span></th>
+      <th onclick="rSortBy('cat')">Cat<span class="sortarrow" id="rsa-cat"></span></th>
+      <th onclick="rSortBy('ftp')">FTP<span class="sortarrow" id="rsa-ftp"></span></th>
+      <th onclick="rSortBy('wkg')">W/kg<span class="sortarrow" id="rsa-wkg"></span></th>
+      <th onclick="rSortBy('velo')">vELO<span class="sortarrow active" id="rsa-velo">↓</span></th>
+      <th onclick="rSortBy('ph')">Phenotype<span class="sortarrow" id="rsa-ph"></span></th>
+    </tr></thead><tbody id="racing-body"></tbody></table></div></div>
+  </div>
+
+  <div id="page-events" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Events & Sign-Up</h2><p style="font-size:13px;color:#6b7280">Race series · team events</p></div>
+      <div style="display:flex;gap:8px" id="event-admin-btns"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
+    <div id="series-content"></div>
+    <div id="sheet-panel"></div>
+  </div>
+
+  <div id="page-rides" class="page">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Social Rides</h2>
+        <p style="font-size:13px;color:#6b7280">RSVP for group rides · <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="color:#00D4FF">View Zwift Club →</a></p>
+      </div>
+      <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
+    </div>
+    <div class="card" style="margin-bottom:20px;overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="zh-sync-btn" onclick="loadZwiftEvents()" style="padding:5px 12px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:6px;color:#00D4FF;font-size:11px;font-weight:700">↻ Sync Events</button>
+          <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#6b7280;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
+        </div>
+      </div>
+      <iframe src="https://zwifthacks.com/app/events/?key=6a24978d28168"
+        style="width:100%;height:420px;border:none;display:block;background:#0a0e1a"
+        title="CRYO-GEN Zwift Events" loading="lazy"></iframe>
+      <div style="padding:8px 16px;background:rgba(0,0,0,0.3)">
+        <span id="zh-status" style="font-size:11px;display:none"></span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
+      <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
+    </div>
+    <div id="rides-list"></div>
+  </div>
+
+  <div id="page-members" class="page">
+    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
+   <div id="offboarding-panel"></div>   
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
+      <select id="m-cat" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+      <select id="m-ph" class="inp" style="width:120px" onchange="mPage=1;renderMembers()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
+      <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
+      <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'#00D4FF':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
+      </tr></thead><tbody id="members-body"></tbody></table></div>
+    <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
+      <span id="m-page-info" style="font-size:12px;color:#4b5563"></span>
+      <div style="display:flex;gap:6px">
+        <button onclick="changeMPage(-1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">←</button>
+        <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
+      </div>
+    </div></div>
+  </div>
+
+  <div id="page-profile" class="page">
+    <div id="profile-content"></div>
+  </div>
+
+  </div></main>
+  </div>
+</div>
+
+<div id="adminModal" class="modal-bg" style="display:none">
+  <div class="modal">
+    <div class="modal-head">⚙️ Admin <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
+    <div class="modal-body">
+      <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
+      <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
+      <div style="display:flex;gap:8px">
+        <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
+        <button onclick="syncSheet()" style="flex:1;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Sync Sheet</button>
+      </div>
+      <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
+        <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
+        <button onclick="if(confirm('Clear ALL event sign-ups?')){allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};save('cg_signups',allSignups);renderEvents();document.getElementById('adminModal').style.display='none'}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-cyan" onclick="document.getElementById('adminModal').style.display='none'">Close</button></div>
+  </div>
+</div>
+
+<div id="newRideModal" class="modal-bg" style="display:none">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">Create New Ride <button onclick="document.getElementById('newRideModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+      <div><label class="lbl">Title</label><input id="nr-title" class="inp" placeholder="e.g. Thursday Night Chaingang"/></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="lbl">Date</label><input id="nr-date" type="date" class="inp"/></div>
+        <div><label class="lbl">Time (UTC)</label><input id="nr-time" class="inp" placeholder="19:00 UTC"/></div>
+      </div>
+      <div><label class="lbl">Route</label><input id="nr-route" class="inp" placeholder="e.g. Watopia Hilly"/></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label class="lbl">Distance</label><input id="nr-dist" class="inp" placeholder="45 km"/></div>
+        <div><label class="lbl">Max Riders</label><input id="nr-max" type="number" class="inp" value="25"/></div>
+        <div><label class="lbl">Category</label><select id="nr-cat" class="inp"><option>All</option><option>A/B</option><option>B/C</option><option>C/D</option></select></div>
+      </div>
+      <div><label class="lbl">Pace (W/kg)</label><input id="nr-pace" class="inp" placeholder="e.g. 2.5–3.2 w/kg"/></div>
+      <div><label class="lbl">Description</label><input id="nr-desc" class="inp" placeholder="Brief description"/></div>
+      <div><label class="lbl">Zwift Event Link (optional)</label><input id="nr-link" class="inp" placeholder="https://www.zwift.com/events/…"/></div>
+    </div>
+    <div class="modal-foot" style="display:flex;gap:8px"><button class="btn-cyan" onclick="createRide()">Create Ride</button><button onclick="document.getElementById('newRideModal').style.display='none'" style="padding:10px 18px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px">Cancel</button></div>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────
+const PASSWORDS = { admin:'cryo2026', mod:'mod2026' };
+const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
+const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
+const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
+const ZRA_RANK  = {Diamond:1,Ruby:2,Emerald:3,Sapphire:4,Amethyst:5,Platinum:6,Gold:7,Silver:8,Bronze:9,Copper:10};
+const CAT_RANK  = {"A+":1,A:2,B:3,C:4,D:5};
+const SERIES = [
+  {id:'ttt',    name:'Weekly TTT',           emoji:'⏱️', max:40, desc:'Team Time Trial · Wed 19:00 UTC · Tempus Fugit · 17.3km'},
+  {id:'ladder', name:'Ladder League',        emoji:'🏅', max:30, desc:'Weekly handicap racing · Tuesdays · all categories welcome'},
+  {id:'zrl',    name:'Zwift Racing League',  emoji:'🏆', max:24, desc:'ZRL Team Series · divisional racing · season format'},
+  {id:'dirt',   name:'Dirt Race Series',     emoji:'🚵', max:20, desc:'Gravel & off-road racing · mixed terrain events'},
+  {id:'herd',   name:'Herd Spring Series',   emoji:'🌱', max:30, desc:'Community race series · spring season · all welcome'},
+];
+const toFlag = cc=>(cc||"").toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt()));
+const catB   = cat=>{const c=CAT_COLOR[cat]||"#888";return`<span class="cat" style="background:${c}22;color:${c};border:1px solid ${c}44">${cat}</span>`;};
+const phClean= v=>(v||"all-rounder").toLowerCase().replace(/\s+/g,"-");
+const ccClean= cc=>(cc||"gb").split("-")[0];
+const fmt    = n=>n?.toLocaleString()||"—";
+
+// ── Storage ────────────────────────────────────────────────
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}};
+
+// ── State ──────────────────────────────────────────────────
+let role=sessionStorage.getItem('role');
+let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
+let riders=[];
+let allSignups=load('cg_signups')||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
+let lockedSeries=load('cg_locked')||{};
+let localMemberState = load('cg_member_state') || {}; 
+let affiliationLog = JSON.parse(localStorage.getItem('cg_aff') || '{}');
+localStorage.removeItem('cg_ri');
+let zwiftEventRides = [];
+let rides=[];
+let rsvps=load('cg_r')||{};
+let mPage=1,mActive=false,rsvpId=null;
+let activeSeries='ttt';
+let mSort={col:'velo',dir:'desc'};
+let rSort={col:'velo',dir:'desc'};
+let liveResults = [];
+let sheetData = null;
+
+function setZRA(color, msg) {
+  const dot = document.getElementById('zra-dot');
+  const text = document.getElementById('zra-msg');
+  if (dot) dot.style.background = color;
+  if (text) text.textContent = msg;
+}
+
+// ── API Bridge to WordPress ──────────────────────────────
+const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
+const WP_AUTH = window.wpApiSettings ? window.wpApiSettings.nonce : 'Basic ' + btoa('admin_username:application_password'); 
+
+async function api(endpoint, method = 'GET', payload = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (window.wpApiSettings) { headers['X-WP-Nonce'] = WP_AUTH; } 
+  else { headers['Authorization'] = WP_AUTH; }
+  const options = { method, headers };
+  if (payload) options.body = JSON.stringify(payload);
+  const res = await fetch(WP_URL + endpoint, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+  return data;
+} 
+
+// ── Login Refactor ─────────────────────────────────────────
+function doMemberLogin(){
+  const q = document.getElementById('member-search').value.trim();
+  if (!q) { showLoginErr('Please enter your name or Zwift ID.'); return; }
+  
+  // Guard Clause: Prevent login attempt if the API hasn't finished loading the roster
+  if (!riders.length) { 
+      showLoginErr('Live roster is still loading from the database. Please wait a few seconds and try again.'); 
+      return; 
   }
 
-  const { endpoint } = req.query;
-  const ZRA_KEY = process.env.ZRA_API_KEY || '63e32b2550a0742a4aa04923';
-
-  // 2. Fail-Fast Mechanism: Prevent infinite hangs with AbortController
-  // Space Complexity: O(1)
-  // Time Complexity: O(1) initialization
-  const controller = new AbortController();
-  const fetchTimeout = setTimeout(() => controller.abort(), 25000); // 25-second explicit timeout
-
-  try {
-    // Route 1: Team Roster
-    if (endpoint === 'team') {
-      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/0', {
-        signal: controller.signal,
-        headers: {
-          'Authorization': ZRA_KEY,
-          'Accept': 'application/json',
-          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
-        }
-      });
-      clearTimeout(fetchTimeout); // Clean up timeout on success
-
-      if (!zraRes.ok) {
-         throw new Error(`ZRA API Error: ${zraRes.status} ${zraRes.statusText}`);
-      }
-      
-      const data = await zraRes.json();
-      return res.status(200).json(data);
-    }
-
-    // Route 2: Recent Results
-    if (endpoint === 'results') {
-      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/results', {
-        signal: controller.signal,
-        headers: {
-          'Authorization': ZRA_KEY,
-          'Accept': 'application/json',
-          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
-        }
-      });
-      clearTimeout(fetchTimeout);
-
-      if (!zraRes.ok) {
-        return res.status(200).json({ results: [], derived: [] }); // Graceful degradation
-      }
-      const data = await zraRes.json();
-      return res.status(200).json(data);
-    }
-
-    // Route 3: Rides from Google Sheets
-    if (endpoint === 'rides') {
-      const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT1-example/pub?gid=0&single=true&output=csv';
-      const csvRes = await fetch(SHEET_CSV_URL, { signal: controller.signal });
-      clearTimeout(fetchTimeout);
-
-      if (!csvRes.ok) throw new Error(`Google Sheets Error: ${csvRes.status}`);
-      
-      const csvText = await csvRes.text();
-      const lines = csvText.trim().split('\n');
-      
-      if (lines.length < 2) return res.status(200).json({ rides: [] });
-
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      
-      // Time Complexity: O(N * M) where N = rows, M = columns
-      const rides = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const row = {};
-        headers.forEach((h, i) => { row[h] = values[i] || ''; });
-        return row;
-      });
-
-      return res.status(200).json({ rides, updated: new Date().toISOString() });
-    }
-
-    // Unhandled endpoint
-    return res.status(400).json({ error: `Unknown endpoint: ${endpoint}` });
-
-  } catch (error) {
-    // 3. Robust Error Handling
-    if (error.name === 'AbortError') {
-      return res.status(504).json({ error: 'Upstream API timed out after 25 seconds.' });
-    }
-    return res.status(502).json({ error: 'Bad Gateway: ' + error.message });
-  } finally {
-    clearTimeout(fetchTimeout); // Ensure garbage collection
+  const matches = riders.filter(r => r.name.toLowerCase().includes(q.toLowerCase()) || r.id.toString() === q);
+  
+  if (matches.length === 1) {
+    sessionStorage.setItem('memberRider', JSON.stringify(matches[0]));
+    memberRider = matches[0];
+    launchApp('member');
+  } else if (matches.length > 1) {
+    document.getElementById('member-results').innerHTML = `<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Multiple matches — click to select:</div>` +
+    matches.slice(0,6).map(r => `<button onclick="selectMember(${r.id})" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;color:white;font-size:13px">${toFlag(r.cc)} ${r.name} · ${catB(r.cat)} · vELO ${r.velo}</button>`).join('');
+  } else {
+    showLoginErr('Rider not found in the live database. Check your spelling or Zwift ID.');
   }
 }
+
+// ── Members Table Refactor ─────────────────────────────────
+function renderMembers(){
+  renderOffboarding(); 
+  
+  // Guard Clause: Show a loading state instead of crashing or showing mock data
+  if (!riders.length) {
+    document.getElementById('members-body').innerHTML = `<tr><td colspan="10" style="text-align:center; padding:30px; color:#9ca3af;">Loading live rider data...</td></tr>`;
+    return;
+  }
+
+  const search = (document.getElementById('m-search')||{value:''}).value.toLowerCase();
+  const cat = (document.getElementById('m-cat')||{value:'All'}).value;
+  const ph = (document.getElementById('m-ph')||{value:''}).value;
+  const zra = (document.getElementById('m-zra')||{value:''}).value;
+  
+  let filtered = riders.filter(m =>
+    (!search || m.name.toLowerCase().includes(search)) &&
+    (cat === 'All' || m.cat === cat) &&
+    (!ph || m.ph === ph) &&
+    (!zra || m.zraCat === zra) &&
+    (!mActive || m.active)
+  );
+  
+  const sorted = sortData(filtered, mSort);
+  const PER = 15, total = Math.ceil(sorted.length/PER) || 1;
+  if (mPage > total) mPage = 1;
+  const page = sorted.slice((mPage-1)*PER, mPage*PER);
+  
+  document.getElementById('members-sub').textContent = `Showing ${filtered.length} live riders`;
+  document.getElementById('m-page-info').textContent = `Page ${mPage} of ${total}`;
+  updateSortArrows('m', mSort);
+  
+  // ... (Keep your existing table header and row mapping logic here) ...
+}
+
+// ── Racing Table Refactor ──────────────────────────────────
+function renderRacing(){
+  if (!riders.length) {
+    document.getElementById('racing-body').innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#9ca3af;">Loading live racing data...</td></tr>`;
+    return;
+  }
+
+  const search = (document.getElementById('r-search')||{value:''}).value.toLowerCase();
+  const cat = (document.getElementById('r-cat')||{value:'All'}).value;
+  const zra = (document.getElementById('r-zra')||{value:''}).value;
+  const ph = (document.getElementById('r-ph')||{value:''}).value;
+  
+  let filtered = riders.filter(m => m.active &&
+    (!search || m.name.toLowerCase().includes(search)) &&
+    (cat === 'All' || m.cat === cat) &&
+    (!zra || m.zraCat === zra) &&
+    (!ph || m.ph === ph)
+  );
+  
+  const sorted = sortData(filtered, rSort);
+  document.getElementById('r-badge').textContent = `${filtered.length} of ${riders.length} · live ✓`;
+  document.getElementById('r-badge').style.color = '#10B981';
+  updateSortArrows('r', rSort);
+  
+  // ... (Keep your existing racing row mapping logic here) ...
+}
+
+// ── Login ──────────────────────────────────────────────────
+function loginStep(type){
+  document.getElementById('login-step1').style.display='none';
+  document.getElementById('login-step2').style.display='block';
+  ['admin','mod','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
+  document.getElementById('login-form-'+type).style.display='block';
+  setTimeout(()=>{ const el=document.getElementById(type==='admin'?'admin-pw':type==='mod'?'mod-pw':'member-search'); if(el)el.focus(); },50);
+}
+function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
+function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
+function doAdminLogin(){
+  if(document.getElementById('admin-pw').value===PASSWORDS.admin){launchApp('admin');}
+  else showLoginErr('Incorrect password.');
+}
+function doModLogin(){
+  if(document.getElementById('mod-pw').value===PASSWORDS.mod){launchApp('mod');}
+  else showLoginErr('Incorrect password.');
+}
+function doMemberLogin(){
+  const q=document.getElementById('member-search').value.trim();
+  if(!q){showLoginErr('Please enter your name or Zwift ID.');return;}
+  const data=riders.length?riders:MOCK;
+  const matches=data.filter(r=>r.name.toLowerCase().includes(q.toLowerCase())||r.id.toString()===q);
+  if(matches.length===1){
+    sessionStorage.setItem('memberRider',JSON.stringify(matches[0]));
+    memberRider=matches[0];
+    launchApp('member');
+  } else if(matches.length>1){
+    document.getElementById('member-results').innerHTML=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Multiple matches — click to select:</div>`+
+    matches.slice(0,6).map(r=>`<button onclick="selectMember(${r.id})" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;color:white;font-size:13px">${toFlag(r.cc)} ${r.name} · ${catB(r.cat)} · vELO ${r.velo}</button>`).join('');
+  } else {
+    showLoginErr('Rider not found. Try a different name or your Zwift ID number. Live data may still be loading.');
+  }
+}
+function selectMember(id){
+  const data=riders.length?riders:MOCK;
+  const r=data.find(x=>x.id===id);
+  if(r){sessionStorage.setItem('memberRider',JSON.stringify(r));memberRider=r;launchApp('member');}
+}
+function launchApp(r){
+  role=r; sessionStorage.setItem('role',r);
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  setupRole();
+  renderAll();
+  loadLive();
+}
+function doLogout(){sessionStorage.clear();location.reload();}
+
+// ── Role Setup ─────────────────────────────────────────────
+function setupRole(){
+  const badges={admin:{text:'Administrator',bg:'rgba(239,68,68,0.15)',color:'#f87171'},mod:{text:'Moderator',bg:'rgba(251,191,36,0.12)',color:'#FBBF24'},member:{text:'Member',bg:'rgba(0,212,255,0.1)',color:'#00D4FF'}};
+  const b=badges[role];
+  const rb=document.getElementById('role-badge');
+  rb.textContent=b.text; rb.style.background=b.bg; rb.style.color=b.color;
+  if(role==='admin'){document.getElementById('nav-admin-btn').style.display='flex';}
+  if(role==='member'){
+    document.getElementById('nav-profile').style.display='flex';
+    document.getElementById('new-ride-btn').style.display='none';
+  }
+  if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
+}
+
+// ── Navigation ─────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='dashboard')loadResults();
+  if(id==='events')renderEvents();
+  if(id==='profile')renderProfile();
+  if(id==='rides')loadZwiftEvents();
+  if(id==='members')renderMembers(); 
+}
+
+// ── Live Data ──────────────────────────────────────────────
+async function loadLive() {
+  setZRA('#FBBF24', 'Loading Database...');
+  try {
+    const dbData = await api('/members', 'GET'); 
+    const dbLookup = {};
+    dbData.forEach(m => dbLookup[m.zwift_id] = m);
+
+    setZRA('#FBBF24', 'Connecting to ZRA...');
+    const r = await fetch(WP_URL + '/zwift/public/clubs/2740/0');
+    if (r.ok) {
+      const d = await r.json();
+      riders = d.riders.map(r => {
+        const dbRecord = dbLookup[r.riderId] || {};
+        return {
+          id: r.riderId, 
+          name: dbRecord.name || r.name, 
+          cc: ccClean(r.country), 
+          cat: r.zpCategory || 'D',
+          ftp: Math.round(r.zpFTP || 0),
+          wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
+          velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
+          zraCat: r.race?.current?.mixed?.category || '',
+          ph: phClean(r.phenotype?.value),
+          active: dbRecord.status === 'active', 
+          tier: dbRecord.tier || 'half',        
+          status: dbRecord.status || 'pending', 
+          ob_discord: dbRecord.offboard_discord === '1',
+          ob_fb: dbRecord.offboard_fb === '1',
+          ob_zp: dbRecord.offboard_zp === '1',
+          raw: r,
+        };
+      });
+      setZRA('#10B981', `Synced DB + Live · ${riders.length} riders ✓`);
+      trackAffiliations(riders);
+      renderAll();
+    }
+  } catch (e) { 
+    setZRA('#EF4444', e.message); 
+  }
+}
+
+// ── Action Functions (Tier Toggle & Off-boarding) ──────────
+function changeTier(id, tier) {
+  localMemberState[id] = localMemberState[id] || {};
+  localMemberState[id].tier = tier;
+  save('cg_member_state', localMemberState);
+  
+  const r = riders.find(x => x.id === id); // Strict reliance on the live array
+  if(r) r.tier = tier;
+  
+  renderMembers();
+}
+
+function updateStatus(id, action, days) {
+  let msg = action === 'left' ? 'Permanently offboard this rider?' : (action === 'suspended' ? `Suspend rider for ${days} days?` : 'Unsuspend rider?');
+  if(!confirm(msg)) return;
+
+  localMemberState[id] = localMemberState[id] || {};
+  localMemberState[id].status = action;
+  save('cg_member_state', localMemberState);
+  
+  const r = riders.find(x => x.id === id); // Strict reliance on the live array
+  if(r) {
+      r.status = action;
+      r.active = (action === 'active');
+  }
+  
+  renderMembers();
+}
+
+function renderOffboarding() {
+  const el = document.getElementById('offboarding-panel');
+  if (!el) return;
+  const pendingOffboard = (riders.length ? riders : MOCK).filter(r => r.status === 'left');
+  if (pendingOffboard.length === 0) { el.innerHTML = ''; return; }
+  const incomplete = pendingOffboard.filter(r => {
+    const state = localMemberState[r.id] || {};
+    return !(state.ob_discord && state.ob_fb && state.ob_zp);
+  });
+  if (incomplete.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
+      <div style="padding:12px 16px; background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.2); border-radius:12px 12px 0 0; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">⚠️</span>
+        <span style="font-size:12px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
+      </div>
+      <div style="padding:16px;">
+        <table style="width:100%; text-align:left; font-size:13px;">
+          <thead>
+            <tr style="color:#6b7280; font-size:11px; text-transform:uppercase;">
+              <th style="padding-bottom:8px;">Rider</th>
+              <th style="padding-bottom:8px; text-align:center;">Discord</th>
+              <th style="padding-bottom:8px; text-align:center;">Facebook</th>
+              <th style="padding-bottom:8px; text-align:center;">ZwiftPower</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${incomplete.map(r => {
+              const state = localMemberState[r.id] || {};
+              return `
+              <tr style="border-top:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 0; font-weight:600;">${r.name}</td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+                <td style="padding:10px 0; text-align:center;">
+                  <input type="checkbox" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function toggleOffboard(id, platform, isChecked) {
+  try {
+    await api(`/members/${id}/offboard-step`, 'POST', { platform: platform, state: isChecked ? 1 : 0 });
+    const r = riders.find(x => x.id === id);
+    if(r) r[platform] = isChecked;
+    renderOffboarding();
+  } catch(e) {
+    alert("Failed to save to database: " + e.message);
+  }
+}
+
+// ── Sort helpers ───────────────────────────────────────────
+function sortData(data,sort){
+  const col=sort.col, dir=sort.dir;
+  return [...data].sort((a,b)=>{
+    let av=a[col], bv=b[col];
+    if(col==='cat') { av=CAT_RANK[av]||99; bv=CAT_RANK[bv]||99; }
+    if(col==='zraCat') { av=ZRA_RANK[av]||99; bv=ZRA_RANK[bv]||99; }
+    if(typeof av==='string') { av=av.toLowerCase(); bv=bv.toLowerCase(); }
+    if(av<bv) return dir==='asc'?-1:1;
+    if(av>bv) return dir==='asc'?1:-1;
+    return 0;
+  });
+}
+function updateSortArrows(prefix,sort){
+  ['name','cc','cat','zraCat','ftp','wkg','velo','ph','rank'].forEach(c=>{
+    const el=document.getElementById(prefix+'sa-'+c);
+    if(!el) return;
+    if(c===sort.col){ el.textContent=sort.dir==='asc'?'↑':'↓'; el.classList.add('active'); }
+    else { el.textContent=''; el.classList.remove('active'); }
+  });
+}
+function mSortBy(col){
+  if(mSort.col===col) mSort.dir=mSort.dir==='asc'?'desc':'asc';
+  else { mSort.col=col; mSort.dir=['name','ph','cc','zraCat'].includes(col)?'asc':'desc'; }
+  mPage=1; renderMembers();
+}
+function rSortBy(col){
+  if(col==='rank') { rSort={col:'velo',dir:'desc'}; renderRacing(); return; }
+  if(rSort.col===col) rSort.dir=rSort.dir==='asc'?'desc':'asc';
+  else { rSort.col=col; rSort.dir=['name','ph'].includes(col)?'asc':'desc'; }
+  renderRacing();
+}
+
+// ── Rider profile links ────────────────────────────────────
+function riderLinks(m){
+  if(!m.id||m.id<1) return m.name;
+  const zra = `https://www.zwiftracing.app/riders/${m.id}`;
+  const zp  = `https://zwiftpower.com/profile.php?z=${m.id}`;
+  return `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <a href="${zra}" target="_blank" title="View on ZwiftRacing.app" style="color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,0.2)" onmouseover="this.style.color='#00D4FF';this.style.borderBottomColor='#00D4FF'" onmouseout="this.style.color='inherit';this.style.borderBottomColor='rgba(255,255,255,0.2)'">${m.name}</a>
+    <span style="display:inline-flex;gap:3px;flex-shrink:0">
+      <a href="${zra}" target="_blank" title="ZwiftRacing.app profile" style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='rgba(0,212,255,0.25)'" onmouseout="this.style.background='rgba(0,212,255,0.12)'">ZRA</a>
+      <a href="${zp}" target="_blank" title="ZwiftPower profile" style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='rgba(251,191,36,0.25)'" onmouseout="this.style.background='rgba(251,191,36,0.12)'">ZP</a>
+    </span>
+  </span>`;
+}
+
+// ── Render All ─────────────────────────────────────────────
+function renderAll(){
+  const data=riders.length?riders:MOCK;
+  const active=data.filter(m=>m.active);
+  const avg=active.length?Math.round(active.reduce((s,m)=>s+m.velo,0)/active.length):0;
+  document.getElementById('s-riders').textContent=active.length;
+  document.getElementById('s-riders-s').textContent=riders.length?`${riders.length} in roster`:'mock data';
+  document.getElementById('s-velo').textContent=avg||'—';
+  document.getElementById('s-velo-s').textContent=riders.length?'Live':'mock data';
+  document.getElementById('s-ttt').textContent=`${(allSignups.ttt||[]).length}/40`;
+  document.getElementById('s-rides').textContent=rides.length;
+
+  const top=[...active].sort((a,b)=>b.velo-a.velo).slice(0,10);
+  document.getElementById('top10').innerHTML=top.map((m,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:7px">
+        <span style="font-size:10px;color:#4b5563;width:16px;text-align:right">${i+1}</span>
+        <span style="font-size:13px">${m.name.split(' ')[0]}</span>
+        ${catB(m.cat)}
+        ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
+      </div>
+      <span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">${m.velo}</span>
+    </div>`).join('');
+
+  const cats={};active.forEach(m=>{cats[m.cat]=(cats[m.cat]||0)+1;});
+  const catArr=["A+","A","B","C","D"].filter(k=>cats[k]).map(k=>({cat:k,n:cats[k]}));
+  const maxN=Math.max(...catArr.map(x=>x.n),1);
+  document.getElementById('catdist').innerHTML=`<div style="display:flex;gap:10px;align-items:flex-end;height:90px">${
+    catArr.map(e=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
+      <span style="font-size:11px;color:#9ca3af">${e.n}</span>
+      <div style="width:100%;height:${Math.round(e.n/maxN*64)+8}px;background:${CAT_COLOR[e.cat]};border-radius:4px 4px 0 0;opacity:.85"></div>
+      <span style="font-size:10px;color:#6b7280">${e.cat}</span>
+    </div>`).join('')}</div>`;
+
+  renderRacing();
+  renderMembers();
+  renderRides();
+}
+
+// ── Racing ─────────────────────────────────────────────────
+function renderRacing(){
+  const data=riders.length?riders:MOCK;
+  const search=(document.getElementById('r-search')||{value:''}).value.toLowerCase();
+  const cat=(document.getElementById('r-cat')||{value:'All'}).value;
+  const zra=(document.getElementById('r-zra')||{value:''}).value;
+  const ph=(document.getElementById('r-ph')||{value:''}).value;
+  let filtered=data.filter(m=>m.active&&
+    (!search||m.name.toLowerCase().includes(search))&&
+    (cat==='All'||m.cat===cat)&&
+    (!zra||m.zraCat===zra)&&
+    (!ph||m.ph===ph)
+  );
+  const sorted=sortData(filtered,rSort);
+  document.getElementById('r-badge').textContent=riders.length?`${filtered.length} of ${riders.length} · live ✓`:`${filtered.length} riders (mock)`;
+  document.getElementById('r-badge').style.color=riders.length?'#10B981':'#4b5563';
+  updateSortArrows('r',rSort);
+  document.getElementById('racing-body').innerHTML=sorted.map((m,i)=>{
+    const barW=Math.min(m.velo/3500*100,100);
+    return`<tr>
+      <td style="color:#4b5563;font-family:monospace;font-size:11px">${i+1}</td>
+      <td style="white-space:nowrap">${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
+      <td>${catB(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700;margin-left:4px">${m.zraCat}</span>`:''}</td>
+      <td style="font-family:monospace;font-size:12px;color:#6b7280">${m.ftp}w</td>
+      <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:56px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px"><div style="width:${barW}%;height:100%;background:#00D4FF;border-radius:2px"></div></div>
+        <span style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</span>
+      </div></td>
+      <td style="font-size:12px;color:#6b7280">${PH_EMOJI[m.ph]||'⭐'} ${m.ph}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Members ────────────────────────────────────────────────
+function renderMembers(){
+  renderOffboarding(); 
+  const data=riders.length?riders:MOCK;
+  const search=(document.getElementById('m-search')||{value:''}).value.toLowerCase();
+  const cat=(document.getElementById('m-cat')||{value:'All'}).value;
+  const ph=(document.getElementById('m-ph')||{value:''}).value;
+  const zra=(document.getElementById('m-zra')||{value:''}).value;
+  let filtered=data.filter(m=>
+    (!search||m.name.toLowerCase().includes(search))&&
+    (cat==='All'||m.cat===cat)&&
+    (!ph||m.ph===ph)&&
+    (!zra||m.zraCat===zra)&&
+    (!mActive||m.active)
+  );
+  
+  const sorted=sortData(filtered,mSort);
+  const PER=15, total=Math.ceil(sorted.length/PER)||1;
+  if(mPage>total)mPage=1;
+  const page=sorted.slice((mPage-1)*PER,mPage*PER);
+  document.getElementById('members-sub').textContent=`Showing ${filtered.length}${riders.length?' of '+riders.length+' live riders':' (mock data)'}`;
+  document.getElementById('m-page-info').textContent=`Page ${mPage} of ${total}`;
+  updateSortArrows('m',mSort);
+  
+  document.getElementById('members-table-head').innerHTML = `
+      <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
+      <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
+      <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
+      <th onclick="mSortBy('zraCat')">ZRA Tier<span class="sortarrow" id="msa-zraCat"></span></th>
+      <th onclick="mSortBy('ftp')">FTP<span class="sortarrow" id="msa-ftp"></span></th>
+      <th onclick="mSortBy('wkg')">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
+      <th onclick="mSortBy('velo')">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
+      <th onclick="mSortBy('ph')">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
+      <th>ZRA Club</th>
+      <th>Status</th>
+      ${(role === 'admin' || role === 'mod') ? '<th>Actions</th>' : ''}
+  `;
+  
+  document.getElementById('members-body').innerHTML=page.map(m=>{
+    const isMe=role==='member'&&memberRider&&m.id===memberRider.id;
+    const zraC=ZRA_COLOR[m.zraCat]||'#9ca3af';
+    let statusBadgeColor = m.active ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)';
+    let statusTextColor = m.active ? '#10B981' : '#4b5563';
+    let statusText = m.status.charAt(0).toUpperCase() + m.status.slice(1);
+    
+    if(m.status === 'suspended') { statusBadgeColor = 'rgba(245,158,11,0.12)'; statusTextColor = '#F59E0B'; }
+    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#EF4444'; }
+    
+    return`<tr style="${isMe?'background:rgba(0,212,255,0.05)':''}">
+      <td style="white-space:nowrap">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
+      <td style="color:#6b7280;font-size:12px">${m.cc.toUpperCase()}</td>
+      <td>${catB(m.cat)}</td>
+      <td>${m.zraCat?`<span style="font-size:11px;color:${zraC};font-weight:700">${m.zraCat}</span>`:'-'}</td>
+      <td style="font-family:monospace;font-size:12px;color:#6b7280">${m.ftp}w</td>
+      <td style="font-family:monospace;font-size:12px;color:#00D4FF;font-weight:700">${m.wkg}</td>
+      <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</td>
+      <td style="font-size:12px;color:#6b7280">${PH_EMOJI[m.ph]||'⭐'} ${m.ph}</td>
+      <td style="font-size:11px;max-width:160px">${(()=>{
+        const log = affiliationLog['r'+m.id];
+        const club = m.raw?.club?.name || log?.club || 'CRYO-GEN';
+        const firstSeen = log?.firstSeen ? new Date(log.firstSeen).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        const changed = log?.changed ? new Date(log.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : null;
+        const isCryo = club.toLowerCase().includes('cryo');
+        return `<div style="color:${isCryo?'#10B981':'#FBBF24'};font-weight:600">${club}</div>
+          <div style="color:#4b5563;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
+          ${changed?`<div style="font-size:9px;color:#EF4444">⚠️ Recently changed</div>`:''}`;
+      })()}</td>
+      <td><span class="badge" style="background:${statusBadgeColor};color:${statusTextColor}">${statusText}</span></td>
+      
+      ${(role === 'admin' || role === 'mod') ? `
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <select onchange="changeTier(${m.id}, this.value)" style="width:auto;padding:2px 4px;font-size:11px;background:#0f1623;color:white;border:1px solid rgba(255,255,255,0.1);border-radius:4px">
+              <option value="half" ${m.tier==='half'?'selected':''}>Half</option>
+              <option value="full" ${m.tier==='full'?'selected':''}>Full</option>
+            </select>
+            ${m.status === 'active' ? `<button onclick="updateStatus(${m.id}, 'suspended', 7)" style="padding:4px 8px;font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:4px">Suspend</button>` : ''}
+            ${m.status === 'suspended' ? `<button onclick="updateStatus(${m.id}, 'active', 0)" style="padding:4px 8px;font-size:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:4px">Unsuspend</button>` : ''}
+            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
+          </div>
+        </td>` : ''}
+    </tr>`;
+  }).join('');
+}
+function changeMPage(d){const data=riders.length?riders:MOCK;const PER=15;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
+
+function trackAffiliations(rArr) {
+  let changed = false;
+  rArr.forEach(r => {
+    const key = 'r' + r.id;
+    const club = r.raw?.club?.name || 'Team CRYO-GEN';
+    const zpCat = r.cat || '';
+    if (!affiliationLog[key]) {
+      affiliationLog[key] = { club, zpCat, firstSeen: new Date().toISOString(), history: [] };
+      changed = true;
+    } else if (affiliationLog[key].club !== club) {
+      affiliationLog[key].history = affiliationLog[key].history || [];
+      affiliationLog[key].history.push({ club: affiliationLog[key].club, until: new Date().toISOString() });
+      affiliationLog[key].club = club;
+      affiliationLog[key].changed = new Date().toISOString();
+      changed = true;
+    }
+  });
+  if (changed) localStorage.setItem('cg_aff', JSON.stringify(affiliationLog));
+}
+
+// ── Events & Sign-Up ───────────────────────────────────────
+function renderEvents(){
+  document.getElementById('series-tabs').innerHTML=SERIES.map(s=>`
+    <button class="tab${activeSeries===s.id?' active':''}" onclick="activeSeries='${s.id}';renderEvents()">${s.emoji} ${s.name}</button>
+  `).join('');
+
+  if(role==='admin'){
+    const locked=lockedSeries[activeSeries];
+    document.getElementById('event-admin-btns').innerHTML=`
+      <button onclick="toggleSeriesLock('${activeSeries}')" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:${locked?'rgba(239,68,68,0.12)':'rgba(255,255,255,0.05)'};border:1px solid ${locked?'rgba(239,68,68,0.3)':'rgba(255,255,255,0.1)'};border-radius:8px;color:${locked?'#f87171':'#9ca3af'};font-size:12px">${locked?'🔒 Locked':'🔓 Lock'}</button>
+      <button onclick="exportSeriesCsv('${activeSeries}')" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">⬇️ Export CSV</button>
+    `;
+  }
+
+  const s=SERIES.find(x=>x.id===activeSeries);
+  const sups=allSignups[activeSeries]||[];
+  const locked=lockedSeries[activeSeries];
+  const pct=Math.min(sups.length/s.max*100,100);
+
+  let html=`
+    <div style="background:rgba(0,80,120,0.2);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:20px;margin-bottom:20px">
+      <div style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Active Event</div>
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px">${s.emoji} ${s.name}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${s.desc}</div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:6px">
+        <span>${sups.length} signed up</span><span>${s.max-sups.length} spots left</span>
+      </div>
+      <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px">
+        <div style="width:${pct}%;height:100%;background:#00D4FF;border-radius:3px;transition:width .3s"></div>
+      </div>
+    </div>`;
+
+  if(!locked){
+    html+=`<div class="card" style="padding:16px;margin-bottom:20px">
+      <label class="lbl">Sign Up for ${s.name}</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="sup-zwid" class="inp" placeholder="Zwift ID (number)" style="width:140px" oninput="lookupZwid()" onkeydown="if(event.key==='Enter')doSignup()"/>
+        <input id="sup-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')doSignup()"/>
+        <select id="sup-cat" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
+        <button onclick="doSignup()" style="padding:9px 20px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Sign Up</button>
+      </div>
+      <div id="zwid-hint" style="font-size:11px;color:#10B981;margin-top:6px"></div>
+    </div>`;
+  } else {
+    html+=`<div class="card" style="padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;border-color:rgba(239,68,68,0.25)"><span style="color:#f87171;font-size:18px">🔒</span><span style="font-size:13px;color:#f87171">Sign-ups are locked for this event</span></div>`;
+  }
+
+  const byCat=["A+","A","B","C","D"].reduce((a,cat)=>{const r=sups.filter(s=>s.cat===cat);if(r.length)a.push({cat,r});return a;},[]);
+  if(sups.length===0){
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#4b5563;font-size:14px">No sign-ups yet — be the first! 🚴</div>`;
+  } else {
+    html+=byCat.map(({cat,r})=>`
+      <div class="card" style="margin-bottom:12px">
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px">${catB(cat)}<span style="font-size:11px;color:#6b7280">${r.length} rider${r.length!==1?'s':''}</span></div>
+        ${r.map(s=>`<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:#10B981">✓</span>
+            <span>${s.name}</span>
+            ${s.zwid?`<span style="font-size:10px;color:#4b5563;font-family:monospace">ID:${s.zwid}</span>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:11px;color:#4b5563">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+            ${(role==='admin'||role==='mod')?`<button onclick="rmSignup('${activeSeries}','${s.ts}')" style="background:none;border:none;color:#4b5563;font-size:16px;padding:0">×</button>`:''}
+          </div>
+        </div>`).join('')}
+      </div>`).join('');
+  }
+  document.getElementById('series-content').innerHTML=html;
+}
+
+function lookupZwid(){
+  const id=document.getElementById('sup-zwid').value.trim();
+  if(!id) { document.getElementById('zwid-hint').textContent=''; return; }
+  const rider=riders.find(r=>r.id.toString()===id);
+  if(rider){
+    document.getElementById('sup-name').value=rider.name;
+    document.getElementById('sup-cat').value=rider.cat;
+    document.getElementById('zwid-hint').textContent=`✓ Found: ${rider.name} · ${rider.cat} · vELO ${rider.velo}`;
+  } else {
+    document.getElementById('zwid-hint').textContent='ID not found in live roster — enter name manually';
+    document.getElementById('zwid-hint').style.color='#FBBF24';
+  }
+}
+function doSignup(){
+  const name=document.getElementById('sup-name').value.trim();
+  const cat=document.getElementById('sup-cat').value;
+  const zwid=document.getElementById('sup-zwid').value.trim();
+  const s=SERIES.find(x=>x.id===activeSeries);
+  if(!name){alert('Please enter your display name.');return;}
+  if(lockedSeries[activeSeries]){alert('Sign-ups are locked.');return;}
+  const sups=allSignups[activeSeries]||[];
+  if(sups.find(x=>x.name.toLowerCase()===name.toLowerCase())){alert('Already signed up!');return;}
+  if(sups.length>=s.max){alert('Event is full.');return;}
+  allSignups[activeSeries]=[...sups,{name,cat,zwid,ts:new Date().toISOString()}];
+  save('cg_signups',allSignups);
+  document.getElementById('sup-name').value='';
+  document.getElementById('sup-zwid').value='';
+  document.getElementById('zwid-hint').textContent='';
+  document.getElementById('s-ttt').textContent=`${(allSignups.ttt||[]).length}/40`;
+  renderEvents();
+}
+function rmSignup(series,ts){allSignups[series]=(allSignups[series]||[]).filter(s=>s.ts!==ts);save('cg_signups',allSignups);renderEvents();}
+function toggleSeriesLock(series){lockedSeries[series]=!lockedSeries[series];save('cg_locked',lockedSeries);renderEvents();}
+function exportSeriesCsv(series){
+  const sups=allSignups[series]||[];
+  const rows=[['Name','Category','Zwift ID','Signed Up'],...sups.map(s=>[s.name,s.cat,s.zwid||'',new Date(s.ts).toLocaleString()])];
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
+  a.download=`cryogen_${series}.csv`; a.click();
+}
+
+// ── Rides ──────────────────────────────────────────────────
+function renderRides(){
+  const allRides = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  document.getElementById('rides-list').innerHTML=allRides.map(ride=>{
+    const att=rsvps[ride.id]||[];const left=ride.max-att.length;const pct=Math.min(att.length/ride.max*100,100);
+    return`<div class="card" style="padding:20px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.06);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);padding:1px 8px;border-radius:99px">${ride.cat}</span>
+            ${left<=0?'<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:1px 8px;border-radius:99px">Full</span>':''}
+            ${left>0&&left<=4?'<span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:1px 8px;border-radius:99px">Almost Full</span>':''}
+          </div>
+          <div style="font-size:15px;font-weight:700">${ride.title}${ride.source==='sheet'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">SHEET</span>':''}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px">${ride.desc||''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700">${new Date(ride.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">${ride.time}</div>
+          ${ride.link?`<a href="${ride.link}" target="_blank" style="font-size:11px;color:#00D4FF;display:block;margin-top:4px">Zwift Event →</a>`:''}
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:11px;color:#6b7280">
+        <span>📍 ${ride.route}</span><span>📏 ${ride.dist}</span><span>⚡ ${ride.pace}</span><span>👥 ${att.length}/${ride.max}</span>
+      </div>
+      <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
+        <div style="width:${pct}%;height:100%;background:${pct>85?'#EF4444':'#00D4FF'};border-radius:2px"></div>
+      </div>
+      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button onclick="cancelRsvp(${ride.id},'${r.name}')" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${r.name}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#4b5563;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
+      ${rsvpId===ride.id?
+        `<div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="rsvp-${ride.id}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(0,212,255,0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(${ride.id})"/>
+          <button onclick="confirmRsvp(${ride.id})" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
+          <button onclick="rsvpId=null;renderRides()" style="padding:9px 12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px">×</button>
+        </div>`:
+        ride.source==='sheet'&&ride.link
+          ? `<a href="${ride.link}" target="_blank" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
+          : `<button onclick="rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
+    </div>`;
+  }).join('');
+}
+function confirmRsvp(id){
+  const name=(document.getElementById('rsvp-'+id)||{value:''}).value.trim();
+  if(!name)return;
+  const cur=rsvps[id]||[];
+  if(cur.find(r=>r.name.toLowerCase()===name.toLowerCase())){alert("Already RSVP'd!");return;}
+  rsvps[id]=[...cur,{name,ts:new Date().toISOString()}];
+  save('cg_r',rsvps);rsvpId=null;renderRides();
+}
+function cancelRsvp(id,name){rsvps[id]=(rsvps[id]||[]).filter(r=>r.name!==name);save('cg_r',rsvps);renderRides();}
+function createRide(){
+  const title=(document.getElementById('nr-title')||{value:''}).value.trim();
+  const date=(document.getElementById('nr-date')||{value:''}).value;
+  if(!title||!date){alert('Title and date required.');return;}
+  const ride={id:Date.now(),title,date,
+    time:(document.getElementById('nr-time')||{value:''}).value,
+    route:(document.getElementById('nr-route')||{value:''}).value,
+    dist:(document.getElementById('nr-dist')||{value:''}).value,
+    pace:(document.getElementById('nr-pace')||{value:''}).value,
+    desc:(document.getElementById('nr-desc')||{value:''}).value,
+    link:(document.getElementById('nr-link')||{value:''}).value,
+    max:parseInt((document.getElementById('nr-max')||{value:'25'}).value)||25,
+    cat:(document.getElementById('nr-cat')||{value:'All'}).value,
+  };
+  rides.push(ride);save('cg_ri',rides);
+  document.getElementById('newRideModal').style.display='none';
+  renderRides();
+}
+
+// ── My Profile ─────────────────────────────────────────────
+function renderProfile(){
+  if(!memberRider){document.getElementById('profile-content').innerHTML='<div style="color:#6b7280;padding:40px;text-align:center">No rider data loaded. Please log in as a member.</div>';return;}
+  const r=memberRider;
+  const raw=r.raw;
+  const ph=raw?.phenotype?.scores||{};
+  const pow=raw?.power||{};
+  const hcp=raw?.handicaps?.profile||{};
+  const phItems=[['Climber',ph.climber||0,'#10B981'],['Pursuiter',ph.pursuiter||0,'#3B82F6'],['Time Trialist',ph.tt||0,'#8B5CF6'],['Puncheur',ph.puncheur||0,'#F59E0B'],['Sprinter',ph.sprinter||0,'#EF4444']];
+  const powItems=[['5s',pow.wkg5||0],['15s',pow.wkg15||0],['30s',pow.wkg30||0],['1min',pow.wkg60||0],['5min',pow.wkg300||0],['20min',pow.wkg1200||0]];
+  const maxPow=Math.max(...powItems.map(x=>x[1]),1);
+  const hcpItems=[['Flat',hcp.flat||0,'#3B82F6'],['Rolling',hcp.rolling||0,'#10B981'],['Hilly',hcp.hilly||0,'#F59E0B'],['Mountainous',hcp.mountainous||0,'#EF4444']];
+  const zraC=ZRA_COLOR[r.zraCat]||'#9ca3af';
+
+  document.getElementById('profile-content').innerHTML=`
+    <div style="display:flex;align-items:center;gap:20px;margin-bottom:28px;flex-wrap:wrap">
+      <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#00D4FF22,#0080FF22);border:2px solid rgba(0,212,255,0.4);display:flex;align-items:center;justify-content:center;font-size:28px">${toFlag(r.cc)}</div>
+      <div>
+        <div style="font-size:22px;font-weight:900">${r.name}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
+          ${catB(r.cat)}
+          ${r.zraCat?`<span style="font-size:12px;color:${zraC};font-weight:700;background:${zraC}18;border:1px solid ${zraC}44;padding:2px 10px;border-radius:4px">${r.zraCat}</span>`:''}
+          <span style="font-size:12px;color:#6b7280">${PH_EMOJI[r.ph]||'⭐'} ${r.ph}</span>
+          <span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">vELO ${r.velo}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat4" style="margin-bottom:24px">
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">FTP</div><div style="font-size:22px;font-weight:900;color:#00D4FF">${r.ftp}w</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.wkg} w/kg @ 20min</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">Races</div><div style="font-size:22px;font-weight:900">${r.finishes||'—'}</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.dnfs||0} DNFs</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">Wins</div><div style="font-size:22px;font-weight:900;color:#10B981">${r.wins||0}</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.finishes?Math.round(r.wins/r.finishes*100):0}% win rate</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#FBBF24;margin-bottom:8px">Podiums</div><div style="font-size:22px;font-weight:900;color:#FBBF24">${r.podiums||0}</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.finishes?Math.round(r.podiums/r.finishes*100):0}% podium rate</div></div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:20px">
+      <div class="card" style="padding:20px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:16px">Rider Phenotype Scores</div>
+        ${phItems.map(([lbl,val,col])=>`
+          <div class="pbar-wrap">
+            <div class="pbar-label"><span>${lbl}</span><span style="color:${col};font-weight:700">${val.toFixed(1)}</span></div>
+            <div class="pbar"><div class="pbar-fill" style="width:${val}%;background:${col}"></div></div>
+          </div>`).join('')}
+        <div style="margin-top:12px;font-size:11px;color:#4b5563">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
+      </div>
+      <div class="card" style="padding:20px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:16px">Power Profile (W/kg)</div>
+        ${powItems.map(([dur,val])=>`
+          <div class="pbar-wrap">
+            <div class="pbar-label"><span>${dur}</span><span style="color:#00D4FF;font-weight:700">${val.toFixed(2)}</span></div>
+            <div class="pbar"><div class="pbar-fill" style="width:${Math.round(val/maxPow*100)}%;background:#00D4FF"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    ${raw?`<div class="card" style="padding:20px;margin-bottom:20px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:16px">Terrain Handicap Profile</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${hcpItems.map(([lbl,val,col])=>`<div style="flex:1;min-width:100px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:10px;color:#6b7280;text-transform:uppercase;margin-bottom:6px">${lbl}</div>
+          <div style="font-size:18px;font-weight:900;color:${val>=0?'#10B981':'#EF4444'}">${val>=0?'+':''}${Math.round(val)}</div>
+          <div style="font-size:10px;color:#4b5563;margin-top:2px">w handicap</div>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
+    </div>`:''}`
+  ;
+}
+
+// ── Live Results ──────────────────────────────────────────
+async function loadResults(){
+  try{
+    const r=await fetch(WP_URL + '/zwift/public/results');
+    if(!r.ok) return;
+    const d=await r.json();
+    if(d.results&&d.results.length>0){ renderAutoResults(d.results); }
+    else { renderHybridResults([],d.derived||[]); }
+  } catch(e){ console.log('Results failed:',e.message); }
+}
+
+function renderAutoResults(results){
+  const el=document.getElementById('results-body');
+  const hdr=document.getElementById('results-header');
+  if(!el) return;
+  if(hdr) hdr.textContent='Recent Results — Live from ZwiftPower';
+  el.innerHTML=results.map(ev=>{
+    const type=ev.eventType||'';
+    const icon=type.includes('TEAM_TIME')?'⏱️ TTT':type.includes('TIME_TRIAL')?'⏱️ TT':type.includes('RACE')?'🏁':'🚴';
+    const cats=(ev.categories||[]).map(c=>{
+      const col=catColor(c.cat);
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin:1px 2px;padding:2px 7px;border-radius:4px;background:'+col+'18;border:1px solid '+col+'44;font-size:11px"><span style="color:'+col+';font-weight:700">'+c.cat+'</span><span style="color:#9ca3af">'+(c.pos<=3?'🏆 ':'')+c.pos+'/'+c.total+'</span><span style="font-family:monospace;color:#6b7280">'+c.time+'</span><span style="color:#00D4FF">'+c.wkg+' w/kg</span></span>';
+    }).join('');
+    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#6b7280;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#6b7280">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#4b5563">'+ev.riders+' riders</td></tr>';
+  }).join('');
+}
+
+function renderHybridResults(sheet,derived){
+  const el=document.getElementById('results-body');
+  const hdr=document.getElementById('results-header');
+  if(!el) return;
+  if(hdr) hdr.textContent='Recent Results';
+  let rows='';
+  if(sheet.length>0){
+    rows+=sheet.map(r=>{
+      const col=catColor(r.Cat||r.cat||'?');
+      const pos=parseInt(r.Pos||r.pos||'0');
+      const podium=pos>0&&pos<=3;
+      return '<tr><td><strong>'+(r.Event||r.event||'—')+'</strong>'+(r.ZPLink?'<a href="'+r.ZPLink+'" target="_blank" style="font-size:10px;color:#00D4FF"> ↗</a>':'')+'</td><td style="color:#6b7280;font-size:11px">'+(r.Date||r.date||'—')+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.Cat||r.cat||'?')+'</span></td><td style="color:'+(podium?'#FBBF24':'#9ca3af')+';font-weight:700">'+(podium?'🏆 ':'')+(pos||'—')+'/'+(r.Total||r.total||'?')+'</td><td style="font-family:monospace;color:#9ca3af">'+(r.Time||r.time||'—')+'</td><td style="font-family:monospace;color:#00D4FF;font-weight:700">'+(r['W/kg']||r.wkg||'—')+'</td></tr>';
+    }).join('');
+  }
+  if(derived.length>0){
+    rows+='<tr><td colspan="6" style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:#374151;background:rgba(255,255,255,0.02)">Recent Rider Activity — ZwiftRacing.app</td></tr>';
+    rows+=derived.slice(0,8).map(r=>{
+      const col=catColor(r.category||'?');
+      const dt=r.date?new Date(r.date*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—';
+      return '<tr><td><a href="https://zwiftpower.com/profile.php?z='+r.id+'" target="_blank" style="color:white;text-decoration:none">'+r.name+'</a></td><td style="color:#6b7280;font-size:11px">'+dt+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.category||'?')+'</span></td><td style="color:#9ca3af">vELO '+r.rating+'</td><td style="color:#10B981;font-size:11px">🏆 '+r.wins+'W / '+r.podiums+'P</td><td style="color:#00D4FF;font-family:monospace">'+r.finishes+' races</td></tr>';
+    }).join('');
+  }
+  el.innerHTML=rows||'<tr><td colspan="6" style="color:#4b5563;text-align:center;padding:20px">No results yet</td></tr>';
+}
+
+function catColor(c){
+  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#6b7280',F:'#ec4899'}[c]||'#6b7280';
+}
+
+async function loadZwiftEvents(){
+  const btn = document.getElementById('zh-sync-btn');
+  if(btn) { btn.textContent='↻ Syncing…'; btn.disabled=true; }
+  try{
+    const r = await fetch('/api/proxy?endpoint=rides');
+    const d = await r.json();
+    if(d.error){
+      showZhStatus('⚠️ '+d.error, '#FBBF24');
+      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
+      return;
+    }
+    if(d.rides && d.rides.length > 0){
+      zwiftEventRides = d.rides.map((row,i)=>({
+        id: 'gs_'+i,
+        title:  row['Title']       || row['title']       || 'Club Ride',
+        date:   row['Date']        || row['date']        || '',
+        time:   row['Time']        || row['time']        || '',
+        route:  row['Route']       || row['route']       || '',
+        dist:   row['Distance']    || row['distance']    || '',
+        pace:   row['Pace']        || row['pace']        || '',
+        max:    parseInt(row['Max'] || row['max'] || row['MaxRiders'] || '30'),
+        desc:   row['Description'] || row['description'] || '',
+        cat:    row['Category']    || row['category']    || 'All',
+        link:   row['ZwiftLink']   || row['zwiftlink']   || row['Link'] || '',
+        source: 'sheet',
+      }));
+      showZhStatus(`✓ ${zwiftEventRides.length} rides loaded from Google Sheet · ${new Date(d.updated).toLocaleTimeString()}`, '#10B981');
+      if(btn){ btn.textContent=`✓ ${zwiftEventRides.length} rides synced`; btn.disabled=false; }
+      renderRides();
+    } else {
+      showZhStatus('Sheet tab "Social Rides" is empty — add rides to your Google Sheet', '#FBBF24');
+      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
+    }
+  } catch(e){
+    showZhStatus('Sync failed: '+e.message, '#EF4444');
+    if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
+  }
+}
+function showZhStatus(msg,color){
+  const el=document.getElementById('zh-status');
+  if(el){ el.textContent=msg; el.style.color=color||'#9ca3af'; el.style.display='block'; }
+}
+
+async function syncSheet(){
+  try{
+    const btn = event.target;
+    btn.textContent = '↻ Syncing…';
+    const r = await fetch('/api/proxy?endpoint=ttt-sheet');
+    if(r.ok){
+      const d = await r.json();
+      sheetData = d;
+      btn.textContent = `✓ ${d.rows.length} rows synced`;
+      btn.style.color = '#10B981';
+      renderSheetPanel(d);
+    } else {
+      btn.textContent = 'Sheet Error';
+      btn.style.color = '#f87171';
+    }
+  } catch(e){
+    console.error('Sheet sync error:', e);
+    event.target.textContent = 'Failed';
+    event.target.style.color = '#f87171';
+  }
+}
+
+function renderSheetPanel(d){
+  const el = document.getElementById('sheet-panel');
+  if(!el || !d) return;
+  const shown = d.rows.slice(0,20);
+  el.innerHTML = `<div class="card" style="margin-top:20px">
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Google Sheet — TTT Data (${d.rows.length} rows)</span>
+      <span style="font-size:10px;color:#10B981">● Live</span>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr>${d.headers.slice(0,6).map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${shown.map(row=>`<tr>${d.headers.slice(0,6).map(h=>`<td style="font-size:12px;color:#9ca3af">${row[h]||'-'}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    ${d.rows.length>20?`<div style="padding:10px 14px;font-size:11px;color:#4b5563">Showing 20 of ${d.rows.length} rows</div>`:''}
+  </div>`;
+}
+
+// ── Init ───────────────────────────────────────────────────
+if(role){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
+  setupRole();
+  renderAll();
+  loadLive();
+}
+</script>
+</body>
+</html>
