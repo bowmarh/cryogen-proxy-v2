@@ -788,7 +788,7 @@ function renderMembers(){
   updateSortArrows('m',mSort);
   
   // Render Dynamic Headers based on Role
-  document('members-table-head').innerHTML = `
+    document.getElementById('members-table-head').innerHTML = `...`
       <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
       <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
       <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
