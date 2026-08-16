@@ -10,6 +10,8 @@ const PUBLIC_DIR = path.join(__dirname, 'api'); // the repository has the HTML u
 // Map logical endpoints used by the frontend to real upstream URLs.
 // Update these to point at your real Google Sheet / JSON endpoints.
 const ENDPOINT_MAP = {
+  rides: https://docs.google.com/spreadsheets/d/YOUR_SHEET/gviz/tq?tqx=out:json&sheet=Social%20Rides
+  ttt-sheet: https://docs.google.com/spreadsheets/d/YOUR_SHEET/gviz/tq?tqx=out:json&sheet=TTT
   // Example:
   // rides: 'https://docs.google.com/spreadsheets/d/XXX/gviz/tq?tqx=out:json&sheet=Social%20Rides',
   // 'ttt-sheet': 'https://docs.google.com/spreadsheets/d/XXX/gviz/tq?tqx=out:json&sheet=TTT',
