@@ -1,126 +1,77 @@
-const BASE       = "https://api.zwiftracing.app/api";
-const ZRA_KEY    = process.env.ZRA_API_KEY  || "63e32b2550a0742a4aa04923";
-const ZRA_KEY_2  = process.env.ZRA_API_KEY_2;
-const ZP_TEAM    = "2740";
-const SHEET_ID   = "1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw";
-const SHEET_GID  = "1775447185";
-const RIDES_URL  = process.env.RIDES_SCRIPT_URL; // Google Apps Script web app URL
+// api/proxy.js - Vercel Serverless Function (Node.js)
+export default async function handler(req, res) {
+  // Set CORS headers so your HTML portal can access it from anywhere
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
 
-const KEYS = [ZRA_KEY, ZRA_KEY_2].filter(Boolean);
-let memCache = { team: null, ts: 0 };
-
-async function fetchTeam() {
-  for (const key of KEYS) {
-    const r = await fetch(`${BASE}/public/clubs/${ZP_TEAM}/0`, { headers: { Authorization: key } });
-    if (r.status === 429) continue;
-    if (!r.ok) throw new Error(`ZRA ${r.status}`);
-    return r.json();
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
-  return null;
-}
 
-module.exports = async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin",  "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") { res.status(200).end(); return; }
   const { endpoint } = req.query;
+  const ZRA_KEY = process.env.ZRA_API_KEY || '63e32b2550a0742a4aa04923'; // Set in Vercel Environment Variables
 
   try {
-
-    // ── ZwiftRacing.app roster ───────────────────────────
-    if (endpoint === "team") {
-      const age = (Date.now() - memCache.ts) / 1000;
-      if (memCache.team && age < 660) {
-        res.setHeader("Cache-Control", "s-maxage=660, stale-while-revalidate=120");
-        return res.status(200).json(memCache.team);
-      }
-      const data = await fetchTeam();
-      if (!data) {
-        if (memCache.team) return res.status(200).json(memCache.team);
-        return res.status(429).json({ error: "Rate limited", retryAfter: 600 });
-      }
-      memCache = { team: data, ts: Date.now() };
-      res.setHeader("Cache-Control", "s-maxage=660, stale-while-revalidate=120");
+    // 1. Route: Team Roster from ZwiftRacing.app
+    if (endpoint === 'team') {
+      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/0', {
+        headers: {
+          'Authorization': ZRA_KEY,
+          'Accept': 'application/json',
+          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
+        }
+      });
+      if (!zraRes.ok) throw new Error(`ZRA returned ${zraRes.status}`);
+      const data = await zraRes.json();
       return res.status(200).json(data);
     }
 
-    // ── Club rides from Google Apps Script ───────────────
-    if (endpoint === "rides") {
-      if (!RIDES_URL) {
-        return res.status(404).json({ error: "RIDES_SCRIPT_URL not set in Vercel env vars. Add it in Vercel → Settings → Environment Variables." });
+    // 2. Route: Recent Results from ZwiftRacing.app
+    if (endpoint === 'results') {
+      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/results', {
+        headers: {
+          'Authorization': ZRA_KEY,
+          'Accept': 'application/json',
+          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
+        }
+      });
+      if (!zraRes.ok) {
+        // Fallback if results endpoint is empty
+        return res.status(200).json({ results: [], derived: [] });
       }
-      res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=60");
-      const r = await fetch(RIDES_URL, { redirect: "follow" });
-      const text = await r.text();
-      // Check if Google returned a login page instead of JSON
-      if (text.trim().startsWith("<")) {
-        return res.status(401).json({
-          error: "Script returned HTML — re-deploy with: Execute as = Me, Who has access = Anyone",
-          hint: "In Apps Script: Deploy → Manage deployments → Edit → set access to Anyone (not Google account)"
-        });
-      }
-      try {
-        const data = JSON.parse(text);
-        return res.status(200).json(data);
-      } catch(e) {
-        return res.status(500).json({ error: "Invalid JSON from script: " + text.substring(0, 100) });
-      }
+      const data = await zraRes.json();
+      return res.status(200).json(data);
     }
 
-    // ── Google Sheets TTT data ───────────────────────────
-    if (endpoint === "ttt-sheet") {
-      res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=30");
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
-      const r = await fetch(url, { redirect: "follow" });
-      if (!r.ok) return res.status(r.status).json({ error: `Sheet ${r.status}` });
-      const csv = await r.text();
-      const lines = csv.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g,"").trim()));
-      const headers = lines[0];
-      const rows = lines.slice(1).filter(r => r.some(c=>c))
-        .map(row => Object.fromEntries(headers.map((h,i) => [h, row[i]||""])));
-      return res.status(200).json({ headers, rows, count: rows.length });
+    // 3. Route: Social Rides from Google Sheets CSV
+    if (endpoint === 'rides') {
+      const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT1-example/pub?gid=0&single=true&output=csv';
+      const csvRes = await fetch(SHEET_CSV_URL);
+      if (!csvRes.ok) return res.status(200).json({ rides: [] });
+      
+      const csvText = await csvRes.text();
+      const lines = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      const rides = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        headers.forEach((h, i) => { row[h] = values[i] || ''; });
+        return row;
+      });
+
+      return res.status(200).json({ rides, updated: new Date().toISOString() });
     }
 
-    // ── Hybrid results: Sheet + ZRA derived ─────────────
-    if (endpoint === "results") {
-      res.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=60");
+    return res.status(400).json({ error: `Unknown or missing endpoint: ${endpoint}` });
 
-      // Source 1: Google Apps Script → ZwiftPower auto-results
-      let sheetResults = [];
-      if (RIDES_URL) {
-        try {
-          const sr = await fetch(RIDES_URL + "?action=results", { redirect: "follow" });
-          if (sr.ok) {
-            const sd = await sr.json();
-            if (sd.results && sd.results.length > 0) {
-              return res.status(200).json({ source: sd.source, results: sd.results, derived: [] });
-            }
-          }
-        } catch(e) { console.log("GAS results error:", e.message); }
-      }
-
-      // Source 2: Derived from ZRA roster cache
-      let derived = [];
-      if (memCache.team && memCache.team.riders) {
-        derived = memCache.team.riders
-          .filter(r => r.race && r.race.last && r.race.last.date)
-          .sort((a,b) => b.race.last.date - a.race.last.date)
-          .slice(0, 20)
-          .map(r => ({
-            name: r.name, id: r.id,
-            date: r.race.last.date,
-            category: (r.race.last.mixed && r.race.last.mixed.category) || r.cat,
-            rating: Math.round(r.race.last.rating || 0),
-            wins: r.race.wins||0, podiums: r.race.podiums||0, finishes: r.race.finishes||0,
-          }));
-      }
-
-      return res.status(200).json({ sheetResults, derived });
-    }
-
-    res.status(400).json({ error: "Unknown endpoint" });
-  } catch(err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    return res.status(502).json({ error: error.message });
   }
-};
+}
