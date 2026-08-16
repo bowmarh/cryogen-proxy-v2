@@ -358,6 +358,30 @@ let activeSeries='ttt';
 let mSort={col:'velo',dir:'desc'};
 let rSort={col:'velo',dir:'desc'};
 const MOCK=[
+   // ── API Bridge to WordPress ──────────────────────────────
+const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
+// In a standalone app, use a WordPress Application Password for auth.
+// If this app is embedded INSIDE WordPress admin, it will use the localized WP_Nonce.
+const WP_AUTH = window.wpApiSettings ? window.wpApiSettings.nonce : 'Basic ' + btoa('admin_username:application_password'); 
+
+async function api(endpoint, method = 'GET', payload = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  
+  if (window.wpApiSettings) {
+      headers['X-WP-Nonce'] = WP_AUTH; // Embedded mode
+  } else {
+      headers['Authorization'] = WP_AUTH; // Standalone mode
+  }
+
+  const options = { method, headers };
+  if (payload) options.body = JSON.stringify(payload);
+
+  const res = await fetch(WP_URL + endpoint, options);
+  const data = await res.json();
+  
+  if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+  return data;
+} 
   {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"half",status:"active"},
   {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
   {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"half",status:"suspended"},
@@ -446,52 +470,51 @@ function showTab(id,btn){
 }
 
 // ── Live Data ──────────────────────────────────────────────
-async function loadLive(){
-  setZRA('#FBBF24','Connecting…');
-  try{
-    const r=await fetch('/api/proxy?endpoint=team');
-    if(r.ok){
-      const d=await r.json();
-      if(d.riders&&Array.isArray(d.riders)){
-        riders=d.riders.map(r=>{
-          // Override logic with local state
-          const state = localMemberState[r.riderId] || {};
-          const isZraActive = !!(r.race?.current?.rating>0);
-          const currentStatus = state.status || (isZraActive ? 'active' : 'inactive');
+async function loadDatabaseAndLive() {
+  setZRA('#FBBF24', 'Loading Database...');
+  try {
+    // 1. Pull the Source of Truth from WordPress DB
+    const dbData = await api('/members', 'GET'); 
+    
+    // 2. Map the DB data to a dictionary for quick lookups
+    const dbLookup = {};
+    dbData.forEach(m => dbLookup[m.zwift_id] = m);
 
-          return {
-            id:r.riderId, name:r.name, cc:ccClean(r.country), cat:r.zpCategory||'D',
-            ftp:Math.round(r.zpFTP||0),
-            wkg:r.power?Math.round((r.power.wkg1200||0)*100)/100:0,
-            velo:r.race?.current?.rating?Math.round(r.race.current.rating):0,
-            zraCat:r.race?.current?.mixed?.category||'',
-            ph:phClean(r.phenotype?.value),
-            active: (currentStatus === 'active'),
-            tier: state.tier || 'half',
-            status: currentStatus,
-            wins:r.race?.wins||0, podiums:r.race?.podiums||0, finishes:r.race?.finishes||0, dnfs:r.race?.dnfs||0,
-            raw:r,
-          };
-        });
-        setZRA('#10B981',`Live · ${riders.length} riders ✓`);
-        // update memberRider if logged in as member
-        if(role==='member'&&memberRider){
-          const updated=riders.find(x=>x.id===memberRider.id);
-          if(updated){memberRider=updated;sessionStorage.setItem('memberRider',JSON.stringify(updated));}
-        }
-        renderAll();
-      }
-    } else if(r.status===429){
-      const d=await r.json().catch(()=>({}));
-      const wait=d.retryAfter||600;
-      setZRA('#F59E0B',`Rate limited — retry in ${Math.ceil(wait/60)} min. Showing cached data.`);
-    } else { setZRA('#EF4444',`Error ${r.status}`); }
-  } catch(e){ setZRA('#EF4444',e.message); }
-}
-function setZRA(color,msg){
-  document.getElementById('zra-dot').style.background=color;
-  document.getElementById('zra-msg').textContent=msg;
-  document.getElementById('admin-msg').textContent=msg;
+    // 3. Fetch live ZRA Data
+    setZRA('#FBBF24', 'Connecting to ZRA...');
+    const r = await fetch('/api/proxy?endpoint=team');
+    if (r.ok) {
+      const d = await r.json();
+      riders = d.riders.map(r => {
+        // Merge DB data with Live data
+        const dbRecord = dbLookup[r.riderId] || {};
+        
+        return {
+          id: r.riderId, 
+          name: dbRecord.name || r.name, 
+          cc: ccClean(r.country), 
+          cat: r.zpCategory || 'D',
+          ftp: Math.round(r.zpFTP || 0),
+          wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
+          velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
+          zraCat: r.race?.current?.mixed?.category || '',
+          ph: phClean(r.phenotype?.value),
+          active: dbRecord.status === 'active', // Pulled from DB
+          tier: dbRecord.tier || 'half',        // Pulled from DB
+          status: dbRecord.status || 'pending', // Pulled from DB
+          // Offboarding flags pulled from DB
+          ob_discord: dbRecord.offboard_discord === '1',
+          ob_fb: dbRecord.offboard_fb === '1',
+          ob_zp: dbRecord.offboard_zp === '1',
+          raw: r,
+        };
+      });
+      setZRA('#10B981', `Synced DB + Live · ${riders.length} riders ✓`);
+      renderAll();
+    }
+  } catch (e) { 
+    setZRA('#EF4444', e.message); 
+  }
 }
 
 // ── Action Functions (Tier Toggle & Off-boarding) ──────────
@@ -589,13 +612,22 @@ function renderOffboarding() {
   `;
 }
 
-function toggleOffboard(id, platform, isChecked) {
-  localMemberState[id] = localMemberState[id] || {};
-  localMemberState[id][platform] = isChecked;
-  save('cg_member_state', localMemberState);
-  
-  // Re-render to see if they should be removed from the list
-  renderOffboarding();
+async function toggleOffboard(id, platform, isChecked) {
+  try {
+    // We send a POST request to a new endpoint to update the checklist
+    await api(`/members/${id}/offboard-step`, 'POST', { 
+      platform: platform, 
+      state: isChecked ? 1 : 0 
+    });
+    
+    // Update local memory so UI stays snappy
+    const r = riders.find(x => x.id === id);
+    if(r) r[platform] = isChecked;
+    renderOffboarding();
+
+  } catch(e) {
+    alert("Failed to save to database: " + e.message);
+  }
 }
 // ── Sort helpers ───────────────────────────────────────────
 function sortData(data,sort){
@@ -756,7 +788,7 @@ function renderMembers(){
   updateSortArrows('m',mSort);
   
   // Render Dynamic Headers based on Role
-  document.getElementById('members-table-head').innerHTML = `
+  document('members-table-head').innerHTML = `
       <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
       <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
       <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
