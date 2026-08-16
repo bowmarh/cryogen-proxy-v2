@@ -1,73 +1,77 @@
-// api/proxy.js — CRYO-GEN API Proxy
-// Endpoints confirmed from zpdatafetch source code:
-//   Base:    https://api.zwiftracing.app/api
-//   Team:    /public/clubs/{id}/0
-//   Rider:   /public/riders/{id}
-//   Results: /public/results/{id}
-//   Batch:   POST /public/riders
-
+// api/proxy.js - Vercel Serverless Function (Node.js)
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin",  "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // Set CORS headers so your HTML portal can access it from anywhere
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "GET")    return res.status(405).json({ error: "Method not allowed" });
-
-  const KEY     = process.env.ZRA_API_KEY || "63e32b2550a0742a4aa04923";
-  const TEAM_ID = "2740";
-  const BASE    = "https://api.zwiftracing.app/api";
-
-  // Route
-  const { endpoint = "team" } = req.query;
-
-  let url;
-  if (endpoint === "team") {
-    // /public/clubs/{id}/0  — the trailing 0 is the rider offset
-    url = `${BASE}/public/clubs/${TEAM_ID}/0`;
-  } else if (endpoint === "rider") {
-    const { id } = req.query;
-    if (!id) return res.status(400).json({ error: "Missing ?id= for rider endpoint" });
-    url = `${BASE}/public/riders/${id}`;
-  } else if (endpoint === "result") {
-    const { id } = req.query;
-    if (!id) return res.status(400).json({ error: "Missing ?id= for result endpoint" });
-    url = `${BASE}/public/results/${id}`;
-  } else {
-    return res.status(400).json({ error: `Unknown endpoint "${endpoint}". Use team, rider, or result.` });
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
+  const { endpoint } = req.query;
+  const ZRA_KEY = process.env.ZRA_API_KEY || '63e32b2550a0742a4aa04923'; // Set in Vercel Environment Variables
+
   try {
-    const upstream = await fetch(url, {
-      headers: {
-        // Key used raw — no Bearer prefix (confirmed from source)
-        Authorization: KEY,
-        Accept:        "application/json",
-        "User-Agent":  "CRYOGEN-Club-App/1.0",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-
-    const text = await upstream.text();
-
-    // Try to return JSON; fall back to raw text with debug info
-    try {
-      const json = JSON.parse(text);
-      if (upstream.ok) {
-        res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=60");
-      }
-      return res.status(upstream.status).json(json);
-    } catch {
-      // Not JSON — return debug info so we can see what happened
-      return res.status(upstream.status).json({
-        error:       "Upstream returned non-JSON",
-        http_status: upstream.status,
-        url,
-        preview:     text.slice(0, 500),
+    // 1. Route: Team Roster from ZwiftRacing.app
+    if (endpoint === 'team') {
+      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/0', {
+        headers: {
+          'Authorization': ZRA_KEY,
+          'Accept': 'application/json',
+          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
+        }
       });
+      if (!zraRes.ok) throw new Error(`ZRA returned ${zraRes.status}`);
+      const data = await zraRes.json();
+      return res.status(200).json(data);
     }
 
-  } catch (err) {
-    return res.status(502).json({ error: err.message, url });
+    // 2. Route: Recent Results from ZwiftRacing.app
+    if (endpoint === 'results') {
+      const zraRes = await fetch('https://api.zwiftracing.app/api/public/clubs/2740/results', {
+        headers: {
+          'Authorization': ZRA_KEY,
+          'Accept': 'application/json',
+          'User-Agent': 'CRYO-GEN/1.0 (+https://cryogen.team)'
+        }
+      });
+      if (!zraRes.ok) {
+        // Fallback if results endpoint is empty
+        return res.status(200).json({ results: [], derived: [] });
+      }
+      const data = await zraRes.json();
+      return res.status(200).json(data);
+    }
+
+    // 3. Route: Social Rides from Google Sheets CSV
+    if (endpoint === 'rides') {
+      const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT1-example/pub?gid=0&single=true&output=csv';
+      const csvRes = await fetch(SHEET_CSV_URL);
+      if (!csvRes.ok) return res.status(200).json({ rides: [] });
+      
+      const csvText = await csvRes.text();
+      const lines = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      const rides = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        headers.forEach((h, i) => { row[h] = values[i] || ''; });
+        return row;
+      });
+
+      return res.status(200).json({ rides, updated: new Date().toISOString() });
+    }
+
+    return res.status(400).json({ error: `Unknown or missing endpoint: ${endpoint}` });
+
+  } catch (error) {
+    return res.status(502).json({ error: error.message });
   }
 }
