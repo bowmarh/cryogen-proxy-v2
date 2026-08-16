@@ -1,693 +1,894 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>CRYO-GEN Club</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#060a14;color:white;font-family:system-ui,sans-serif;min-height:100vh}
-button{cursor:pointer;font-family:inherit}input,select{font-family:inherit;outline:none;color:white}
-select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0f1623}::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}input,select{color-scheme:dark}
+<?php
+/**
+ * Plugin Name:  CRYO-GEN Racing Portal
+ * Plugin URI:   https://cryogen.team
+ * Description:  Member portal backend — stores all sign-ups, weigh-ins, and ride RSVPs in WordPress, and connects to ZwiftRacing.app on your behalf so members never hit CORS errors.
+ * Version:      1.5.3
+ * Author:       CRYO-GEN Racing
+ */
 
-/* ── Mobile ─────────────────────────────────────────────── */
-@media(max-width:768px) and (orientation:portrait){
-  #app{height:100dvh!important;overflow:hidden!important}
-  #app-inner{flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
-  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
-  main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
-}
-@media(max-width:900px) and (orientation:landscape){
-  #app-inner{flex-direction:column!important}
-  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:44px!important;min-height:44px!important;max-height:44px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
-  main{padding:12px!important;overflow:auto!important}
-}
-@media(max-width:900px){
-  #sidebar>div:first-child,#sidebar>div:last-child{display:none!important}
-  #sidebar nav{display:flex!important;flex-direction:row!important;padding:4px 8px!important;gap:2px!important;flex:1!important;overflow-x:auto!important;align-items:center!important;height:100%!important}
-  .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:36px!important}
-  .stat4{grid-template-columns:1fr 1fr!important;gap:8px!important}
-  .grid2{grid-template-columns:1fr!important}
-  .brand-bar{padding:8px 12px!important;flex-shrink:0!important}
-  .brand-bar img{width:34px!important;height:34px!important}
-  table{font-size:12px!important}
-  td,th{padding:7px 8px!important;font-size:11px!important}
-  .modal{margin:8px!important;max-height:92vh!important;overflow-y:auto!important}
-  .modal-body{max-height:65vh!important;overflow-y:auto!important}
-  #role-display span:first-child{display:none!important}
-}
-@media(max-width:480px){
-  .navbtn{padding:6px 8px!important;font-size:11px!important}
-  main{padding:10px!important}
-}
-.card{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px}
-.inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px}
-.inp:focus{border-color:rgba(0,212,255,0.4)}
-th{padding:9px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;border-bottom:1px solid rgba(255,255,255,0.07);cursor:pointer;white-space:nowrap;user-select:none}
-th:hover{color:#9ca3af}
-td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:white;font-size:13px}
-table{width:100%;border-collapse:collapse}
-.page{display:none}.page.active{display:block}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
-.modal{background:#0d1322;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:440px}
-.modal-head{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px}
-.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
-.modal-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
-.btn-cyan{padding:10px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;width:100%;font-size:14px}
-.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
-.cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
-.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
-.navbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:#6b7280;text-align:left;font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap}
-.navbtn.active{border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:#00D4FF}
-.navbtn:hover:not(.active){background:rgba(255,255,255,0.03);color:#9ca3af}
-.tab{padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#6b7280;font-size:12px;font-weight:600}
-.tab.active{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.2);color:#00D4FF}
-.sortarrow{font-size:9px;margin-left:3px;opacity:0.5}
-.sortarrow.active{opacity:1;color:#00D4FF}
-.brand-bar{background:linear-gradient(135deg,#0d1f3c 0%,#1a3a6b 40%,#0d1f3c 100%);border-bottom:2px solid rgba(0,180,255,0.3);padding:8px 16px;display:flex;align-items:center;gap:12px}
-.snowflake{color:#00D4FF;font-size:20px;animation:spin 20s linear infinite}
-@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-.role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase}
-.stat4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-@media(max-width:700px){.stat4{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr!important}}
-.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
-.pbar-wrap{margin-bottom:8px}
-.pbar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#9ca3af}
-.pbar{height:6px;background:rgba(255,255,255,0.08);border-radius:3px}
-.pbar-fill{height:100%;border-radius:3px;transition:width .4s}
-</style>
-</head>
-<body>
+defined( 'ABSPATH' ) || exit;
 
-<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:url(/images/banner.jpg) center/cover no-repeat;position:relative"><div style="position:absolute;inset:0;background:rgba(6,10,20,0.82)"></div><div style="position:relative;z-index:1;width:100%;max-width:420px;padding:24px">
-  <div style="width:100%;max-width:420px;padding:24px">
-    <div style="text-align:center;margin-bottom:32px">
-      <img src="/logo.png" alt="Team CRYO-GEN" style="width:180px;height:180px;object-fit:contain;margin-bottom:8px"/>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">Zwift Cycling Club · Member Portal</div>
-    </div>
-    <div id="login-step1" class="card" style="padding:24px">
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:20px;text-align:center">Select your access level</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button onclick="loginStep('admin')" style="padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
-          <span style="font-size:20px">🔑</span><div><div>Administrator</div><div style="font-size:11px;color:#6b7280;font-weight:400">Full access · manage all settings</div></div>
-        </button>
-        <button onclick="loginStep('mod')" style="padding:14px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
-          <span style="font-size:20px">🛡️</span><div><div>Moderator</div><div style="font-size:11px;color:#6b7280;font-weight:400">View all riders · manage events</div></div>
-        </button>
-        <button onclick="loginStep('member')" style="padding:14px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
-          <span style="font-size:20px">🚴</span><div><div>Member</div><div style="font-size:11px;color:#6b7280;font-weight:400">Your profile · sign up for events</div></div>
-        </button>
-      </div>
-    </div>
-    <div id="login-step2" style="display:none">
-      <div class="card" style="padding:24px">
-        <button onclick="backToStep1()" style="background:none;border:none;color:#6b7280;font-size:13px;margin-bottom:16px;padding:0;display:flex;align-items:center;gap:4px">← Back</button>
-        <div id="login-form-admin" style="display:none">
-          <label class="lbl">Administrator Password</label>
-          <input id="admin-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAdminLogin()" style="margin-bottom:12px"/>
-          <button class="btn-cyan" onclick="doAdminLogin()">Login as Administrator</button>
+if ( ! class_exists( 'CG_Portal' ) ) :
+
+final class CG_Portal {
+
+    public static function init() {
+        register_activation_hook( CG_PORTAL_FILE, [ __CLASS__, 'activate' ] );
+        register_deactivation_hook( CG_PORTAL_FILE, [ __CLASS__, 'deactivate' ] );
+        add_action( 'rest_api_init', [ __CLASS__, 'cors_headers' ] );
+        add_filter( 'rest_pre_serve_request', [ __CLASS__, 'force_cors_on_all_responses' ], 20, 4 );
+        add_action( 'init', [ __CLASS__, 'cors_preflight' ] );
+        add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
+        add_action( 'admin_menu', [ __CLASS__, 'register_settings_menu' ] );
+        add_action( 'admin_menu', [ __CLASS__, 'register_members_menu' ] );
+        add_action( 'admin_menu', [ __CLASS__, 'register_import_menu' ] );
+        add_action( 'admin_post_cryogen_export_members', [ __CLASS__, 'handle_export_members' ] );
+        add_action( 'admin_post_cryogen_import_members', [ __CLASS__, 'handle_import_members' ] );
+        add_action( 'admin_post_cryogen_refresh_all_zwift', [ __CLASS__, 'handle_refresh_all_zwift' ] );
+        add_action( 'admin_post_cryogen_refresh_one_zwift', [ __CLASS__, 'handle_refresh_one_zwift' ] );
+        add_action( 'cg_daily_zwift_refresh', [ __CLASS__, 'run_scheduled_zwift_refresh' ] );
+    }
+
+    public static function activate() {
+        self::add_zwift_data_columns();
+        if ( ! wp_next_scheduled( 'cg_daily_zwift_refresh' ) ) {
+            wp_schedule_event( time() + 300, 'daily', 'cg_daily_zwift_refresh' );
+        }
+        if ( ! get_option( 'cryogen_api_token' ) ) {
+            update_option( 'cryogen_api_token', bin2hex( random_bytes( 24 ) ) );
+        }
+        self::create_core_tables();
+        self::create_members_table();
+		self::register_member_roles();
+    }
+
+    public static function deactivate() {
+        wp_clear_scheduled_hook( 'cg_daily_zwift_refresh' );
+    }
+
+    public static function create_core_tables(): void {
+        global $wpdb;
+        $c = $wpdb->get_charset_collate();
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( "
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_signups (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                series_id   VARCHAR(20)     NOT NULL,
+                rider_name  VARCHAR(120)    NOT NULL,
+                category    VARCHAR(5)      NOT NULL DEFAULT 'B',
+                created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id), KEY series_id (series_id)
+            ) $c;
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_weights (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                rider_name  VARCHAR(120)    NOT NULL,
+                weight_kg   DECIMAL(5,2)    NOT NULL,
+                entry_date  DATE            NOT NULL,
+                note        VARCHAR(255),
+                photo_data  LONGTEXT,
+                created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id), KEY rider_name (rider_name)
+            ) $c;
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_rides (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                title       VARCHAR(120)    NOT NULL,
+                route       VARCHAR(120),   distance VARCHAR(20),
+                pace        VARCHAR(30),    category VARCHAR(10) NOT NULL DEFAULT 'All',
+                ride_date   DATE            NOT NULL,
+                ride_time   VARCHAR(20),    max_riders INT NOT NULL DEFAULT 20,
+                description TEXT,           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) $c;
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_rsvps (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                ride_id     BIGINT UNSIGNED NOT NULL,
+                rider_name  VARCHAR(120)    NOT NULL,
+                created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id), UNIQUE KEY ride_rider (ride_id, rider_name)
+            ) $c;
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_settings (
+                setting_key   VARCHAR(60) NOT NULL,
+                setting_value LONGTEXT,
+                PRIMARY KEY (setting_key)
+            ) $c;
+        " );
+    }
+
+    public static function create_members_table(): void {
+        global $wpdb;
+        $c = $wpdb->get_charset_collate();
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( "
+            CREATE TABLE IF NOT EXISTS {$wpdb->prefix}cryogen_members (
+                id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                name            VARCHAR(120)    NOT NULL,
+                email           VARCHAR(160),
+                zwift_id        VARCHAR(20),
+                discord_handle  VARCHAR(60),
+                facebook        VARCHAR(160),
+                tier            VARCHAR(10)     NOT NULL DEFAULT 'half',
+                status          VARCHAR(10)     NOT NULL DEFAULT 'pending',
+                jersey_status   VARCHAR(20)     NOT NULL DEFAULT 'none',
+                zp_confirmed    TINYINT(1)      NOT NULL DEFAULT 0,
+                zra_full_data   LONGTEXT,
+                suspend_until   DATETIME,
+                offboard_discord TINYINT(1)     NOT NULL DEFAULT 0,
+                offboard_fb      TINYINT(1)     NOT NULL DEFAULT 0,
+                offboard_zp      TINYINT(1)     NOT NULL DEFAULT 0,
+                created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id), KEY status (status), KEY jersey_status (jersey_status)
+            ) $c;
+        " );
+    }
+
+    public static function cors_headers() {
+        remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
+        add_filter( 'rest_pre_serve_request', function ( $v ) {
+            header( 'Access-Control-Allow-Origin: *' );
+            header( 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS' );
+            header( 'Access-Control-Allow-Headers: Content-Type, X-Cryogen-Token' );
+            return $v;
+        } );
+    }
+
+    public static function force_cors_on_all_responses( $served, $result, $request, $server ) {
+        header( 'Access-Control-Allow-Origin: *' );
+        header( 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS' );
+        header( 'Access-Control-Allow-Headers: Content-Type, X-Cryogen-Token' );
+        return $served;
+    }
+
+    public static function cors_preflight() {
+        if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) === 'OPTIONS' ) {
+            header( 'Access-Control-Allow-Origin: *' );
+            header( 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS' );
+            header( 'Access-Control-Allow-Headers: Content-Type, X-Cryogen-Token' );
+            status_header( 200 );
+            exit;
+        }
+    }
+
+    public static function auth( WP_REST_Request $req ) {
+        $token = get_option( 'cryogen_api_token', '' );
+        $provided = $req->get_header( 'X-Cryogen-Token' );
+        if ( ! $provided ) $provided = $req->get_param( 'token' );
+        if ( $token && $provided === $token ) return true;
+        return new WP_Error( 'forbidden', 'Invalid or missing token.', [ 'status' => 403 ] );
+    }
+
+    public static function register_routes() {
+        $ns   = 'cryogen/v1';
+        $pub  = '__return_true';
+        $auth = [ __CLASS__, 'auth' ];
+
+        register_rest_route( $ns, '/signups', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'get_signups' ], 'permission_callback' => $pub ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'add_signup' ],  'permission_callback' => $auth ],
+        ] );
+        register_rest_route( $ns, '/signups/(?P<id>\d+)', [ 'methods' => 'DELETE', 'callback' => [ __CLASS__, 'del_signup' ], 'permission_callback' => $auth ] );
+        register_rest_route( $ns, '/signups/lock', [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'lock_series' ], 'permission_callback' => $auth ] );
+
+        register_rest_route( $ns, '/weights', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'get_weights' ], 'permission_callback' => $pub ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'add_weight' ],  'permission_callback' => $auth ],
+        ] );
+        register_rest_route( $ns, '/weights/(?P<id>\d+)', [ 'methods' => 'DELETE', 'callback' => [ __CLASS__, 'del_weight' ], 'permission_callback' => $auth ] );
+        register_rest_route( $ns, '/weights/(?P<id>\d+)/photo', [ 'methods' => 'GET', 'callback' => [ __CLASS__, 'get_photo' ], 'permission_callback' => $auth ] );
+
+        register_rest_route( $ns, '/rides', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'get_rides' ], 'permission_callback' => $pub ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'add_ride' ],  'permission_callback' => $auth ],
+        ] );
+        register_rest_route( $ns, '/rides/(?P<id>\d+)', [ 'methods' => 'DELETE', 'callback' => [ __CLASS__, 'del_ride' ], 'permission_callback' => $auth ] );
+
+        register_rest_route( $ns, '/rsvps', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'get_rsvps' ], 'permission_callback' => $pub ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'add_rsvp' ],  'permission_callback' => $auth ],
+        ] );
+        register_rest_route( $ns, '/rsvps/(?P<id>\d+)', [ 'methods' => 'DELETE', 'callback' => [ __CLASS__, 'del_rsvp' ], 'permission_callback' => $auth ] );
+
+        register_rest_route( $ns, '/portal-settings', [
+            [ 'methods' => 'GET', 'callback' => [ __CLASS__, 'get_settings' ], 'permission_callback' => $pub ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'set_settings' ], 'permission_callback' => $auth ],
+        ] );
+
+        register_rest_route( $ns, '/members/(?P<id>\d+)/tier', [ 
+            'methods' => 'POST', 
+            'callback' => [ __CLASS__, 'set_member_tier' ], 
+            'permission_callback' => $auth 
+        ] );
+        
+        register_rest_route( $ns, '/members/(?P<id>\d+)/status', [ 
+            'methods' => 'POST', 
+            'callback' => [ __CLASS__, 'handle_member_status' ], 
+            'permission_callback' => $auth 
+        ] );
+
+        register_rest_route( $ns, '/members/(?P<id>\d+)/offboard-step', [ 
+            'methods' => 'POST', 
+            'callback' => [ __CLASS__, 'update_offboard_step' ], 
+            'permission_callback' => $auth 
+        ] );
+
+        register_rest_route( $ns, '/zwift/(?P<path>.+)', [ 'methods' => 'GET', 'callback' => [ __CLASS__, 'zwift_proxy' ], 'permission_callback' => $pub ] );
+        register_rest_route( $ns, '/members/(?P<id>\d+)/zwift-refresh', [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'refresh_member_zwift' ], 'permission_callback' => $auth ] );
+        register_rest_route( $ns, '/members/zwift-refresh-all', [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'refresh_all_zwift' ], 'permission_callback' => $auth ] );
+		register_rest_route( $ns, '/register', [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'public_register' ], 'permission_callback' => '__return_true' ] );
+        register_rest_route( $ns, '/members', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'members_list' ], 'permission_callback' => $auth ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'members_add' ],  'permission_callback' => $auth ],
+        ] );
+        register_rest_route( $ns, '/members/welcome/(?P<id>\d+)',  [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'member_welcome' ],  'permission_callback' => $auth ] );
+        register_rest_route( $ns, '/members/offboard/(?P<id>\d+)', [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'member_offboard' ], 'permission_callback' => $auth ] );
+        register_rest_route( $ns, '/members/jersey-batch', [
+            [ 'methods' => 'GET',  'callback' => [ __CLASS__, 'jersey_batch' ],       'permission_callback' => $auth ],
+            [ 'methods' => 'POST', 'callback' => [ __CLASS__, 'jersey_batch_close' ], 'permission_callback' => $auth ],
+        ] );
+    }
+
+    public static function get_signups(): array {
+        global $wpdb;
+        $grouped = [];
+        foreach ( $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}cryogen_signups ORDER BY created_at ASC" ) as $r ) {
+            $grouped[ $r->series_id ][] = [ 'id' => (int) $r->id, 'name' => $r->rider_name, 'cat' => $r->category, 'ts' => strtotime( $r->created_at ) * 1000 ];
+        }
+        return $grouped;
+    }
+    public static function add_signup( WP_REST_Request $req ) {
+        global $wpdb;
+        $series = sanitize_text_field( $req->get_param( 'series_id' ) );
+        $name   = sanitize_text_field( $req->get_param( 'rider_name' ) );
+        $cat    = sanitize_text_field( $req->get_param( 'category' ) ?: 'B' );
+        if ( ! $series || ! $name ) return new WP_Error( 'missing', 'series_id and rider_name are required.', [ 'status' => 400 ] );
+        $locked = $wpdb->get_var( $wpdb->prepare( "SELECT setting_value FROM {$wpdb->prefix}cryogen_settings WHERE setting_key=%s", "locked_{$series}" ) );
+        if ( $locked === '1' ) return new WP_Error( 'locked', 'Sign-ups are locked for this series.', [ 'status' => 423 ] );
+        if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}cryogen_signups WHERE series_id=%s AND rider_name=%s", $series, $name ) ) )
+            return new WP_Error( 'duplicate', 'Already signed up.', [ 'status' => 409 ] );
+        $wpdb->insert( "{$wpdb->prefix}cryogen_signups", [ 'series_id' => $series, 'rider_name' => $name, 'category' => $cat ] );
+        return [ 'id' => $wpdb->insert_id ];
+    }
+    public static function del_signup( WP_REST_Request $req ) { global $wpdb; $wpdb->delete( "{$wpdb->prefix}cryogen_signups", [ 'id' => (int) $req['id'] ] ); return [ 'deleted' => true ]; }
+    public static function lock_series( WP_REST_Request $req ) {
+        global $wpdb;
+        $series = sanitize_text_field( $req->get_param( 'series_id' ) );
+        $locked = (bool) $req->get_param( 'locked' );
+        $wpdb->replace( "{$wpdb->prefix}cryogen_settings", [ 'setting_key' => "locked_{$series}", 'setting_value' => $locked ? '1' : '0' ] );
+        return [ 'series_id' => $series, 'locked' => $locked ];
+    }
+
+    public static function get_weights(): array {
+        global $wpdb;
+        return array_map( fn( $r ) => [ 'id' => (int) $r->id, 'name' => $r->rider_name, 'weight' => (float) $r->weight_kg, 'date' => $r->entry_date, 'note' => $r->note ?? '', 'has_photo' => (bool) $r->has_photo ],
+            $wpdb->get_results( "SELECT id,rider_name,weight_kg,entry_date,note,CASE WHEN photo_data IS NOT NULL THEN 1 ELSE 0 END AS has_photo FROM {$wpdb->prefix}cryogen_weights ORDER BY entry_date DESC" ) ?: [] );
+    }
+    public static function add_weight( WP_REST_Request $req ) {
+        global $wpdb;
+        $name = $req->get_param( 'name' ); $weight = $req->get_param( 'weight' ); $date = $req->get_param( 'date' );
+        if ( ! $name || ! $weight || ! $date ) return new WP_Error( 'missing', 'name, weight, date required.', [ 'status' => 400 ] );
+        $wpdb->insert( "{$wpdb->prefix}cryogen_weights", [ 'rider_name' => sanitize_text_field( $name ), 'weight_kg' => (float) $weight, 'entry_date' => sanitize_text_field( $date ), 'note' => sanitize_text_field( $req->get_param( 'note' ) ?? '' ), 'photo_data' => $req->get_param( 'photo' ) ?? null ] );
+        return [ 'id' => $wpdb->insert_id ];
+    }
+    public static function del_weight( WP_REST_Request $req ) { global $wpdb; $wpdb->delete( "{$wpdb->prefix}cryogen_weights", [ 'id' => (int) $req['id'] ] ); return [ 'deleted' => true ]; }
+    public static function get_photo( WP_REST_Request $req ) { global $wpdb; $p = $wpdb->get_var( $wpdb->prepare( "SELECT photo_data FROM {$wpdb->prefix}cryogen_weights WHERE id=%d", (int) $req['id'] ) ); return $p ? [ 'photo' => $p ] : new WP_Error( 'not_found', 'No photo.', [ 'status' => 404 ] ); }
+
+    public static function get_rides(): array { global $wpdb; return $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}cryogen_rides ORDER BY ride_date ASC", ARRAY_A ) ?: []; }
+    public static function add_ride( WP_REST_Request $req ) {
+        global $wpdb;
+        $wpdb->insert( "{$wpdb->prefix}cryogen_rides", [
+            'title' => sanitize_text_field( $req->get_param( 'title' ) ), 'route' => sanitize_text_field( $req->get_param( 'route' ) ?? '' ),
+            'distance' => sanitize_text_field( $req->get_param( 'dist' ) ?? '' ), 'pace' => sanitize_text_field( $req->get_param( 'pace' ) ?? '' ),
+            'category' => sanitize_text_field( $req->get_param( 'cat' ) ?: 'All' ), 'ride_date' => sanitize_text_field( $req->get_param( 'date' ) ),
+            'ride_time' => sanitize_text_field( $req->get_param( 'time' ) ?? '' ), 'max_riders' => (int) ( $req->get_param( 'max' ) ?: 20 ),
+            'description' => sanitize_textarea_field( $req->get_param( 'desc' ) ?? '' ),
+        ] );
+        return [ 'id' => $wpdb->insert_id ];
+    }
+    public static function del_ride( WP_REST_Request $req ) { global $wpdb; $wpdb->delete( "{$wpdb->prefix}cryogen_rides", [ 'id' => (int) $req['id'] ] ); return [ 'deleted' => true ]; }
+
+    public static function get_rsvps(): array {
+        global $wpdb; $grouped = [];
+        foreach ( $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}cryogen_rsvps ORDER BY created_at ASC" ) as $r ) {
+            $grouped[ (int) $r->ride_id ][] = [ 'id' => (int) $r->id, 'name' => $r->rider_name, 'ts' => strtotime( $r->created_at ) * 1000 ];
+        }
+        return $grouped;
+    }
+    public static function add_rsvp( WP_REST_Request $req ) {
+        global $wpdb;
+        $rid = (int) $req->get_param( 'ride_id' ); $name = sanitize_text_field( $req->get_param( 'rider_name' ) );
+        if ( ! $rid || ! $name ) return new WP_Error( 'missing', 'ride_id and rider_name required.', [ 'status' => 400 ] );
+        $r = $wpdb->insert( "{$wpdb->prefix}cryogen_rsvps", [ 'ride_id' => $rid, 'rider_name' => $name ] );
+        if ( $r === false ) return new WP_Error( 'duplicate', "Already RSVP'd.", [ 'status' => 409 ] );
+        return [ 'id' => $wpdb->insert_id ];
+    }
+    public static function del_rsvp( WP_REST_Request $req ) { global $wpdb; $wpdb->delete( "{$wpdb->prefix}cryogen_rsvps", [ 'id' => (int) $req['id'] ] ); return [ 'deleted' => true ]; }
+
+    public static function get_settings(): array { global $wpdb; $out = []; foreach ( $wpdb->get_results( "SELECT setting_key,setting_value FROM {$wpdb->prefix}cryogen_settings" ) as $r ) { $out[ $r->setting_key ] = $r->setting_value; } return $out; }
+    public static function set_settings( WP_REST_Request $req ) { global $wpdb; foreach ( $req->get_json_params() as $k => $v ) { $wpdb->replace( "{$wpdb->prefix}cryogen_settings", [ 'setting_key' => sanitize_key( $k ), 'setting_value' => sanitize_textarea_field( (string) $v ) ] ); } return [ 'saved' => true ]; }
+
+    public static function do_add_member( array $data ): int {
+        global $wpdb;
+        $wpdb->insert( "{$wpdb->prefix}cryogen_members", [
+            'name' => sanitize_text_field( $data['name'] ?? '' ),
+            'email' => sanitize_email( $data['email'] ?? '' ),
+            'zwift_id' => sanitize_text_field( $data['zwift_id'] ?? '' ),
+            'discord_handle' => sanitize_text_field( $data['discord_handle'] ?? '' ),
+            'facebook' => sanitize_text_field( $data['facebook'] ?? '' ),
+            'tier' => sanitize_text_field( $data['tier'] ?: 'half' ),
+            'zp_confirmed' => ! empty( $data['zp_confirmed'] ) ? 1 : 0,
+        ] );
+        return $wpdb->insert_id;
+    }
+
+	public static function set_member_tier( WP_REST_Request $req ) {
+		global $wpdb;
+		$id = (int) $req->get_param( 'id' );
+		$tier = sanitize_text_field( $req->get_param( 'tier' ) );
+		
+		if ( ! in_array( $tier, ['full', 'half'], true ) ) {
+			return new WP_Error( 'invalid_tier', 'Tier must be full or half.', [ 'status' => 400 ] );
+		}
+
+		$m = $wpdb->get_row( $wpdb->prepare( "SELECT email FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+		if ( ! $m ) return new WP_Error( 'not_found', 'Member not found.', [ 'status' => 404 ] );
+
+		$wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'tier' => $tier, 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $id ] );
+		self::sync_wp_role( $m->email, $tier );
+		
+		return [ 'ok' => true, 'id' => $id, 'tier' => $tier ];
+	}
+
+	public static function handle_member_status( WP_REST_Request $req ) {
+		global $wpdb;
+		$id = (int) $req->get_param( 'id' );
+		$action = sanitize_text_field( $req->get_param( 'action' ) );
+		
+		$m = $wpdb->get_row( $wpdb->prepare( "SELECT email FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+		if ( ! $m ) return new WP_Error( 'not_found', 'Member not found.', [ 'status' => 404 ] );
+
+		if ( $action === 'suspend' ) {
+			$days = (int) $req->get_param( 'days' ) ?: 7;
+			$until = gmdate( 'Y-m-d H:i:s', strtotime( "+{$days} days" ) );
+			$wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'status' => 'suspended', 'suspend_until' => $until ], [ 'id' => $id ] );
+			self::lock_wp_account( $m->email );
+			
+		} elseif ( $action === 'unsuspend' ) {
+			$wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'status' => 'active', 'suspend_until' => null ], [ 'id' => $id ] );
+			$tier = $wpdb->get_var( $wpdb->prepare( "SELECT tier FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+			self::sync_wp_role( $m->email, $tier ?: 'half' );
+
+		} elseif ( $action === 'left' ) {
+			$wpdb->update( "{$wpdb->prefix}cryogen_members", [ 
+				'status' => 'left', 
+				'jersey_status' => 'pending_removal' 
+			], [ 'id' => $id ] );
+			self::lock_wp_account( $m->email );
+		}
+
+		return [ 'ok' => true, 'action' => $action, 'id' => $id ];
+	}
+
+	private static function lock_wp_account( string $email ) {
+		$wp_user_id = email_exists( $email );
+		if ( $wp_user_id ) {
+			$user = new WP_User( $wp_user_id );
+			$user->remove_role( 'cg_full_member' );
+			$user->remove_role( 'cg_half_member' );
+		}
+	}
+
+    public static function update_offboard_step( WP_REST_Request $req ) {
+        global $wpdb;
+        $id = (int) $req->get_param( 'id' );
+        $platform = sanitize_text_field( $req->get_param( 'platform' ) ); 
+        $state = (int) $req->get_param( 'state' );
+
+        $allowed = ['ob_discord', 'ob_fb', 'ob_zp'];
+        if ( ! in_array( $platform, $allowed, true ) ) {
+            return new WP_Error( 'invalid_platform', 'Invalid platform identifier.', [ 'status' => 400 ] );
+        }
+
+        $column = str_replace( 'ob_', 'offboard_', $platform );
+
+        $wpdb->update( 
+            "{$wpdb->prefix}cryogen_members", 
+            [ $column => $state, 'updated_at' => current_time( 'mysql' ) ], 
+            [ 'id' => $id ] 
+        );
+        
+        return [ 'ok' => true, 'platform' => $platform, 'state' => $state ];
+    }
+
+    public static function sync_wp_role( string $email, string $tier ) {
+        $wp_user_id = email_exists( $email );
+        if ( ! $wp_user_id ) return;
+        $user = new WP_User( $wp_user_id );
+        $role = ( $tier === 'full' ) ? 'cg_full_member' : 'cg_half_member';
+        $user->set_role( $role );
+    }
+
+	public static function do_welcome( int $id ): array {
+        global $wpdb;
+        $m = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+        if ( ! $m ) return [ 'error' => 'Member not found.' ];
+
+        $wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'status' => 'active', 'jersey_status' => 'pending_add', 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $id ] );
+		self::sync_wp_role( $m->email, $m->tier );
+		$discord_invite = get_option( 'cryogen_discord_invite', '' );
+        $facebook_link  = get_option( 'cryogen_facebook_link', '' );
+
+        $subject = "Welcome to CRYO-GEN, {$m->name}!";
+        $body  = "Hey {$m->name}!\n\nWelcome to Team CRYO-GEN - great to have you on board.\n\n";
+        $body .= "Join us on Discord: {$discord_invite}\n";
+        if ( $facebook_link ) $body .= "Join the Facebook group (optional): {$facebook_link}\n";
+        if ( $m->tier === 'full' ) $body .= "\nYour jersey order has been queued - we batch these monthly, so sit tight!\n";
+        $body .= "\nSee you on the road,\nTeam CRYO-GEN";
+
+        $sent = false;
+        if ( $m->email ) $sent = wp_mail( $m->email, $subject, $body );
+
+        return [ 'welcomed' => true, 'email_sent' => $sent, 'discord_invite' => $discord_invite, 'email_preview' => [ 'subject' => $subject, 'body' => $body ] ];
+    }
+
+    public static function do_offboard( int $id ): array {
+        global $wpdb;
+        $wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'status' => 'left', 'jersey_status' => 'pending_removal', 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $id ] );
+        return [ 'offboarded' => true ];
+    }
+
+    public static function do_jersey_batch(): array {
+        global $wpdb;
+        return [
+            'add'    => $wpdb->get_results( "SELECT id,name,zwift_id FROM {$wpdb->prefix}cryogen_members WHERE jersey_status='pending_add'", ARRAY_A ) ?: [],
+            'remove' => $wpdb->get_results( "SELECT id,name,zwift_id FROM {$wpdb->prefix}cryogen_members WHERE jersey_status='pending_removal'", ARRAY_A ) ?: [],
+        ];
+    }
+    public static function do_jersey_close(): array {
+        global $wpdb;
+        $wpdb->query( "UPDATE {$wpdb->prefix}cryogen_members SET jersey_status='on_order' WHERE jersey_status='pending_add'" );
+        $wpdb->query( "UPDATE {$wpdb->prefix}cryogen_members SET jersey_status='removed'  WHERE jersey_status='pending_removal'" );
+        return [ 'closed' => true ];
+    }
+
+    public static function handle_export_members() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Not allowed.' );
+        global $wpdb;
+        $rows = $wpdb->get_results( "SELECT name,email,zwift_id,discord_handle,facebook,tier,status,jersey_status,zp_confirmed,created_at,updated_at FROM {$wpdb->prefix}cryogen_members ORDER BY name ASC", ARRAY_A );
+
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename=cryogen-members-' . date( 'Y-m-d' ) . '.csv' );
+        $out = fopen( 'php://output', 'w' );
+        fputcsv( $out, [ 'name','email','zwift_id','discord_handle','facebook','tier','status','jersey_status','zp_confirmed','created_at','updated_at' ] );
+        foreach ( (array) $rows as $r ) {
+            fputcsv( $out, $r );
+        }
+        fclose( $out );
+        exit;
+    }
+
+    public static function register_import_menu() {
+        add_submenu_page( 'cryogen-members', 'Import Members', 'Import', 'manage_options', 'cryogen-import', [ __CLASS__, 'render_import_page' ] );
+    }
+
+    public static function render_import_page() {
+        $msg = isset( $_GET['cg_import_msg'] ) ? sanitize_text_field( wp_unslash( $_GET['cg_import_msg'] ) ) : '';
+        echo '<div class="wrap"><h1>Import Members</h1>';
+        if ( $msg ) echo '<div class="notice notice-success"><p>' . esc_html( $msg ) . '</p></div>';
+        echo '<p>Upload a CSV with these exact column headers in row 1:</p>';
+        echo '<p><code>name,email,zwift_id,discord_handle,facebook,tier</code></p>';
+        echo '<p><em>Tip: use Export on the Members page first, that file already has the right headers.</em></p>';
+        echo '<form method="post" enctype="multipart/form-data" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+        echo '<input type="hidden" name="action" value="cryogen_import_members">';
+        wp_nonce_field( 'cryogen_import', 'cryogen_import_nonce' );
+        echo '<input type="file" name="cg_import_file" accept=".csv" required>';
+        echo '<p><button type="submit" class="button button-primary">Import</button></p></form></div>';
+    }
+
+    public static function handle_import_members() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Not allowed.' );
+        check_admin_referer( 'cryogen_import', 'cryogen_import_nonce' );
+
+        if ( empty( $_FILES['cg_import_file']['tmp_name'] ) ) {
+            wp_redirect( admin_url( 'admin.php?page=cryogen-import&cg_import_msg=' . urlencode( 'No file uploaded.' ) ) );
+            exit;
+        }
+
+        global $wpdb;
+        $handle = fopen( $_FILES['cg_import_file']['tmp_name'], 'r' );
+        $header = fgetcsv( $handle );
+        $added = 0; $skipped = 0;
+
+        while ( ( $row = fgetcsv( $handle ) ) !== false ) {
+            $data  = array_combine( $header, $row );
+            $email = sanitize_email( $data['email'] ?? '' );
+            $zwift = sanitize_text_field( $data['zwift_id'] ?? '' );
+            if ( ! $email || ! $zwift ) { $skipped++; continue; }
+
+            $exists = $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}cryogen_members WHERE email=%s OR zwift_id=%s", $email, $zwift
+            ) );
+            if ( $exists ) { $skipped++; continue; }
+
+            self::do_add_member( [
+                'name'           => $data['name'] ?? '',
+                'email'          => $email,
+                'zwift_id'       => $zwift,
+                'discord_handle' => $data['discord_handle'] ?? '',
+                'facebook'       => $data['facebook'] ?? '',
+                'tier'           => ( isset( $data['tier'] ) && trim( strtolower( $data['tier'] ) ) === 'full' ) ? 'full' : 'half',
+            ] );
+            $added++;
+        }
+        fclose( $handle );
+
+        $msg = "Import complete: {$added} added, {$skipped} skipped (already existed or missing data).";
+        wp_redirect( admin_url( 'admin.php?page=cryogen-import&cg_import_msg=' . urlencode( $msg ) ) );
+        exit;
+    }
+
+    public static function add_zwift_data_columns() {
+        global $wpdb;
+        $table = "{$wpdb->prefix}cryogen_members";
+        $existing = $wpdb->get_col( "DESCRIBE {$table}", 0 );
+
+        $new_columns = [
+            'zp_category'           => "VARCHAR(5) DEFAULT ''",
+            'ftp'                   => "SMALLINT DEFAULT 0",
+            'critical_power'        => "SMALLINT DEFAULT 0",
+            'compound_score'        => "DECIMAL(10,2) DEFAULT 0",
+            'velo_rating'           => "DECIMAL(10,2) DEFAULT 0",
+            'phenotype'             => "VARCHAR(20) DEFAULT ''",
+            'club_match'            => "VARCHAR(120) DEFAULT ''",
+            'zwift_data_updated_at' => "DATETIME NULL",
+        ];
+
+        foreach ( $new_columns as $col => $definition ) {
+            if ( ! in_array( $col, $existing, true ) ) {
+                $wpdb->query( "ALTER TABLE {$table} ADD COLUMN {$col} {$definition}" );
+            }
+        }
+    }
+
+    public static function handle_upgrade_schema() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Not allowed.' );
+        self::add_zwift_data_columns();
+        wp_redirect( admin_url( 'admin.php?page=cryogen-members&cg_msg=' . urlencode( 'Database columns updated.' ) ) );
+        exit;
+    }
+
+    public static function do_refresh_member_zwift( int $id ): array {
+        global $wpdb;
+        $m = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+        if ( ! $m ) return [ 'ok' => false, 'error' => 'Member not found.' ];
+        if ( empty( $m->zwift_id ) ) return [ 'ok' => false, 'error' => 'No Zwift ID on file for this member.' ];
+
+        $result = self::zwift_request( "public/riders/{$m->zwift_id}" );
+        if ( ! $result['ok'] ) {
+            return [ 'ok' => false, 'error' => $result['error'] ?? 'ZwiftRacing.app request failed.' ];
+        }
+
+        $data = json_decode( $result['body'], true );
+        if ( ! is_array( $data ) || empty( $data['name'] ) ) {
+            return [ 'ok' => false, 'error' => 'ZwiftRacing.app returned no data for this Zwift ID.' ];
+        }
+
+        $wpdb->update( "{$wpdb->prefix}cryogen_members", [
+            'zp_category'           => sanitize_text_field( $data['zpCategory'] ?? '' ),
+            'ftp'                   => (int) ( $data['zpFTP'] ?? 0 ),
+            'critical_power'        => (int) ( $data['power']['CP'] ?? 0 ),
+            'compound_score'        => (float) ( $data['power']['compoundScore'] ?? 0 ),
+            'velo_rating'           => (float) ( $data['race']['current']['rating'] ?? 0 ),
+            'phenotype'             => sanitize_text_field( $data['phenotype']['value'] ?? '' ),
+            'club_match'            => sanitize_text_field( $data['club']['name'] ?? '' ),
+            'zwift_data_updated_at' => current_time( 'mysql' ),
+        ], [ 'id' => $id ] );
+
+        return [ 'ok' => true, 'id' => $id ];
+    }
+
+    public static function refresh_member_zwift( WP_REST_Request $req ) {
+        return self::do_refresh_member_zwift( (int) $req->get_param( 'id' ) );
+    }
+
+    public static function do_refresh_all_zwift(): array {
+        global $wpdb;
+        $ids = $wpdb->get_col( "SELECT id FROM {$wpdb->prefix}cryogen_members WHERE zwift_id != '' AND status != 'left'" );
+        $ok = 0; $failed = 0; $errors = [];
+
+        foreach ( $ids as $id ) {
+            $r = self::do_refresh_member_zwift( (int) $id );
+            if ( $r['ok'] ) { $ok++; } else { $failed++; $errors[] = "Member #{$id}: " . ( $r['error'] ?? 'unknown error' ); }
+            usleep( 300000 ); 
+        }
+        return [ 'ok' => true, 'refreshed' => $ok, 'failed' => $failed, 'errors' => $errors ];
+    }
+
+    public static function refresh_all_zwift( WP_REST_Request $req ) {
+        return self::do_refresh_all_zwift();
+    }
+
+    public static function handle_refresh_all_zwift() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Not allowed.' );
+        $r = self::do_refresh_all_zwift();
+        $msg = "Refreshed {$r['refreshed']} members" . ( $r['failed'] ? ", {$r['failed']} failed" : '' ) . " from ZwiftRacing.app.";
+        wp_redirect( admin_url( 'admin.php?page=cryogen-members&cg_msg=' . urlencode( $msg ) ) );
+        exit;
+    }
+
+    public static function handle_refresh_one_zwift() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Not allowed.' );
+        $id = isset( $_GET['id'] ) ? (int) $_GET['id'] : 0;
+        $r = self::do_refresh_member_zwift( $id );
+        $msg = $r['ok'] ? 'Rider data refreshed from ZwiftRacing.app.' : ( 'Refresh failed: ' . ( $r['error'] ?? 'unknown error' ) );
+        wp_redirect( admin_url( 'admin.php?page=cryogen-members&cg_msg=' . urlencode( $msg ) ) );
+        exit;
+    }
+
+    public static function run_scheduled_zwift_refresh() {
+        self::do_refresh_all_zwift();
+    }
+
+    public static function sync_wp_role_v2( string $email, string $tier ) {
+        $wp_user_id = email_exists( $email );
+        if ( ! $wp_user_id ) return;
+        $user = new WP_User( $wp_user_id );
+        $role = ( $tier === 'full' ) ? 'cg_full_member' : 'cg_half_member';
+        $user->set_role( $role );
+    }
+
+    public static function register_member_roles() {
+        if ( ! get_role( 'cg_half_member' ) ) {
+            add_role( 'cg_half_member', 'Half Member', [ 'read' => true, 'cg_member_area' => true ] );
+        }
+        if ( ! get_role( 'cg_full_member' ) ) {
+            add_role( 'cg_full_member', 'Full Member', [ 'read' => true, 'cg_member_area' => true, 'cg_full_member' => true ] );
+        }
+    }
+
+    public static function upgrade_to_full_v2( WP_REST_Request $req ) {
+        global $wpdb;
+        $id = (int) $req->get_param( 'id' );
+        $member = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}cryogen_members WHERE id=%d", $id ) );
+        if ( ! $member ) {
+            return new WP_Error( 'not_found', 'Member not found.', [ 'status' => 404 ] );
+        }
+        $wpdb->update( "{$wpdb->prefix}cryogen_members", [ 'tier' => 'full', 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $id ] );
+        self::sync_wp_role( $member->email, 'full' );
+        return [ 'ok' => true, 'id' => $id, 'tier' => 'full' ];
+    }
+
+    public static function public_register( WP_REST_Request $req ) {
+        if ( ! empty( $req->get_param( 'website' ) ) ) {
+            return [ 'ok' => true ]; 
+        }
+
+        $name    = sanitize_text_field( $req->get_param( 'name' ) );
+        $email   = sanitize_email( $req->get_param( 'email' ) );
+        $zwift   = sanitize_text_field( $req->get_param( 'zwift_id' ) );
+        $discord = sanitize_text_field( $req->get_param( 'discord_handle' ) );
+        $fb      = sanitize_text_field( $req->get_param( 'facebook' ) ?? '' );
+        $agree   = ! empty( $req->get_param( 'agree' ) );
+
+        if ( ! $name || ! $email || ! $zwift || ! $discord || ! $agree ) {
+            return new WP_Error( 'missing', 'Name, email, Zwift ID, Discord handle, and agreeing to the code of conduct are all required.', [ 'status' => 400 ] );
+        }
+        if ( ! is_email( $email ) ) {
+            return new WP_Error( 'bad_email', "That email address doesn't look valid.", [ 'status' => 400 ] );
+        }
+
+        global $wpdb;
+        $exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}cryogen_members WHERE email=%s OR zwift_id=%s", $email, $zwift
+        ) );
+        if ( $exists ) {
+            return new WP_Error( 'duplicate', "Looks like you're already registered with us — check your email, or reach out on Discord.", [ 'status' => 409 ] );
+        }
+
+        $member_id = self::do_add_member( [
+            'name' => $name, 'email' => $email, 'zwift_id' => $zwift,
+            'discord_handle' => $discord, 'facebook' => $fb,
+            'tier' => 'half', 'zp_confirmed' => false,
+        ] );
+
+        $wp_user_id = email_exists( $email );
+        if ( ! $wp_user_id ) {
+            $username = sanitize_user( current( explode( '@', $email ) ), true );
+            $base = $username ?: 'rider'; $i = 1;
+            while ( username_exists( $username ) ) { $username = $base . $i; $i++; }
+
+            $wp_user_id = wp_insert_user( [
+                'user_login'   => $username,
+                'user_email'   => $email,
+                'user_pass'    => wp_generate_password( 20 ),
+                'display_name' => $name,
+						'role' => 'cg_half_member',
+            ] );
+
+            if ( ! is_wp_error( $wp_user_id ) ) {
+                wp_new_user_notification( $wp_user_id, null, 'user' );
+            }
+        }
+
+        return [
+            'ok' => true,
+            'member_id' => $member_id,
+            'message' => 'Welcome to CRYO-GEN! Check your email to set your account password, and keep an eye out for your Discord invite.',
+        ];
+    }
+
+    public static function members_list(): array { global $wpdb; return $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}cryogen_members ORDER BY created_at DESC", ARRAY_A ) ?: []; }
+    public static function members_add( WP_REST_Request $req ) { return [ 'id' => self::do_add_member( $req->get_params() ) ]; }
+    public static function member_welcome( WP_REST_Request $req ) {
+        $result = self::do_welcome( (int) $req['id'] );
+        if ( isset( $result['error'] ) ) return new WP_Error( 'not_found', $result['error'], [ 'status' => 404 ] );
+        return $result;
+    }
+    public static function member_offboard( WP_REST_Request $req ) { return self::do_offboard( (int) $req['id'] ); }
+    public static function jersey_batch(): array { return self::do_jersey_batch(); }
+    public static function jersey_batch_close(): array { return self::do_jersey_close(); }
+
+    public static function zwift_test(): array {
+        $key1 = get_option( 'cryogen_zra_key', '' );
+        $key2 = get_option( 'cryogen_zra_key2', '' );
+        return [
+            'wordpress_routing' => 'OK',
+            'key1_saved'        => ! empty( $key1 ) ? 'Yes' : 'No - go to Settings -> CRYO-GEN',
+            'key1_length'       => strlen( $key1 ) . ' characters',
+            'key2_saved'        => ! empty( $key2 ) ? 'Yes' : 'No (optional backup)',
+            'key2_length'       => strlen( $key2 ) . ' characters',
+        ];
+    }
+
+    public static function zwift_request( string $path ): array {
+        $keys = array_filter( [ get_option( 'cryogen_zra_key', '' ), get_option( 'cryogen_zra_key2', '' ) ] );
+        if ( empty( $keys ) ) return [ 'ok' => false, 'code' => 500, 'error' => 'No API key saved. Go to Settings -> CRYO-GEN.' ];
+
+        $retryable  = [ 401, 403, 429 ];
+        $last_error = null;
+
+        foreach ( $keys as $i => $key ) {
+            $res = wp_remote_get( "https://api.zwiftracing.app/api/{$path}", [
+                'timeout' => 15,
+                'headers' => [ 'Authorization' => $key, 'Accept' => 'application/json', 'User-Agent' => 'CRYO-GEN/1.0 (+https://cryogen.team)' ],
+            ] );
+
+            if ( is_wp_error( $res ) ) { $last_error = [ 'ok' => false, 'code' => 502, 'error' => 'Could not reach ZwiftRacing.app: ' . $res->get_error_message() ]; continue; }
+
+            $code = wp_remote_retrieve_response_code( $res );
+            $body = wp_remote_retrieve_body( $res );
+
+            if ( $code === 200 ) return [ 'ok' => true, 'code' => 200, 'body' => $body, 'key_used' => $i + 1 ];
+
+            $last_error = [ 'ok' => false, 'code' => $code, 'body' => $body, 'error' => 'ZwiftRacing.app returned an error', 'failed_key' => $i + 1, 'api_key_preview' => substr( $key, 0, 6 ) . '...' ];
+            if ( ! in_array( $code, $retryable, true ) && $code < 500 ) break;
+        }
+        return $last_error;
+    }
+
+    public static function zwift_riders() {
+        $cached = get_transient( 'cg_zra_riders' );
+        if ( $cached !== false ) return new WP_REST_Response( json_decode( $cached ), 200 );
+        $result = self::zwift_request( 'public/clubs/2740/0' );
+        if ( ! $result['ok'] ) { unset( $result['ok'] ); return $result; }
+        set_transient( 'cg_zra_riders', $result['body'], 60 );
+        return new WP_REST_Response( json_decode( $result['body'] ), 200 );
+    }
+
+    public static function zwift_proxy( WP_REST_Request $req ) {
+        $path = ltrim( $req->get_param( 'path' ), '/' );
+        $cache_key = 'cg_zra_' . md5( $path );
+        if ( $cached = get_transient( $cache_key ) ) return new WP_REST_Response( json_decode( $cached ), 200 );
+        $result = self::zwift_request( $path );
+        if ( ! $result['ok'] ) return new WP_Error( 'upstream', $result['error'] ?? 'Unknown error', [ 'status' => $result['code'] ?? 502 ] );
+        set_transient( $cache_key, $result['body'], 60 );
+        return new WP_REST_Response( json_decode( $result['body'] ), $result['code'] );
+    }
+
+    public static function register_settings_menu() {
+        add_options_page( 'CRYO-GEN Portal', 'CRYO-GEN', 'manage_options', 'cryogen', [ __CLASS__, 'render_settings_page' ] );
+    }
+
+    public static function render_settings_page(): void {
+        if ( isset( $_POST['cg_save'] ) ) {
+            check_admin_referer( 'cg_settings' );
+            update_option( 'cryogen_zra_key', sanitize_text_field( $_POST['cg_zra_key'] ?? '' ) );
+            update_option( 'cryogen_zra_key2', sanitize_text_field( $_POST['cg_zra_key2'] ?? '' ) );
+            update_option( 'cryogen_discord_invite', sanitize_text_field( $_POST['cg_discord_invite'] ?? '' ) );
+            update_option( 'cryogen_facebook_link', sanitize_text_field( $_POST['cg_facebook_link'] ?? '' ) );
+            if ( ! empty( $_POST['cg_token'] ) ) update_option( 'cryogen_api_token', sanitize_text_field( $_POST['cg_token'] ) );
+            echo '<div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>';
+        }
+        if ( isset( $_POST['cg_regen'] ) ) {
+            check_admin_referer( 'cg_settings' );
+            update_option( 'cryogen_api_token', bin2hex( random_bytes( 24 ) ) );
+            echo '<div class="notice notice-success is-dismissible"><p>New token generated.</p></div>';
+        }
+
+        $key = get_option( 'cryogen_zra_key', '' );
+        $key2 = get_option( 'cryogen_zra_key2', '' );
+        $discord_invite = get_option( 'cryogen_discord_invite', '' );
+        $facebook_link = get_option( 'cryogen_facebook_link', '' );
+        $token = get_option( 'cryogen_api_token', '(not set - try deactivating and reactivating the plugin)' );
+        $base = rest_url( 'cryogen/v1' );
+        $connected = ! empty( $key ) || ! empty( $key2 );
+        ?>
+        <div class="wrap">
+            <h1>CRYO-GEN Racing Portal</h1>
+            <p>Configure your portal below, then copy the token into your <strong>portal.html</strong> file.</p>
+            <hr>
+            <form method="post" action="">
+                <?php wp_nonce_field( 'cg_settings' ); ?>
+                <table class="form-table" role="presentation">
+                    <tr><th scope="row"><label for="cg_zra_key">ZwiftRacing.app API Key (Primary)</label></th>
+                        <td><input type="text" id="cg_zra_key" name="cg_zra_key" value="<?= esc_attr( $key ) ?>" class="regular-text" placeholder="e.g. 63e32b2550a0742a4aa04923">
+                        <p class="description"><?= ! empty( $key ) ? 'Key is set.' : 'No key set yet.' ?></p></td></tr>
+                    <tr><th scope="row"><label for="cg_zra_key2">ZwiftRacing.app API Key (Backup)</label></th>
+                        <td><input type="text" id="cg_zra_key2" name="cg_zra_key2" value="<?= esc_attr( $key2 ) ?>" class="regular-text" placeholder="Optional - used automatically if the primary key fails">
+                        <p class="description"><?= ! empty( $key2 ) ? 'Backup key is set.' : 'No backup key set yet.' ?></p></td></tr>
+                    <tr><th scope="row"><label for="cg_discord_invite">Discord Invite Link</label></th>
+                        <td><input type="text" id="cg_discord_invite" name="cg_discord_invite" value="<?= esc_attr( $discord_invite ) ?>" class="regular-text" placeholder="https://discord.gg/yourinvite">
+                        <p class="description">Sent automatically in the welcome email.</p></td></tr>
+                    <tr><th scope="row"><label for="cg_facebook_link">Facebook Group Link</label></th>
+                        <td><input type="text" id="cg_facebook_link" name="cg_facebook_link" value="<?= esc_attr( $facebook_link ) ?>" class="regular-text" placeholder="https://facebook.com/groups/yourgroup">
+                        <p class="description">Optional - included in the welcome email if set.</p></td></tr>
+                    <tr><th scope="row">Portal Access Token</th>
+                        <td><code style="display:block;padding:8px 12px;background:#f6f7f7;border:1px solid #ddd;border-radius:4px;font-size:13px;word-break:break-all;margin-bottom:8px"><?= esc_html( $token ) ?></code>
+                        <button type="submit" name="cg_regen" class="button">Generate a new token</button></td></tr>
+                </table>
+                <p class="submit"><button type="submit" name="cg_save" class="button button-primary button-large">Save Settings</button></p>
+            </form>
+            <hr>
+            <h2>Copy This Into portal.html</h2>
+            <textarea rows="4" class="large-text code" readonly style="font-size:12px;background:#1e1e1e;color:#9cdcfe;padding:12px;border-radius:4px">
+wpApiBase : 'https://cryogen.team/wp-json/cryogen/v1',
+apiToken  : '<?= esc_textarea( $token ) ?>',</textarea>
+            <hr>
+            <h2>Test Your Connection</h2>
+            <p>
+                <a href="<?= esc_url( $base . '/zwift/public/clubs/2740/0' ) ?>" target="_blank" class="button button-primary">Test ZwiftRacing.app -&gt;</a>
+                &nbsp;
+                <a href="<?= esc_url( $base . '/signups' ) ?>" target="_blank" class="button">View sign-ups -&gt;</a>
+            </p>
+            <?php if ( $connected ) : ?>
+            <div class="notice notice-success inline"><p>At least one ZwiftRacing.app key is configured.</p></div>
+            <?php endif; ?>
         </div>
-        <div id="login-form-mod" style="display:none">
-          <label class="lbl">Moderator Password</label>
-          <input id="mod-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doModLogin()" style="margin-bottom:12px"/>
-          <button class="btn-cyan" onclick="doModLogin()">Login as Moderator</button>
+        <?php
+    }
+
+    public static function register_members_menu() {
+        add_menu_page(
+            'CRYO-GEN Members',
+            'CRYO-GEN',
+            'manage_options',
+            'cg-members-tool',
+            [ __CLASS__, 'render_spa_admin_page' ],
+            'dashicons-groups',
+            30
+        );
+    }
+
+    public static function render_spa_admin_page() {
+        ?>
+        <div class="wrap" style="margin: -20px 0 0 -20px;">
+            <script>
+                window.wpApiSettings = {
+                    root: "<?= esc_url_raw( rest_url() ); ?>",
+                    nonce: "<?= wp_create_nonce( 'wp_rest' ); ?>"
+                };
+            </script>
+            <iframe 
+                src="<?= plugins_url( 'cryogen-members-tool.html', CG_PORTAL_FILE ); ?>" 
+                style="width: 100%; height: 100vh; border: none; overflow: hidden;"
+                title="CRYO-GEN Admin Tool">
+            </iframe>
         </div>
-        <div id="login-form-member" style="display:none">
-          <label class="lbl">Your Zwift Name or Rider ID</label>
-          <input id="member-search" class="inp" placeholder="e.g. Rick or 24650" onkeydown="if(event.key==='Enter')doMemberLogin()" style="margin-bottom:6px"/>
-          <div style="font-size:11px;color:#4b5563;margin-bottom:12px">Data loads from ZwiftRacing.app — make sure you've refreshed first</div>
-          <button class="btn-cyan" onclick="doMemberLogin()">Find My Profile</button>
-          <div id="member-results" style="margin-top:12px"></div>
-        </div>
-        <div id="login-err" style="margin-top:10px;font-size:12px;color:#f87171;display:none"></div>
-      </div>
-    </div>
-  </div></div>
-</div>
-
-<div id="app" style="display:none;min-height:100vh;flex-direction:column">
-
-  <div class="brand-bar">
-    <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
-    <div style="flex:1">
-      <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,#00D4FF,#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
-      <div style="font-size:10px;color:#4b5563">Cycling Club · Member Portal</div>
-    </div>
-    <div id="role-display" style="display:flex;align-items:center;gap:10px">
-      <span id="role-badge" class="role-badge"></span>
-      <button onclick="doLogout()" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#6b7280;font-size:11px">Logout</button>
-    </div>
-  </div>
-
-  <div style="display:flex;flex:1" id="app-inner">
-
-  <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
-    <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
-      <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
-    </div>
-    <nav style="flex:1;padding:8px" id="main-nav">
-      <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
-      <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
-      <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
-      <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
-      <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
-      <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
-    </nav>
-    <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
-      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex'">⚙️ Admin</button>
-    </div>
-  </aside>
-
-  <main style="flex:1;overflow:auto;padding:28px">
-  <div style="max-width:980px;margin:0 auto">
-
-  <div id="page-dashboard" class="page active">
-    <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
-    <p style="font-size:13px;color:#6b7280;margin-bottom:20px">ZwiftPower · ZwiftRacing.app</p>
-    <div class="stat4">
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#00D4FF;margin-bottom:8px">👥 Roster</div><div id="s-riders" style="font-size:22px;font-weight:900">—</div><div id="s-riders-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">📈 Avg vELO</div><div id="s-velo" style="font-size:22px;font-weight:900">—</div><div id="s-velo-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">0/40</div><div style="font-size:11px;color:#6b7280;margin-top:3px">Wed 28 May</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#F59E0B;margin-bottom:8px">🚴 Rides</div><div id="s-rides" style="font-size:22px;font-weight:900">—</div><div style="font-size:11px;color:#6b7280;margin-top:3px">upcoming</div></div>
-    </div>
-    <div class="grid2" style="margin-bottom:20px">
-      <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Top 10 by vELO</div><div id="top10"></div></div>
-      <div class="card" style="padding:20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:14px">Category Breakdown</div><div id="catdist"></div></div>
-    </div>
-    <div class="card"><div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280" id="results-header">Recent Results</div><table><thead><tr><th>Event / Rider</th><th>Date</th><th>Cat</th><th>Result / vELO</th><th>Time / Record</th><th>W/kg / Races</th></tr></thead><tbody id="results-body"></tbody></table></div>
-  </div>
-
-  <div id="page-racing" class="page">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Racing Dashboard</h2><p style="font-size:13px;color:#6b7280">ZwiftRacing.app live data</p></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <div id="zra-dot" style="width:8px;height:8px;border-radius:50%;background:#FBBF24"></div>
-        <span id="zra-msg" style="font-size:12px;color:#6b7280">Connecting…</span>
-        <button onclick="loadLive()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh</button>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <input id="r-search" class="inp" placeholder="Search rider…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
-      <select id="r-cat" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
-      <select id="r-zra" class="inp" style="width:110px" onchange="renderRacing()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
-      <select id="r-ph" class="inp" style="width:120px" onchange="renderRacing()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
-    </div>
-    <div class="card"><div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Rider Rankings — vELO</span><span id="r-badge" style="font-size:10px;color:#4b5563;background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:99px">—</span></div>
-    <div style="overflow-x:auto"><table><thead><tr>
-      <th onclick="rSortBy('rank')">#<span class="sortarrow" id="rsa-rank"></span></th>
-      <th onclick="rSortBy('name')">Rider<span class="sortarrow" id="rsa-name"></span></th>
-      <th onclick="rSortBy('cat')">Cat<span class="sortarrow" id="rsa-cat"></span></th>
-      <th onclick="rSortBy('ftp')">FTP<span class="sortarrow" id="rsa-ftp"></span></th>
-      <th onclick="rSortBy('wkg')">W/kg<span class="sortarrow" id="rsa-wkg"></span></th>
-      <th onclick="rSortBy('velo')">vELO<span class="sortarrow active" id="rsa-velo">↓</span></th>
-      <th onclick="rSortBy('ph')">Phenotype<span class="sortarrow" id="rsa-ph"></span></th>
-    </tr></thead><tbody id="racing-body"></tbody></table></div></div>
-  </div>
-
-  <div id="page-events" class="page">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Events & Sign-Up</h2><p style="font-size:13px;color:#6b7280">Race series · team events</p></div>
-      <div style="display:flex;gap:8px" id="event-admin-btns"></div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
-    <div id="series-content"></div>
-    <div id="sheet-panel"></div>
-  </div>
-
-  <div id="page-rides" class="page">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Social Rides</h2>
-        <p style="font-size:13px;color:#6b7280">RSVP for group rides · <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="color:#00D4FF">View Zwift Club →</a></p>
-      </div>
-      <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
-    </div>
-    <div class="card" style="margin-bottom:20px;overflow:hidden">
-      <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="zh-sync-btn" onclick="loadZwiftEvents()" style="padding:5px 12px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:6px;color:#00D4FF;font-size:11px;font-weight:700">↻ Sync Events</button>
-          <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#6b7280;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
-        </div>
-      </div>
-      <iframe src="https://zwifthacks.com/app/events/?key=6a24978d28168"
-        style="width:100%;height:420px;border:none;display:block;background:#0a0e1a"
-        title="CRYO-GEN Zwift Events" loading="lazy"></iframe>
-      <div style="padding:8px 16px;background:rgba(0,0,0,0.3)">
-        <span id="zh-status" style="font-size:11px;display:none"></span>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
-      <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
-    </div>
-    <div id="rides-list"></div>
-  </div>
-
-  <div id="page-members" class="page">
-    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
-   <div id="offboarding-panel"></div>   
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
-      <select id="m-cat" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
-      <select id="m-ph" class="inp" style="width:120px" onchange="mPage=1;renderMembers()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
-      <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
-      <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'#00D4FF':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
-    </div>
-    <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
-      </tr></thead><tbody id="members-body"></tbody></table></div>
-    <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
-      <span id="m-page-info" style="font-size:12px;color:#4b5563"></span>
-      <div style="display:flex;gap:6px">
-        <button onclick="changeMPage(-1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">←</button>
-        <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
-      </div>
-    </div></div>
-  </div>
-
-  <div id="page-profile" class="page">
-    <div id="profile-content"></div>
-  </div>
-
-  </div></main>
-  </div>
-</div>
-
-<div id="adminModal" class="modal-bg" style="display:none">
-  <div class="modal">
-    <div class="modal-head">⚙️ Admin <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
-    <div class="modal-body">
-      <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
-      <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
-      <div style="display:flex;gap:8px">
-        <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
-        <button onclick="syncSheet()" style="flex:1;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Sync Sheet</button>
-      </div>
-      <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
-      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
-        <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
-        <button onclick="if(confirm('Clear ALL event sign-ups?')){allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};save('cg_signups',allSignups);renderEvents();document.getElementById('adminModal').style.display='none'}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
-      </div>
-    </div>
-    <div class="modal-foot"><button class="btn-cyan" onclick="document.getElementById('adminModal').style.display='none'">Close</button></div>
-  </div>
-</div>
-
-<div id="newRideModal" class="modal-bg" style="display:none">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-head">Create New Ride <button onclick="document.getElementById('newRideModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
-    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
-      <div><label class="lbl">Title</label><input id="nr-title" class="inp" placeholder="e.g. Thursday Night Chaingang"/></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label class="lbl">Date</label><input id="nr-date" type="date" class="inp"/></div>
-        <div><label class="lbl">Time (UTC)</label><input id="nr-time" class="inp" placeholder="19:00 UTC"/></div>
-      </div>
-      <div><label class="lbl">Route</label><input id="nr-route" class="inp" placeholder="e.g. Watopia Hilly"/></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-        <div><label class="lbl">Distance</label><input id="nr-dist" class="inp" placeholder="45 km"/></div>
-        <div><label class="lbl">Max Riders</label><input id="nr-max" type="number" class="inp" value="25"/></div>
-        <div><label class="lbl">Category</label><select id="nr-cat" class="inp"><option>All</option><option>A/B</option><option>B/C</option><option>C/D</option></select></div>
-      </div>
-      <div><label class="lbl">Pace (W/kg)</label><input id="nr-pace" class="inp" placeholder="e.g. 2.5–3.2 w/kg"/></div>
-      <div><label class="lbl">Description</label><input id="nr-desc" class="inp" placeholder="Brief description"/></div>
-      <div><label class="lbl">Zwift Event Link (optional)</label><input id="nr-link" class="inp" placeholder="https://www.zwift.com/events/…"/></div>
-    </div>
-    <div class="modal-foot" style="display:flex;gap:8px"><button class="btn-cyan" onclick="createRide()">Create Ride</button><button onclick="document.getElementById('newRideModal').style.display='none'" style="padding:10px 18px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px">Cancel</button></div>
-  </div>
-</div>
-
-<script>
-// ── Constants ──────────────────────────────────────────────
-const PASSWORDS = { admin:'cryo2026', mod:'mod2026' };
-const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
-const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
-const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
-const ZRA_RANK  = {Diamond:1,Ruby:2,Emerald:3,Sapphire:4,Amethyst:5,Platinum:6,Gold:7,Silver:8,Bronze:9,Copper:10};
-const CAT_RANK  = {"A+":1,A:2,B:3,C:4,D:5};
-const SERIES = [
-  {id:'ttt',    name:'Weekly TTT',           emoji:'⏱️', max:40, desc:'Team Time Trial · Wed 19:00 UTC · Tempus Fugit · 17.3km'},
-  {id:'ladder', name:'Ladder League',        emoji:'🏅', max:30, desc:'Weekly handicap racing · Tuesdays · all categories welcome'},
-  {id:'zrl',    name:'Zwift Racing League',  emoji:'🏆', max:24, desc:'ZRL Team Series · divisional racing · season format'},
-  {id:'dirt',   name:'Dirt Race Series',     emoji:'🚵', max:20, desc:'Gravel & off-road racing · mixed terrain events'},
-  {id:'herd',   name:'Herd Spring Series',   emoji:'🌱', max:30, desc:'Community race series · spring season · all welcome'},
-];
-const toFlag = cc=>(cc||"").toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt()));
-const catB   = cat=>{const c=CAT_COLOR[cat]||"#888";return`<span class="cat" style="background:${c}22;color:${c};border:1px solid ${c}44">${cat}</span>`;};
-const phClean= v=>(v||"all-rounder").toLowerCase().replace(/\s+/g,"-");
-const ccClean= cc=>(cc||"gb").split("-")[0];
-const fmt    = n=>n?.toLocaleString()||"—";
-
-// ── Storage ────────────────────────────────────────────────
-const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
-const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}};
-
-// ── State ──────────────────────────────────────────────────
-let role=sessionStorage.getItem('role');
-let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
-let riders=[];
-let allSignups=load('cg_signups')||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
-let lockedSeries=load('cg_locked')||{};
-let localMemberState = load('cg_member_state') || {}; // NEW: Tracker for tiers and status overrides
-localStorage.removeItem('cg_ri');
-let rides=[];
-let rsvps=load('cg_r')||{};
-let mPage=1,mActive=false,rsvpId=null;
-let activeSeries='ttt';
-let mSort={col:'velo',dir:'desc'};
-let rSort={col:'velo',dir:'desc'};
-
-// ── API Bridge to WordPress ──────────────────────────────
-const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
-const WP_AUTH = window.wpApiSettings ? window.wpApiSettings.nonce : 'Basic ' + btoa('admin_username:application_password'); 
-
-async function api(endpoint, method = 'GET', payload = null) {
-  const headers = { 'Content-Type': 'application/json' };
-  
-  if (window.wpApiSettings) {
-      headers['X-WP-Nonce'] = WP_AUTH; // Embedded mode
-  } else {
-      headers['Authorization'] = WP_AUTH; // Standalone mode
-  }
-
-  const options = { method, headers };
-  if (payload) options.body = JSON.stringify(payload);
-
-  const res = await fetch(WP_URL + endpoint, options);
-  const data = await res.json();
-  
-  if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
-  return data;
+        <?php
+    }
 } 
 
-const MOCK=[
-  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"half",status:"active"},
-  {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"half",status:"suspended"},
-  {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"half",status:"active"},
-];
+endif;
 
-// ── Login ──────────────────────────────────────────────────
-function loginStep(type){
-  document.getElementById('login-step1').style.display='none';
-  document.getElementById('login-step2').style.display='block';
-  ['admin','mod','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
-  document.getElementById('login-form-'+type).style.display='block';
-  setTimeout(()=>{ const el=document.getElementById(type==='admin'?'admin-pw':type==='mod'?'mod-pw':'member-search'); if(el)el.focus(); },50);
-}
-function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
-function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
-function doAdminLogin(){
-  if(document.getElementById('admin-pw').value===PASSWORDS.admin){launchApp('admin');}
-  else showLoginErr('Incorrect password.');
-}
-function doModLogin(){
-  if(document.getElementById('mod-pw').value===PASSWORDS.mod){launchApp('mod');}
-  else showLoginErr('Incorrect password.');
-}
-function doMemberLogin(){
-  const q=document.getElementById('member-search').value.trim();
-  if(!q){showLoginErr('Please enter your name or Zwift ID.');return;}
-  const data=riders.length?riders:MOCK;
-  const matches=data.filter(r=>
-    r.name.toLowerCase().includes(q.toLowerCase())||
-    r.id.toString()===q
-  );
-  if(matches.length===1){
-    sessionStorage.setItem('memberRider',JSON.stringify(matches[0]));
-    memberRider=matches[0];
-    launchApp('member');
-  } else if(matches.length>1){
-    document.getElementById('member-results').innerHTML=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Multiple matches — click to select:</div>`+
-    matches.slice(0,6).map(r=>`<button onclick="selectMember(${r.id})" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;color:white;font-size:13px">${toFlag(r.cc)} ${r.name} · ${catB(r.cat)} · vELO ${r.velo}</button>`).join('');
-  } else {
-    showLoginErr('Rider not found. Try a different name or your Zwift ID number. Live data may still be loading.');
-  }
-}
-function selectMember(id){
-  const data=riders.length?riders:MOCK;
-  const r=data.find(x=>x.id===id);
-  if(r){sessionStorage.setItem('memberRider',JSON.stringify(r));memberRider=r;launchApp('member');}
-}
-function launchApp(r){
-  role=r; sessionStorage.setItem('role',r);
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').style.display='flex';
-  setupRole();
-  renderAll();
-  loadLive();
-}
-function doLogout(){sessionStorage.clear();location.reload();}
-
-// ── Role Setup ─────────────────────────────────────────────
-function setupRole(){
-  const badges={admin:{text:'Administrator',bg:'rgba(239,68,68,0.15)',color:'#f87171'},mod:{text:'Moderator',bg:'rgba(251,191,36,0.12)',color:'#FBBF24'},member:{text:'Member',bg:'rgba(0,212,255,0.1)',color:'#00D4FF'}};
-  const b=badges[role];
-  const rb=document.getElementById('role-badge');
-  rb.textContent=b.text; rb.style.background=b.bg; rb.style.color=b.color;
-  if(role==='admin'){document.getElementById('nav-admin-btn').style.display='flex';}
-  if(role==='member'){
-    document.getElementById('nav-profile').style.display='flex';
-    // Members can see members list but only their own detail; hide some admin controls
-    document.getElementById('new-ride-btn').style.display='none';
-  }
-  if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
-}
-
-// ── Navigation ─────────────────────────────────────────────
-function showTab(id,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+id).classList.add('active');
-  btn.classList.add('active');
-  if(id==='dashboard')loadResults();
-  if(id==='events')renderEvents();
-  if(id==='profile')renderProfile();
-  if(id==='rides')loadZwiftEvents();
-  if(id==='members')renderMembers(); 
-}
-
-// ── Live Data ──────────────────────────────────────────────
-async function loadLive() {
-  setZRA('#FBBF24', 'Loading Database...');
-  try {
-    // 1. Pull the Source of Truth from WordPress DB
-    const dbData = await api('/members', 'GET'); 
-    
-    // 2. Map the DB data to a dictionary for quick lookups
-    const dbLookup = {};
-    dbData.forEach(m => dbLookup[m.zwift_id] = m);
-
-    // 3. Fetch live ZRA Data
-    setZRA('#FBBF24', 'Connecting to ZRA...');
-    const r = await fetch('/api/proxy?endpoint=team');
-    if (r.ok) {
-      const d = await r.json();
-      riders = d.riders.map(r => {
-        // Merge DB data with Live data
-        const dbRecord = dbLookup[r.riderId] || {};
-        
-        return {
-          id: r.riderId, 
-          name: dbRecord.name || r.name, 
-          cc: ccClean(r.country), 
-          cat: r.zpCategory || 'D',
-          ftp: Math.round(r.zpFTP || 0),
-          wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
-          velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
-          zraCat: r.race?.current?.mixed?.category || '',
-          ph: phClean(r.phenotype?.value),
-          active: dbRecord.status === 'active', // Pulled from DB
-          tier: dbRecord.tier || 'half',        // Pulled from DB
-          status: dbRecord.status || 'pending', // Pulled from DB
-          // Offboarding flags pulled from DB
-          ob_discord: dbRecord.offboard_discord === '1',
-          ob_fb: dbRecord.offboard_fb === '1',
-          ob_zp: dbRecord.offboard_zp === '1',
-          raw: r,
-        };
-      });
-      setZRA('#10B981', `Synced DB + Live · ${riders.length} riders ✓`);
-      renderAll();
-    }
-  } catch (e) { 
-    setZRA('#EF4444', e.message); 
-  }
-}
-
-// ── Action Functions (Tier Toggle & Off-boarding) ──────────
-function changeTier(id, tier) {
-  localMemberState[id] = localMemberState[id] || {};
-  localMemberState[id].tier = tier;
-  save('cg_member_state', localMemberState);
-  
-  // Update in-memory arrays so UI refects instantly without full refresh
-  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
-  if(r) r.tier = tier;
-  
-  renderMembers();
-}
-
-function updateStatus(id, action, days) {
-  let msg = action === 'left' ? 'Permanently offboard this rider?' : (action === 'suspended' ? `Suspend rider for ${days} days?` : 'Unsuspend rider?');
-  if(!confirm(msg)) return;
-
-  localMemberState[id] = localMemberState[id] || {};
-  localMemberState[id].status = action;
-  save('cg_member_state', localMemberState);
-  
-  // Update in-memory array
-  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
-  if(r) {
-      r.status = action;
-      r.active = (action === 'active');
-  }
-  
-  renderMembers();
-}
-// ── Off-boarding Checklist ─────────────────────────────────
-function renderOffboarding() {
-  const el = document.getElementById('offboarding-panel');
-  if (!el) return;
-
-  // Find riders who are marked as 'left'
-  const pendingOffboard = (riders.length ? riders : MOCK).filter(r => r.status === 'left');
-  
-  if (pendingOffboard.length === 0) {
-    el.innerHTML = ''; // Hide panel if no one is pending
-    return;
-  }
-
-  // Filter out those who have ALL 3 boxes checked
-  const incomplete = pendingOffboard.filter(r => {
-    const state = localMemberState[r.id] || {};
-    return !(state.ob_discord && state.ob_fb && state.ob_zp);
-  });
-
-  if (incomplete.length === 0) {
-    el.innerHTML = ''; 
-    return;
-  }
-
-  el.innerHTML = `
-    <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
-      <div style="padding:12px 16px; background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.2); border-radius:12px 12px 0 0; display:flex; align-items:center; gap:8px;">
-        <span style="font-size:16px;">⚠️</span>
-        <span style="font-size:12px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
-      </div>
-      <div style="padding:16px;">
-        <table style="width:100%; text-align:left; font-size:13px;">
-          <thead>
-            <tr style="color:#6b7280; font-size:11px; text-transform:uppercase;">
-              <th style="padding-bottom:8px;">Rider</th>
-              <th style="padding-bottom:8px; text-align:center;">Discord</th>
-              <th style="padding-bottom:8px; text-align:center;">Facebook</th>
-              <th style="padding-bottom:8px; text-align:center;">ZwiftPower</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${incomplete.map(r => {
-              const state = localMemberState[r.id] || {};
-              return `
-              <tr style="border-top:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:10px 0; font-weight:600;">${r.name}</td>
-                <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
-                </td>
-                <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
-                </td>
-                <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
-                </td>
-              </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-async function toggleOffboard(id, platform, isChecked) {
-  try {
-    // We send a POST request to a new endpoint to update the checklist
-    await api(`/members/${id}/offboard-step`, 'POST', { 
-      platform: platform, 
-      state: isChecked ? 1 : 0 
-    });
-    
-    // Update local memory so UI stays snappy
-    const r = riders.find(x => x.id === id);
-    if(r) r[platform] = isChecked;
-    renderOffboarding();
-
-  } catch(e) {
-    alert("Failed to save to database: " + e.message);
-  }
-}
-// ── Sort helpers ───────────────────────────────────────────
-function sortData(data,sort){
-  const col=sort.col, dir=sort.dir;
-  return [...data].sort((a,b)=>{
-    let av=a[col], bv=b[col];
-    if(col==='cat') { av=CAT_RANK[av]||99; bv=CAT_RANK[bv]||99; }
-    if(col==='zraCat') { av=ZRA_RANK[av]||99; bv=ZRA_RANK[bv]||99; }
-    if(typeof av==='string') { av=av.toLowerCase(); bv=bv.toLowerCase(); }
-    if(av<bv) return dir==='asc'?-1:1;
-    if(av>bv) return dir==='asc'?1:-1;
-    return 0;
-  });
-}
-function updateSortArrows(prefix,sort){
-  ['name','cc','cat','zraCat','ftp','wkg','velo','ph','rank'].forEach(c=>{
-    const el=document.getElementById(prefix+'sa-'+c);
-    if(!el) return;
-    if(c===sort.col){ el.textContent=sort.dir==='asc'?'↑':'↓'; el.classList.add('active'); }
-    else { el.textContent=''; el.classList.remove('active'); }
-  });
-}
-function mSortBy(col){
-  if(mSort.col===col) mSort.dir=mSort.dir==='asc'?'desc':'asc';
-  else { mSort.col=col; mSort.dir=['name','ph','cc','zraCat'].includes(col)?'asc':'desc'; }
-  mPage=1; renderMembers();
-}
-function rSortBy(col){
-  if(col==='rank') { rSort={col:'velo',dir:'desc'}; renderRacing(); return; }
-  if(rSort.col===col) rSort.dir=rSort.dir==='asc'?'desc':'asc';
-  else { rSort.col=col; rSort.dir=['name','ph'].includes(col)?'asc':'desc'; }
-  renderRacing();
-}
-
-// ── Render All ─────────────────────────────────────────────
-function renderAll(){
-  const data=riders.length?riders:MOCK;
-  const active=data.filter(m=>m.active);
-  const avg=active.length?Math.round(active.reduce((s,m)=>s+m.velo,0)/active.length):0;
-  document.getElementById('s-riders').textContent=active.length;
-  document.getElementById('s-riders-s').textContent=riders.length?`${riders.length} in roster`:'mock data';
-  document.getElementById('s-velo').textContent=avg||'—';
-  document.getElementById('s-velo-s').textContent=riders.length?'Live':'mock data';
-  document.getElementById('s-ttt').textContent=`${(allSignups.ttt||[]).length}/40`;
-  document.getElementById('s-rides').textContent=rides.length;
-
-  // Top 10
-  const top=[...active].sort((a,b)=>b.velo-a.velo).slice(0,10);
-  document.getElementById('top10').innerHTML=top.map((m,i)=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:7px">
-        <span style="font-size:10px;color:#4b5563;width:16px;text-align:right">${i+1}</span>
-        <span style="font-size:13px">${m.name.split(' ')[0]}</span>
-        ${catB(m.cat)}
-        ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
-      </div>
-      <span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">${m.velo}</span>
-    </div>`).join('');
-
-  // Cat dist
-  const cats={};active.forEach(m=>{cats[m.cat]=(cats[m.cat]||0)+1;});
-  const catArr=["A+","A","B","C","D"].filter(k=>cats[k]).map(k=>({cat:k,n:cats[k]}));
-  const maxN=Math.max(...catArr.map(x=>x.n),1);
-  document.getElementById('catdist').innerHTML=`<div style="display:flex;gap:10px;align-items:flex-end;height:90px">${
-    catArr.map(e=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
-      <span style="font-size:11px;color:#9ca3af">${e.n}</span>
-      <div style="width:100
+define( 'CG_PORTAL_FILE', __FILE__ );
+CG_Portal::init();
