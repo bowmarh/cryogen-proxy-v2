@@ -284,7 +284,7 @@ table{width:100%;border-collapse:collapse}
       <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
-        <button onclick="if(confirm('Clear ALL event sign-ups?')){allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};save('cg_signups',allSignups);renderEvents();document.getElementById('adminModal').style.display='none'}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
+        <button onclick="if(confirm('Clear ALL event sign-ups?')){sharedWrite('/api/signups/clear').then(ok=>{if(ok)document.getElementById('adminModal').style.display='none'})}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
       </div>
     </div>
     <div class="modal-foot"><button class="btn-cyan" onclick="document.getElementById('adminModal').style.display='none'">Close</button></div>
@@ -342,14 +342,15 @@ const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}
 let role=sessionStorage.getItem('role');
 let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
-let allSignups=load('cg_signups')||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
-let lockedSeries=load('cg_locked')||{};
+let allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
+let lockedSeries={};
 let localMemberState = load('cg_member_state') || {}; 
 let affiliationLog = JSON.parse(localStorage.getItem('cg_aff') || '{}');
 localStorage.removeItem('cg_ri');
 let zwiftEventRides = [];
 let rides=[];
-let rsvps=load('cg_r')||{};
+let rsvps={};
+let sharedError='';
 let mPage=1,mActive=false,rsvpId=null;
 let activeSeries='ttt';
 let mSort={col:'velo',dir:'desc'};
@@ -388,6 +389,42 @@ const MOCK=[
   {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"half",status:"active"},
 ];
 
+// ── Escaping (shared data is shown to other people) ─────────
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||'')?esc(u):'';
+
+// ── Shared data (sign-ups, locks, rides, RSVPs) ─────────────
+function applyShared(d){
+  allSignups=d.signups||{ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
+  lockedSeries=d.locks||{};
+  rides=d.rides||[];
+  rsvps=d.rsvps||{};
+  sharedError='';
+}
+async function loadShared(){
+  try{
+    const res=await fetch('/api/state');
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    applyShared(d);
+  }catch(e){ sharedError='Shared sign-ups and RSVPs could not be loaded: '+e.message; }
+  renderAll();
+}
+async function sharedWrite(path,payload){
+  const headers={'Content-Type':'application/json'};
+  const token=sessionStorage.getItem('token');
+  if(token) headers['Authorization']='Bearer '+token;
+  let res,d;
+  try{
+    res=await fetch(path,{method:'POST',headers,body:JSON.stringify(payload||{})});
+    d=await res.json();
+  }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  applyShared(d);
+  renderAll();
+  return true;
+}
+
 // ── Login ──────────────────────────────────────────────────
 function loginStep(type){
   document.getElementById('login-step1').style.display='none';
@@ -404,7 +441,7 @@ async function doRoleLogin(role, inputId){
   try{
     res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password})});
   }catch(e){showLoginErr('Could not reach the login server.');return;}
-  if(res.ok){launchApp(role);}
+  if(res.ok){const d=await res.json();sessionStorage.setItem('token',d.token);launchApp(role);}
   else if(res.status===401){showLoginErr('Incorrect password.');}
   else{showLoginErr('Login is unavailable right now. Please try again later.');}
 }
@@ -438,6 +475,7 @@ function launchApp(r){
   setupRole();
   renderAll();
   loadLive();
+  loadShared();
 }
 function doLogout(){sessionStorage.clear();location.reload();}
 
@@ -836,7 +874,8 @@ function renderEvents(){
   const locked=lockedSeries[activeSeries];
   const pct=Math.min(sups.length/s.max*100,100);
 
-  let html=`
+  let html=sharedError?`<div class="card" style="padding:12px 16px;margin-bottom:16px;border-color:rgba(251,191,36,0.3);color:#FBBF24;font-size:13px">⚠️ ${esc(sharedError)}</div>`:'';
+  html+=`
     <div style="background:rgba(0,80,120,0.2);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:20px;margin-bottom:20px">
       <div style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Active Event</div>
       <div style="font-size:18px;font-weight:900;margin-bottom:4px">${s.emoji} ${s.name}</div>
@@ -874,12 +913,12 @@ function renderEvents(){
         ${r.map(s=>`<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04)">
           <div style="display:flex;align-items:center;gap:10px">
             <span style="color:#10B981">✓</span>
-            <span>${s.name}</span>
-            ${s.zwid?`<span style="font-size:10px;color:#4b5563;font-family:monospace">ID:${s.zwid}</span>`:''}
+            <span>${esc(s.name)}</span>
+            ${s.zwid?`<span style="font-size:10px;color:#4b5563;font-family:monospace">ID:${esc(s.zwid)}</span>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:12px">
             <span style="font-size:11px;color:#4b5563">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
-            ${(role==='admin'||role==='mod')?`<button onclick="rmSignup('${activeSeries}','${s.ts}')" style="background:none;border:none;color:#4b5563;font-size:16px;padding:0">×</button>`:''}
+            ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#4b5563;font-size:16px;padding:0">×</button>`:''}
           </div>
         </div>`).join('')}
       </div>`).join('');
@@ -910,62 +949,62 @@ function doSignup(){
   const sups=allSignups[activeSeries]||[];
   if(sups.find(x=>x.name.toLowerCase()===name.toLowerCase())){alert('Already signed up!');return;}
   if(sups.length>=s.max){alert('Event is full.');return;}
-  allSignups[activeSeries]=[...sups,{name,cat,zwid,ts:new Date().toISOString()}];
-  save('cg_signups',allSignups);
-  document.getElementById('sup-name').value='';
-  document.getElementById('sup-zwid').value='';
-  document.getElementById('zwid-hint').textContent='';
-  document.getElementById('s-ttt').textContent=`${(allSignups.ttt||[]).length}/40`;
-  renderEvents();
+  sharedWrite('/api/signups',{series:activeSeries,name,cat,zwid}).then(ok=>{
+    if(!ok)return;
+    document.getElementById('sup-name').value='';
+    document.getElementById('sup-zwid').value='';
+    document.getElementById('zwid-hint').textContent='';
+  });
 }
-function rmSignup(series,ts){allSignups[series]=(allSignups[series]||[]).filter(s=>s.ts!==ts);save('cg_signups',allSignups);renderEvents();}
-function toggleSeriesLock(series){lockedSeries[series]=!lockedSeries[series];save('cg_locked',lockedSeries);renderEvents();}
+function rmSignup(series,name){sharedWrite('/api/signups/remove',{series,name});}
+function toggleSeriesLock(series){sharedWrite('/api/locks',{series,locked:!lockedSeries[series]});}
 function exportSeriesCsv(series){
   const sups=allSignups[series]||[];
   const rows=[['Name','Category','Zwift ID','Signed Up'],...sups.map(s=>[s.name,s.cat,s.zwid||'',new Date(s.ts).toLocaleString()])];
+  const csv=v=>{v=String(v);if(/^[=+\-@]/.test(v))v="'"+v;return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(csv).join(',')).join('\n')],{type:'text/csv'}));
   a.download=`cryogen_${series}.csv`; a.click();
 }
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
   const allRides = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
-  document.getElementById('rides-list').innerHTML=allRides.map(ride=>{
-    const att=rsvps[ride.id]||[];const left=ride.max-att.length;const pct=Math.min(att.length/ride.max*100,100);
+  document.getElementById('rides-list').innerHTML=(sharedError?`<div class="card" style="padding:12px 16px;margin-bottom:16px;border-color:rgba(251,191,36,0.3);color:#FBBF24;font-size:13px">⚠️ ${esc(sharedError)}</div>`:'')+allRides.map(ride=>{
+    const att=rsvps[ride.id]||[];const max=parseInt(ride.max)||25;const left=max-att.length;const rid=esc(ride.id);const pct=Math.min(att.length/max*100,100);
     return`<div class="card" style="padding:20px;margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
         <div style="flex:1">
           <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
-            <span style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.06);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);padding:1px 8px;border-radius:99px">${ride.cat}</span>
+            <span style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.06);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);padding:1px 8px;border-radius:99px">${esc(ride.cat)}</span>
             ${left<=0?'<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:1px 8px;border-radius:99px">Full</span>':''}
             ${left>0&&left<=4?'<span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:1px 8px;border-radius:99px">Almost Full</span>':''}
           </div>
-          <div style="font-size:15px;font-weight:700">${ride.title}${ride.source==='sheet'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">SHEET</span>':''}</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:4px">${ride.desc||''}</div>
+          <div style="font-size:15px;font-weight:700">${esc(ride.title)}${ride.source==='sheet'?'<span style="font-size:9px;font-weight:700;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:4px;margin-left:8px">SHEET</span>':''}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px">${esc(ride.desc)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:13px;font-weight:700">${new Date(ride.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>
-          <div style="font-size:11px;color:#6b7280;margin-top:2px">${ride.time}</div>
-          ${ride.link?`<a href="${ride.link}" target="_blank" style="font-size:11px;color:#00D4FF;display:block;margin-top:4px">Zwift Event →</a>`:''}
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(ride.time)}</div>
+          ${safeUrl(ride.link)?`<a href="${safeUrl(ride.link)}" target="_blank" rel="noopener" style="font-size:11px;color:#00D4FF;display:block;margin-top:4px">Zwift Event →</a>`:''}
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:11px;color:#6b7280">
-        <span>📍 ${ride.route}</span><span>📏 ${ride.dist}</span><span>⚡ ${ride.pace}</span><span>👥 ${att.length}/${ride.max}</span>
+        <span>📍 ${esc(ride.route)}</span><span>📏 ${esc(ride.dist)}</span><span>⚡ ${esc(ride.pace)}</span><span>👥 ${att.length}/${max}</span>
       </div>
       <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
         <div style="width:${pct}%;height:100%;background:${pct>85?'#EF4444':'#00D4FF'};border-radius:2px"></div>
       </div>
-      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button onclick="cancelRsvp(${ride.id},'${r.name}')" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${r.name}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#4b5563;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
-      ${rsvpId===ride.id?
+      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#4b5563;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
+      ${String(rsvpId)===String(ride.id)?
         `<div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="rsvp-${ride.id}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(0,212,255,0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(${ride.id})"/>
-          <button onclick="confirmRsvp(${ride.id})" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
+          <input id="rsvp-${rid}" data-ride="${rid}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(0,212,255,0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(this.dataset.ride)"/>
+          <button data-ride="${rid}" onclick="confirmRsvp(this.dataset.ride)" style="padding:9px 18px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Confirm</button>
           <button onclick="rsvpId=null;renderRides()" style="padding:9px 12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:8px">×</button>
         </div>`:
-        ride.source==='sheet'&&ride.link
-          ? `<a href="${ride.link}" target="_blank" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
-          : `<button onclick="rsvpId=${ride.id};renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
+        ride.source==='sheet'&&safeUrl(ride.link)
+          ? `<a href="${safeUrl(ride.link)}" target="_blank" rel="noopener" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
+          : `<button data-ride="${rid}" onclick="rsvpId=this.dataset.ride;renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
     </div>`;
   }).join('');
 }
@@ -974,15 +1013,14 @@ function confirmRsvp(id){
   if(!name)return;
   const cur=rsvps[id]||[];
   if(cur.find(r=>r.name.toLowerCase()===name.toLowerCase())){alert("Already RSVP'd!");return;}
-  rsvps[id]=[...cur,{name,ts:new Date().toISOString()}];
-  save('cg_r',rsvps);rsvpId=null;renderRides();
+  sharedWrite('/api/rsvps',{rideId:id,name}).then(ok=>{if(ok){rsvpId=null;renderRides();}});
 }
-function cancelRsvp(id,name){rsvps[id]=(rsvps[id]||[]).filter(r=>r.name!==name);save('cg_r',rsvps);renderRides();}
+function cancelRsvp(id,name){if(confirm(`Cancel ${name}'s RSVP?`))sharedWrite('/api/rsvps/cancel',{rideId:id,name});}
 function createRide(){
   const title=(document.getElementById('nr-title')||{value:''}).value.trim();
   const date=(document.getElementById('nr-date')||{value:''}).value;
   if(!title||!date){alert('Title and date required.');return;}
-  const ride={id:Date.now(),title,date,
+  const ride={title,date,
     time:(document.getElementById('nr-time')||{value:''}).value,
     route:(document.getElementById('nr-route')||{value:''}).value,
     dist:(document.getElementById('nr-dist')||{value:''}).value,
@@ -992,9 +1030,7 @@ function createRide(){
     max:parseInt((document.getElementById('nr-max')||{value:'25'}).value)||25,
     cat:(document.getElementById('nr-cat')||{value:'All'}).value,
   };
-  rides.push(ride);save('cg_ri',rides);
-  document.getElementById('newRideModal').style.display='none';
-  renderRides();
+  sharedWrite('/api/rides',ride).then(ok=>{if(ok)document.getElementById('newRideModal').style.display='none';});
 }
 
 // ── My Profile ─────────────────────────────────────────────
@@ -1134,8 +1170,10 @@ async function loadZwiftEvents(){
       return;
     }
     if(d.rides && d.rides.length > 0){
+      // Stable ID from date + title, so RSVPs stay attached if sheet rows are reordered.
+      const rideKey=row=>{const k=(row['Date']||row['date']||'')+'|'+(row['Title']||row['title']||'');let h=5381;for(const ch of k)h=((h*33)^ch.codePointAt(0))>>>0;return 'gs_'+h.toString(36);};
       zwiftEventRides = d.rides.map((row,i)=>({
-        id: 'gs_'+i,
+        id: rideKey(row),
         title:  row['Title']       || row['title']       || 'Club Ride',
         date:   row['Date']        || row['date']        || '',
         time:   row['Time']        || row['time']        || '',
@@ -1197,8 +1235,8 @@ function renderSheetPanel(d){
       <span style="font-size:10px;color:#10B981">● Live</span>
     </div>
     <div style="overflow-x:auto"><table>
-      <thead><tr>${d.headers.slice(0,6).map(h=>`<th>${h}</th>`).join('')}</tr></thead>
-      <tbody>${shown.map(row=>`<tr>${d.headers.slice(0,6).map(h=>`<td style="font-size:12px;color:#9ca3af">${row[h]||'-'}</td>`).join('')}</tr>`).join('')}</tbody>
+      <thead><tr>${d.headers.slice(0,6).map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${shown.map(row=>`<tr>${d.headers.slice(0,6).map(h=>`<td style="font-size:12px;color:#9ca3af">${esc(row[h]||'-')}</td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>
     ${d.rows.length>20?`<div style="padding:10px 14px;font-size:11px;color:#4b5563">Showing 20 of ${d.rows.length} rows</div>`:''}
   </div>`;
@@ -1212,6 +1250,7 @@ if(role){
   setupRole();
   renderAll();
   loadLive();
+  loadShared();
 }
 </script>
 </body>
