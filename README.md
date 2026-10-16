@@ -7,7 +7,7 @@ Members dashboard for the CRYO-GEN Zwift cycling club (Zwift club 2740). It show
 | Path | What it is |
 |---|---|
 | `public/index.html` | The dashboard: a single-page app (HTML, CSS and JS in one file). Vercel serves it as a static file. |
-| `api/server.js` | Small Node.js server: a CORS proxy at `/api/proxy`, plus serving of `api/api/proxy.html`. |
+| `api/server.js` | Small Node.js server: admin/mod login at `/api/login`, a CORS proxy at `/api/proxy`, and serving of `api/api/proxy.html`. |
 | `api/api/proxy.html` | A newer copy of the dashboard (adds a guard on member login while the roster loads). |
 | `vercel.json` | Vercel config pointing at `api/server.js`. |
 | `schema.sql` | Empty placeholder. |
@@ -18,7 +18,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together and [PROJ
 
 ```bash
 cd api
-npm start          # http://localhost:3000
+ADMIN_PASSWORD=... MOD_PASSWORD=... npm start   # http://localhost:3000
 ```
 
 No dependencies: it uses only Node's built-in modules.
