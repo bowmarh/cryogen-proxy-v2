@@ -13,7 +13,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public'); // local dev only; Verc
 const SHEET_ID = process.env.SHEET_ID || '1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw';
 const SHEET_TABS = {
   rides: process.env.SHEET_TAB_RIDES || 'Social Rides',
-  'ttt-sheet': process.env.SHEET_TAB_TTT || 'Published TEAM LIST',
+  'ttt-sheet': process.env.SHEET_TAB_TTT || 'TEAM LIST',
 };
 
 // ── Shared data ────────────────────────────────────────────
