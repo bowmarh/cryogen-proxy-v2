@@ -13,7 +13,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public'); // local dev only; Verc
 const SHEET_ID = process.env.SHEET_ID || '1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw';
 const SHEET_TABS = {
   rides: process.env.SHEET_TAB_RIDES || 'Social Rides',
-  'ttt-sheet': process.env.SHEET_TAB_TTT || 'TTT',
+  'ttt-sheet': process.env.SHEET_TAB_TTT || 'Published TEAM LIST',
 };
 
 // ── Shared data ────────────────────────────────────────────
@@ -303,13 +303,25 @@ function parseGviz(textBody){
   return { headers, rows };
 }
 
-async function handleSheet(endpoint, res){
-  const tab = SHEET_TABS[endpoint];
+async function fetchTab(tab){
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tab)}`;
   const r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' } });
   const body = await r.text();
   if (!r.ok) throw new HttpError(502, `Google Sheets returned ${r.status} for tab "${tab}".`);
   if (/^\s*</.test(body)) throw new HttpError(502, 'The Google Sheet is not shared publicly ("Anyone with the link can view").');
+  return body;
+}
+
+async function handleSheet(endpoint, res){
+  const tab = SHEET_TABS[endpoint];
+  // Google silently returns the first tab when the named one doesn't exist. Detect that by
+  // comparing with what a tab name that can't exist returns.
+  const [body, fallback] = await Promise.all([fetchTab(tab), fetchTab(`__no_such_tab_${Date.now()}`)]);
+  const columns = b => JSON.stringify(JSON.parse(b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1)).table?.cols || null);
+  const cols = columns(body);
+  if (cols !== 'null' && cols === columns(fallback)){
+    throw new HttpError(404, `The Google Sheet has no tab named "${tab}".`);
+  }
   const { headers, rows } = parseGviz(body);
   // Google silently falls back to the first tab when the named tab doesn't exist,
   // so make sure this really looks like a rides tab before showing it as rides.
