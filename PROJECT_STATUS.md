@@ -4,16 +4,19 @@
 - Admin and moderator passwords were moved out of the page source into server-side environment variables (#3).
 - The proxy no longer accepts arbitrary `url=` targets (#3).
 - `api/server.js` now exports a handler, so it runs on Vercel (#3).
+- Sign-ups, series locks, created rides and RSVPs are shared through the server instead of each browser's `localStorage`. Staff-only actions need a signed login token.
+- The sheet reader now returns the JSON shape the page expects, using the club sheet ID.
+- The broken duplicate dashboard (`api/api/proxy.html`) was removed.
 
 ## Known issues
 
 ### Security
-- **Roles are only enforced in the browser.** The password check now runs on the server (`/api/login`), but anyone can still switch to the admin view in devtools. Real protection must come from the WordPress API, which handles every write.
+- **Roles are partly enforced in the browser.** Staff-only shared-data actions are checked on the server. The admin view itself, and anything that writes to WordPress, still relies on the WordPress API's own auth.
+- **Anyone can cancel anyone's RSVP** (same as before). Members aren't authenticated.
 - **The non-WordPress fallback sends placeholder Basic auth credentials.** Real credentials must never go in this file.
 - **The old admin and moderator passwords are still in git history.** They must not be reused.
 
 ### Functionality
-- **Shared data is stored per browser.** Sign-ups and RSVPs are saved to `localStorage`, so other members and admins don't see them. They need a shared store, such as the WordPress API.
-- **`ENDPOINT_MAP` still has placeholder Google Sheet IDs** (`YOUR_SHEET`), so `/api/proxy?endpoint=rides` and `ttt-sheet` don't work yet.
-- **There are two copies of the dashboard** (`public/index.html` and `api/api/proxy.html`) and they have drifted apart. Keep one.
+- **Admin tier/status edits are still per browser.** They belong with the member records in WordPress.
+- **Member login only searches the live roster once it has loaded.** Before that it falls back to the small `MOCK` list.
 - **`schema.sql` is empty.**
