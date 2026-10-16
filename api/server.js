@@ -269,6 +269,8 @@ async function handleData(dataRoute, req, res){
 }
 
 // ── Sheet proxy ────────────────────────────────────────────
+const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+
 function gvizCell(cell){
   if (!cell || cell.v == null) return '';
   // Dates arrive as "Date(2026,9,16)" with a zero-based month; return YYYY-MM-DD.
@@ -292,9 +294,12 @@ function parseGviz(textBody){
   // If Google didn't detect a header row, use the first row as headers.
   if (headers.every(h => !h) && rows.length){ headers = rows[0]; rows = rows.slice(1); }
   headers = headers.map((h, i) => h || `Column ${i + 1}`);
+  // This data is public, so never pass on email columns or email-looking values.
+  const keep = headers.map((h, i) => !/e-?mail/i.test(h) && !rows.some(r => EMAIL_RE.test(r[i])));
+  headers = headers.filter((h, i) => keep[i]);
   rows = rows
     .filter(r => r.some(v => v !== ''))
-    .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i]])));
+    .map(r => Object.fromEntries(r.filter((v, i) => keep[i]).map((v, i) => [headers[i], v])));
   return { headers, rows };
 }
 
