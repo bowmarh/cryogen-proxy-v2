@@ -311,6 +311,11 @@ async function handleSheet(endpoint, res){
   if (!r.ok) throw new HttpError(502, `Google Sheets returned ${r.status} for tab "${tab}".`);
   if (/^\s*</.test(body)) throw new HttpError(502, 'The Google Sheet is not shared publicly ("Anyone with the link can view").');
   const { headers, rows } = parseGviz(body);
+  // Google silently falls back to the first tab when the named tab doesn't exist,
+  // so make sure this really looks like a rides tab before showing it as rides.
+  if (endpoint === 'rides' && !headers.some(h => /^(title|date)$/i.test(h))){
+    throw new HttpError(404, `No "${tab}" tab with Title and Date columns was found in the Google Sheet.`);
+  }
   const updated = new Date().toISOString();
   sendJSON(res, 200, endpoint === 'rides' ? { rides: rows, headers, updated } : { headers, rows, updated });
 }
