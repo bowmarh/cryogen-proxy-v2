@@ -316,7 +316,6 @@ table{width:100%;border-collapse:collapse}
 
 <script>
 // ── Constants ──────────────────────────────────────────────
-const PASSWORDS = { admin:'cryo2026', mod:'mod2026' };
 const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
 const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
 const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
@@ -478,14 +477,18 @@ function loginStep(type){
 }
 function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
 function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
-function doAdminLogin(){
-  if(document.getElementById('admin-pw').value===PASSWORDS.admin){launchApp('admin');}
-  else showLoginErr('Incorrect password.');
+async function doRoleLogin(role, inputId){
+  const password=document.getElementById(inputId).value;
+  let res;
+  try{
+    res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password})});
+  }catch(e){showLoginErr('Could not reach the login server.');return;}
+  if(res.ok){launchApp(role);}
+  else if(res.status===401){showLoginErr('Incorrect password.');}
+  else{showLoginErr('Login is unavailable right now. Please try again later.');}
 }
-function doModLogin(){
-  if(document.getElementById('mod-pw').value===PASSWORDS.mod){launchApp('mod');}
-  else showLoginErr('Incorrect password.');
-}
+function doAdminLogin(){doRoleLogin('admin','admin-pw');}
+function doModLogin(){doRoleLogin('mod','mod-pw');}
 function doMemberLogin(){
   const q=document.getElementById('member-search').value.trim();
   if(!q){showLoginErr('Please enter your name or Zwift ID.');return;}

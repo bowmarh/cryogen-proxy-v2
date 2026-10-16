@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'api'); // the repository has the HTML under api/api/
@@ -50,6 +51,43 @@ function proxyFetch(targetUrl, res){
   }
 }
 
+// Admin/moderator passwords come from environment variables, never from the page source.
+const ROLE_PASSWORD_ENV = { admin: 'ADMIN_PASSWORD', mod: 'MOD_PASSWORD' };
+
+function passwordMatches(given, expected){
+  // Compare hashes so the comparison is constant-time regardless of input length.
+  const a = crypto.createHash('sha256').update(String(given)).digest();
+  const b = crypto.createHash('sha256').update(String(expected)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+function handleLogin(req, res){
+  let body = '';
+  req.on('data', c => {
+    body += c;
+    if (body.length > 10000) req.destroy();
+  });
+  req.on('end', () => {
+    let payload;
+    try { payload = JSON.parse(body || '{}'); } catch (e) { payload = {}; }
+    const envName = ROLE_PASSWORD_ENV[payload.role];
+    if (!envName){
+      sendJSON(res, 400, { error: 'unknown role' });
+      return;
+    }
+    const expected = process.env[envName];
+    if (!expected){
+      sendJSON(res, 503, { error: 'login not configured', missing: envName });
+      return;
+    }
+    if (typeof payload.password === 'string' && passwordMatches(payload.password, expected)){
+      sendJSON(res, 200, { role: payload.role });
+    } else {
+      sendJSON(res, 401, { error: 'incorrect password' });
+    }
+  });
+}
+
 function serveStatic(req, res, reqPath){
   // Resolve file under PUBLIC_DIR
   const safeSuffix = path.normalize(reqPath).replace(/^(\.\.[/\\])+/, '');
@@ -75,7 +113,7 @@ function serveStatic(req, res, reqPath){
   sendJSON(res, 404, { error: 'Not found' });
 }
 
-const server = http.createServer((req, res) => {
+function handler(req, res){
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname || '/';
 
@@ -90,16 +128,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (pathname === '/api/login' && req.method === 'POST'){
+    handleLogin(req, res);
+    return;
+  }
+
   if (pathname === '/api/proxy'){
+    // Only named endpoints are allowed, so the proxy can't be used to fetch arbitrary URLs.
     const endpoint = parsed.query.endpoint;
-    const rawUrl = parsed.query.url;
-    if (!endpoint && !rawUrl){
-      sendJSON(res, 400, { error: 'missing endpoint or url query parameter' });
-      return;
-    }
-    const target = rawUrl || ENDPOINT_MAP[endpoint];
+    const target = Object.prototype.hasOwnProperty.call(ENDPOINT_MAP, endpoint) ? ENDPOINT_MAP[endpoint] : null;
     if (!target){
-      sendJSON(res, 400, { error: 'unknown endpoint and no url provided', endpoint });
+      sendJSON(res, 400, { error: 'unknown endpoint', endpoint: endpoint || null });
       return;
     }
     proxyFetch(target, res);
@@ -111,6 +150,11 @@ const server = http.createServer((req, res) => {
   let reqPath = pathname;
   if (reqPath === '/') reqPath = '/proxy.html';
   serveStatic(req, res, reqPath);
-});
+}
 
-server.listen(PORT, () => console.log(`cryogen-proxy server listening on http://localhost:${PORT}`));
+// Vercel calls the exported handler; `npm start` runs a local server.
+module.exports = handler;
+
+if (require.main === module){
+  http.createServer(handler).listen(PORT, () => console.log(`cryogen-proxy server listening on http://localhost:${PORT}`));
+}
