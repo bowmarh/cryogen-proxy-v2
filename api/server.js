@@ -13,7 +13,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public'); // local dev only; Verc
 const SHEET_ID = process.env.SHEET_ID || '1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw';
 const SHEET_TABS = {
   rides: process.env.SHEET_TAB_RIDES || 'Social Rides',
-  'ttt-sheet': process.env.SHEET_TAB_TTT || 'TTT',
+  'ttt-sheet': process.env.SHEET_TAB_TTT || 'TEAM LIST',
 };
 
 // ── Shared data ────────────────────────────────────────────
@@ -290,9 +290,23 @@ function parseGviz(textBody){
   }
   const cols = data.table.cols;
   let rows = data.table.rows.map(r => cols.map((c, i) => gvizCell((r.c || [])[i])));
-  let headers = cols.map(c => (c.label || '').trim());
-  // If Google didn't detect a header row, use the first row as headers.
-  if (headers.every(h => !h) && rows.length){ headers = rows[0]; rows = rows.slice(1); }
+  let headers = cols.map(c => (c.label || '').trim().replace(/^#(REF!|N\/A|VALUE!|NAME\?|ERROR!)$/, ''));
+  // If Google didn't detect a usable header row (e.g. a laid-out sheet with titles a few rows
+  // down and other blocks further right), take the leftmost block of filled columns, use its
+  // first row with at least 3 filled cells as the headers, and keep only those columns.
+  if (headers.filter(Boolean).length < 2 && rows.length){
+    const used = cols.map((c, i) => rows.some(r => r[i] !== ''));
+    const start = used.indexOf(true);
+    let end = start;
+    while (end + 1 < used.length && used[end + 1]) end++;
+    const inBlock = i => i >= start && i <= end;
+    const at = start < 0 ? -1 : rows.findIndex(r => r.filter((v, i) => inBlock(i) && v !== '').length >= 3);
+    if (at >= 0){
+      const keepCols = rows[at].map((v, i) => (inBlock(i) && v !== '' ? i : -1)).filter(i => i >= 0);
+      headers = keepCols.map(i => rows[at][i]);
+      rows = rows.slice(at + 1).map(r => keepCols.map(i => r[i]));
+    }
+  }
   headers = headers.map((h, i) => h || `Column ${i + 1}`);
   // This data is public, so never pass on email columns or email-looking values.
   const keep = headers.map((h, i) => !/e-?mail/i.test(h) && !rows.some(r => EMAIL_RE.test(r[i])));
@@ -303,13 +317,25 @@ function parseGviz(textBody){
   return { headers, rows };
 }
 
-async function handleSheet(endpoint, res){
-  const tab = SHEET_TABS[endpoint];
+async function fetchTab(tab){
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tab)}`;
   const r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' } });
   const body = await r.text();
   if (!r.ok) throw new HttpError(502, `Google Sheets returned ${r.status} for tab "${tab}".`);
   if (/^\s*</.test(body)) throw new HttpError(502, 'The Google Sheet is not shared publicly ("Anyone with the link can view").');
+  return body;
+}
+
+async function handleSheet(endpoint, res){
+  const tab = SHEET_TABS[endpoint];
+  // Google silently returns the first tab when the named one doesn't exist. Detect that by
+  // comparing with what a tab name that can't exist returns.
+  const [body, fallback] = await Promise.all([fetchTab(tab), fetchTab(`__no_such_tab_${Date.now()}`)]);
+  const columns = b => JSON.stringify(JSON.parse(b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1)).table?.cols || null);
+  const cols = columns(body);
+  if (cols !== 'null' && cols === columns(fallback)){
+    throw new HttpError(404, `The Google Sheet has no tab named "${tab}".`);
+  }
   const { headers, rows } = parseGviz(body);
   // Google silently falls back to the first tab when the named tab doesn't exist,
   // so make sure this really looks like a rides tab before showing it as rides.
