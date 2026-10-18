@@ -272,12 +272,13 @@ const TTT_KEYS = {
   archive: 'cg:ttt:archive',   // field "<week id>" -> snapshot JSON
 };
 const TTT_STYLES = ['race', 'casual'];
+const TTT_TEAM_MAX = 6; // default riders per team
 // Starting teams, taken from the club's TEAM LIST sheet. Staff can edit them in the dashboard.
 const DEFAULT_TTT_TEAMS = [
   ['Hawks', 'Latte', 'Zone 22'], ['Magpies', 'Latte+', 'Zone 22'], ['Kites', 'Mocha', 'Zone 22'],
   ['Buzzards', 'Frappe', 'Zone 15'], ['Kestrels', 'Frappe', 'Zone 9'], ['Kawaus', 'Latte+', 'Zone 9'],
   ['Snow Geese', 'Latte+', 'Zone 8'], ['Owls', 'Mocha', 'Zone 8'], ['Crows', 'Latte', 'Zone 30'],
-].map(([name, level, zone]) => ({ id: teamId(name), name, level, zone, max: 8 }));
+].map(([name, level, zone]) => ({ id: teamId(name), name, level, zone, max: TTT_TEAM_MAX }));
 
 function teamId(name){
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'team';
@@ -296,7 +297,7 @@ function parseTeams(list){
       id, name,
       level: text(t.level, 'team level', 30, false),
       zone: text(t.zone, 'team zone', 30, false),
-      max: Math.min(Math.max(parseInt(t.max, 10) || 8, 1), 20),
+      max: Math.min(Math.max(parseInt(t.max, 10) || TTT_TEAM_MAX, 1), 20),
     };
   });
 }
