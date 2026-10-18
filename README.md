@@ -1,6 +1,6 @@
 # cryogen-proxy-v2
 
-Members dashboard for the CRYO-GEN Zwift cycling club (Zwift club 2740). It shows the team roster, racing stats, race-series sign-ups and social rides, with separate views for admins, moderators and members.
+Members dashboard for the CRYO-GEN Zwift cycling club (Zwift club 2740), live at **https://club.cryo-gen.team**. It shows the team roster, racing stats, race-series sign-ups, the weekly TTT (sign-up, team builder, published line-ups and history) and social rides, with separate views for admins, moderators and members.
 
 ## What's in the repo
 
