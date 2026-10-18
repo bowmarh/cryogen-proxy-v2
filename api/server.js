@@ -262,6 +262,200 @@ const DATA_ROUTES = {
   },
 };
 
+// ── TTT week ───────────────────────────────────────────────
+// One "current week" plus an archive of past weeks. Riders sign up, staff assign
+// them to teams, then publish the line-ups for everyone to see.
+const TTT_KEYS = {
+  week: 'cg:ttt:week',         // JSON {id, title, date, open, published, teams:[{id,name,level,zone,max}]}
+  signups: 'cg:ttt:signups',   // field "<lowercase name>" -> signup JSON
+  assign: 'cg:ttt:assign',     // field "<lowercase name>" -> JSON array of team ids
+  archive: 'cg:ttt:archive',   // field "<week id>" -> snapshot JSON
+};
+const TTT_STYLES = ['race', 'casual'];
+// Starting teams, taken from the club's TEAM LIST sheet. Staff can edit them in the dashboard.
+const DEFAULT_TTT_TEAMS = [
+  ['Hawks', 'Latte', 'Zone 22'], ['Magpies', 'Latte+', 'Zone 22'], ['Kites', 'Mocha', 'Zone 22'],
+  ['Buzzards', 'Frappe', 'Zone 15'], ['Kestrels', 'Frappe', 'Zone 9'], ['Kawaus', 'Latte+', 'Zone 9'],
+  ['Snow Geese', 'Latte+', 'Zone 8'], ['Owls', 'Mocha', 'Zone 8'], ['Crows', 'Latte', 'Zone 30'],
+].map(([name, level, zone]) => ({ id: teamId(name), name, level, zone, max: 8 }));
+
+function teamId(name){
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'team';
+}
+
+function parseTeams(list){
+  if (!Array.isArray(list) || !list.length) throw new HttpError(400, 'Add at least one team.');
+  if (list.length > 40) throw new HttpError(400, 'Too many teams (max 40).');
+  const seen = new Set();
+  return list.map(t => {
+    const name = text(t && t.name, 'team name', 40);
+    const id = teamId(name);
+    if (seen.has(id)) throw new HttpError(400, `Two teams are called "${name}".`);
+    seen.add(id);
+    return {
+      id, name,
+      level: text(t.level, 'team level', 30, false),
+      zone: text(t.zone, 'team zone', 30, false),
+      max: Math.min(Math.max(parseInt(t.max, 10) || 8, 1), 20),
+    };
+  });
+}
+
+async function loadTtt(){
+  const [week, signups, assign, archiveIds] = await redis([
+    ['GET', TTT_KEYS.week], ['HGETALL', TTT_KEYS.signups], ['HGETALL', TTT_KEYS.assign], ['HKEYS', TTT_KEYS.archive],
+  ]);
+  return {
+    week: week ? JSON.parse(week) : null,
+    signups: pairs(signups).map(([, v]) => JSON.parse(v)).sort((a, b) => a.ts.localeCompare(b.ts)),
+    assign: Object.fromEntries(pairs(assign).map(([k, v]) => [k, JSON.parse(v)])),
+    archive: archiveIds.sort().reverse(),
+  };
+}
+
+// What a given role may see: comments are staff-only, and line-ups stay hidden until published.
+function tttView(data, role){
+  const staff = role === 'admin' || role === 'mod';
+  const showLineups = staff || (data.week && data.week.published);
+  return {
+    week: data.week,
+    signups: data.signups.map(s => (staff ? s : { ...s, comments: undefined })),
+    assign: showLineups ? data.assign : {},
+    archive: data.archive,
+    role: role || null,
+  };
+}
+
+async function requireWeek(){
+  const data = await loadTtt();
+  if (!data.week) throw new HttpError(409, 'No TTT week has been started yet.');
+  return data;
+}
+
+async function weekWith(changes){
+  const data = await requireWeek();
+  const week = { ...data.week, ...changes };
+  await redis([['SET', TTT_KEYS.week, JSON.stringify(week)]]);
+}
+
+const TTT_ROUTES = {
+  'GET /api/ttt': async () => {},
+
+  'GET /api/ttt/archive': async (req) => {
+    const id = String(url.parse(req.url, true).query.id || '');
+    const [snap] = await redis([['HGET', TTT_KEYS.archive, id]]);
+    if (!snap) throw new HttpError(404, 'That week is not in the archive.');
+    const data = JSON.parse(snap);
+    return tttView({ ...data, archive: [] }, roleFromRequest(req));
+  },
+
+  'POST /api/ttt/signup': async (req, body) => {
+    const { week } = await requireWeek();
+    if (!week.open) throw new HttpError(409, 'TTT sign-ups are closed for this week.');
+    const name = text(body.name, 'name', 60);
+    const teamIds = new Set(week.teams.map(t => t.id));
+    const preferred = (Array.isArray(body.preferred) ? body.preferred : []).filter(id => teamIds.has(id)).slice(0, 5);
+    const entry = {
+      name,
+      zwid: /^\d{1,12}$/.test(String(body.zwid || '')) ? String(body.zwid) : '',
+      cat: CATS.includes(body.cat) ? body.cat : '',
+      available: body.available !== false,
+      style: TTT_STYLES.includes(body.style) ? body.style : 'casual',
+      doubleUp: body.doubleUp === true,
+      preferred,
+      comments: text(body.comments, 'comment', 300, false),
+      ts: new Date().toISOString(),
+    };
+    // Signing up again with the same name updates the entry.
+    await redis([['HSET', TTT_KEYS.signups, name.toLowerCase(), JSON.stringify(entry)]]);
+  },
+
+  'POST /api/ttt/withdraw': async (req, body) => {
+    const key = text(body.name, 'name', 60).toLowerCase();
+    await redis([['HDEL', TTT_KEYS.signups, key], ['HDEL', TTT_KEYS.assign, key]]);
+  },
+
+  'POST /api/ttt/assign': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const { week, signups } = await requireWeek();
+    const key = text(body.name, 'name', 60).toLowerCase();
+    if (!signups.some(s => s.name.toLowerCase() === key)) throw new HttpError(404, 'That rider has not signed up.');
+    const ids = [...new Set(Array.isArray(body.teams) ? body.teams : [])].filter(Boolean);
+    const valid = new Set(week.teams.map(t => t.id));
+    if (ids.some(id => !valid.has(id))) throw new HttpError(400, 'Unknown team.');
+    if (ids.length > 2) throw new HttpError(400, 'A rider can be in at most 2 teams.');
+    await redis([ids.length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)] : ['HDEL', TTT_KEYS.assign, key]]);
+  },
+
+  'POST /api/ttt/auto-assign': async (req) => {
+    requireRole(req, ['admin', 'mod']);
+    const { week, signups, assign } = await requireWeek();
+    const count = Object.fromEntries(week.teams.map(t => [t.id, 0]));
+    for (const ids of Object.values(assign)) for (const id of ids) if (id in count) count[id]++;
+    const max = Object.fromEntries(week.teams.map(t => [t.id, t.max]));
+    const commands = [];
+    // Earliest sign-ups get their preference first. Only riders not yet placed are touched.
+    for (const s of [...signups].sort((a, b) => a.ts.localeCompare(b.ts))){
+      const key = s.name.toLowerCase();
+      if (!s.available || assign[key]) continue;
+      const want = s.doubleUp ? 2 : 1;
+      const picked = s.preferred.filter(id => id in count && count[id] < max[id]).slice(0, want);
+      if (!picked.length) continue;
+      picked.forEach(id => count[id]++);
+      commands.push(['HSET', TTT_KEYS.assign, key, JSON.stringify(picked)]);
+    }
+    if (commands.length) await redis(commands);
+  },
+
+  'POST /api/ttt/status': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const changes = {};
+    if (typeof body.open === 'boolean') changes.open = body.open;
+    if (typeof body.published === 'boolean') changes.published = body.published;
+    await weekWith(changes);
+  },
+
+  'POST /api/ttt/teams': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const teams = parseTeams(body.teams);
+    const { assign } = await requireWeek();
+    await weekWith({ teams });
+    // Drop assignments to teams that no longer exist.
+    const valid = new Set(teams.map(t => t.id));
+    const commands = [];
+    for (const [key, ids] of Object.entries(assign)){
+      const kept = ids.filter(id => valid.has(id));
+      if (kept.length !== ids.length) commands.push(kept.length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(kept)] : ['HDEL', TTT_KEYS.assign, key]);
+    }
+    if (commands.length) await redis(commands);
+  },
+
+  'POST /api/ttt/new-week': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const date = text(body.date, 'date', 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'The date must be YYYY-MM-DD.');
+    const title = text(body.title, 'title', 80, false) || `TTT ${date}`;
+    const current = await loadTtt();
+    if (current.week && current.week.id === date) throw new HttpError(409, 'A week with that date is already running.');
+    const commands = [];
+    if (current.week){
+      // Archive the finished week (with its line-ups) before starting the new one.
+      const snapshot = { week: { ...current.week, published: true, open: false }, signups: current.signups, assign: current.assign };
+      commands.push(['HSET', TTT_KEYS.archive, current.week.id, JSON.stringify(snapshot)]);
+    }
+    const teams = current.week ? current.week.teams : DEFAULT_TTT_TEAMS;
+    const week = { id: date, title, date, open: true, published: false, teams };
+    commands.push(['SET', TTT_KEYS.week, JSON.stringify(week)], ['DEL', TTT_KEYS.signups], ['DEL', TTT_KEYS.assign]);
+    await redis(commands);
+  },
+};
+
+async function handleTtt(tttRoute, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await tttRoute(req, body);
+  sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
+}
+
 async function handleData(dataRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await dataRoute(req, body);
@@ -376,6 +570,9 @@ async function route(req, res){
 
   const dataRoute = DATA_ROUTES[`${req.method} ${pathname}`];
   if (dataRoute) return handleData(dataRoute, req, res);
+
+  const tttRoute = TTT_ROUTES[`${req.method} ${pathname}`];
+  if (tttRoute) return handleTtt(tttRoute, req, res);
 
   if (pathname === '/api/proxy'){
     // Only named sheet tabs are allowed, so the proxy can't be used to fetch arbitrary URLs.

@@ -148,6 +148,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
       <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
       <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
+      <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
@@ -211,6 +212,12 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
     <div id="sheet-panel"></div>
+  </div>
+
+  <div id="page-ttt" class="page">
+    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">TTT Week</h2>
+      <p style="font-size:13px;color:#6b7280">Sign up for this week's Team Time Trial · see your team</p></div>
+    <div id="ttt-root"><div style="color:#6b7280;font-size:13px">Loading…</div></div>
   </div>
 
   <div id="page-rides" class="page">
@@ -503,6 +510,7 @@ function showTab(id,btn){
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
   if(id==='rides')loadZwiftEvents();
+  if(id==='ttt')loadTtt();
   if(id==='members')renderMembers(); 
 }
 
@@ -965,6 +973,176 @@ function exportSeriesCsv(series){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(csv).join(',')).join('\n')],{type:'text/csv'}));
   a.download=`cryogen_${series}.csv`; a.click();
+}
+
+// ── TTT Week ───────────────────────────────────────────────
+let tttData=null, tttArchiveView=null, tttEditingTeams=false;
+const TTT_STYLE_LABEL={race:'Competitive (captain decides)',casual:'Not bothered / social'};
+const tttStaff=()=>role==='admin'||role==='mod';
+const tttKey=n=>String(n||'').toLowerCase();
+function tttRider(s){
+  const data=riders.length?riders:MOCK;
+  return data.find(r=>s.zwid&&String(r.id)===String(s.zwid))||data.find(r=>r.name.toLowerCase()===tttKey(s.name))||null;
+}
+function tttHeaders(){
+  const h={'Content-Type':'application/json'};
+  const t=sessionStorage.getItem('token'); if(t)h['Authorization']='Bearer '+t;
+  return h;
+}
+async function loadTtt(){
+  tttArchiveView=null;
+  const el=document.getElementById('ttt-root');
+  try{
+    const res=await fetch('/api/ttt',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok)throw new Error(d.error||('HTTP '+res.status));
+    tttData=d;
+  }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;color:#FBBF24;font-size:13px">⚠️ TTT data could not be loaded: ${esc(e.message)}</div>`; return; }
+  renderTtt();
+}
+async function tttWrite(path,payload){
+  let res,d;
+  try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(payload||{})}); d=await res.json(); }
+  catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  tttData=d; tttArchiveView=null; renderTtt(); return true;
+}
+async function tttShowArchive(id){
+  if(!id){ tttArchiveView=null; renderTtt(); return; }
+  try{
+    const res=await fetch('/api/ttt/archive?id='+encodeURIComponent(id),{headers:tttHeaders()});
+    const d=await res.json(); if(!res.ok)throw new Error(d.error);
+    tttArchiveView=d; renderTtt();
+  }catch(e){ alert('Could not load that week: '+e.message); }
+}
+function tttLineups(d,opts){
+  const teams=d.week.teams;
+  const byTeam=Object.fromEntries(teams.map(t=>[t.id,[]]));
+  for(const s of d.signups){ for(const id of (d.assign[tttKey(s.name)]||[])) if(byTeam[id])byTeam[id].push(s); }
+  const mine=memberRider?tttKey(memberRider.name):'';
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">${teams.map(t=>{
+    const list=byTeam[t.id]; const velos=list.map(s=>(tttRider(s)||{}).velo).filter(Boolean);
+    const avg=velos.length?Math.round(velos.reduce((a,b)=>a+b,0)/velos.length):0;
+    const full=list.length>=t.max;
+    return `<div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px"><span style="font-weight:800">${esc(t.name)}</span><span style="font-size:11px;color:${full?'#f87171':'#6b7280'}">${list.length}/${t.max}</span></div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:8px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
+      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:#00D4FF;font-weight:700':''}"><span>${cat?catB(esc(cat))+' ':''}${esc(s.name)}</span><span style="font-size:11px;color:#6b7280">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#4b5563">No riders yet</div>`}
+      ${opts&&opts.staff?'':''}
+    </div>`;}).join('')}</div>`;
+}
+function tttSignupForm(d){
+  const week=d.week; const me=memberRider||{};
+  const existing=d.signups.find(s=>tttKey(s.name)===tttKey(me.name));
+  const pref=new Set(existing?existing.preferred:[]);
+  if(!week.open) return `<div class="card" style="padding:14px 16px;margin-bottom:20px;color:#f87171;font-size:13px">🔒 Sign-ups are closed for this week.</div>`;
+  return `<div class="card" style="padding:16px;margin-bottom:20px">
+    <label class="lbl">${existing?'Update your sign-up':'Sign up for this week'}</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input id="ttt-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:180px" value="${esc(me.name||'')}"/>
+      <input id="ttt-zwid" class="inp" placeholder="Zwift ID" style="width:120px" value="${esc(me.id||'')}"/>
+      <select id="ttt-cat" class="inp" style="width:70px">${['','A+','A','B','C','D'].map(c=>`<option ${c===(existing?existing.cat:me.cat||'')?'selected':''}>${c}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-bottom:10px">
+      <label><input type="radio" name="ttt-avail" value="yes" ${!existing||existing.available?'checked':''}/> Available this week</label>
+      <label><input type="radio" name="ttt-avail" value="no" ${existing&&!existing.available?'checked':''}/> Not available</label>
+      <label><input type="checkbox" id="ttt-double" ${existing&&existing.doubleUp?'checked':''}/> Happy to double up</label>
+    </div>
+    <label class="lbl">Riding style</label>
+    <select id="ttt-style" class="inp" style="margin-bottom:10px">${Object.entries(TTT_STYLE_LABEL).map(([k,v])=>`<option value="${k}" ${existing&&existing.style===k?'selected':''}>${v}</option>`).join('')}</select>
+    <label class="lbl">Preferred teams</label>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin-bottom:10px">${week.teams.map(t=>`<label><input type="checkbox" class="ttt-pref" value="${esc(t.id)}" ${pref.has(t.id)?'checked':''}/> ${esc(t.name)} <span style="color:#6b7280;font-size:11px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}</span></label>`).join('')}</div>
+    <textarea id="ttt-comments" class="inp" rows="2" placeholder="Comments for the TTT admins (only staff can see these)" style="margin-bottom:10px"></textarea>
+    <div style="display:flex;gap:8px"><button class="btn-cyan" style="width:auto;padding:9px 20px" onclick="tttSubmit()">${existing?'Update':'Sign Up'}</button>
+    ${existing?`<button onclick="tttWithdraw(${esc(JSON.stringify(existing.name))})" style="padding:9px 14px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Withdraw</button>`:''}</div>
+  </div>`;
+}
+function tttSubmit(){
+  const name=document.getElementById('ttt-name').value.trim();
+  if(!name){alert('Please enter your name.');return;}
+  tttWrite('/api/ttt/signup',{
+    name, zwid:document.getElementById('ttt-zwid').value.trim(), cat:document.getElementById('ttt-cat').value,
+    available:document.querySelector('input[name="ttt-avail"]:checked').value==='yes',
+    doubleUp:document.getElementById('ttt-double').checked, style:document.getElementById('ttt-style').value,
+    preferred:[...document.querySelectorAll('.ttt-pref:checked')].map(c=>c.value),
+    comments:document.getElementById('ttt-comments').value,
+  });
+}
+function tttWithdraw(name){ if(confirm(`Withdraw ${name} from this week's TTT?`)) tttWrite('/api/ttt/withdraw',{name}); }
+function tttAssign(name){
+  const sels=[...document.querySelectorAll(`select[data-assign="${CSS.escape(tttKey(name))}"]`)];
+  tttWrite('/api/ttt/assign',{name,teams:sels.map(s=>s.value).filter(Boolean)});
+}
+function tttStaffPanel(d){
+  const w=d.week;
+  const teamOpts=sel=>`<option value="">—</option>`+w.teams.map(t=>`<option value="${esc(t.id)}" ${t.id===sel?'selected':''}>${esc(t.name)}</option>`).join('');
+  const teamName=Object.fromEntries(w.teams.map(t=>[t.id,t.name]));
+  const rows=[...d.signups].sort((a,b)=>(b.available-a.available)||a.name.localeCompare(b.name)).map(s=>{
+    const k=tttKey(s.name); const a=d.assign[k]||[]; const r=tttRider(s); const cat=s.cat||(r&&r.cat)||'';
+    return `<tr style="${s.available?'':'opacity:.45'}">
+      <td style="padding:6px 8px">${cat?catB(esc(cat)):''}</td>
+      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
+      <td style="padding:6px 8px;color:#9ca3af">${r&&r.velo?r.velo:'—'}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#9ca3af">${s.available?'':'Not available · '}${esc(TTT_STYLE_LABEL[s.style]||'')}${s.doubleUp?' · double-up':''}<div>${esc(s.preferred.map(id=>teamName[id]||id).join(', '))}</div></td>
+      <td style="padding:6px 8px;white-space:nowrap">
+        <select class="inp" style="width:auto;padding:4px 6px" data-assign="${esc(k)}" data-name="${esc(s.name)}" onchange="tttAssign(this.dataset.name)">${teamOpts(a[0])}</select>
+        ${s.doubleUp||a[1]?`<select class="inp" style="width:auto;padding:4px 6px;margin-left:4px" data-assign="${esc(k)}" data-name="${esc(s.name)}" onchange="tttAssign(this.dataset.name)">${teamOpts(a[1])}</select>`:''}
+      </td></tr>`;}).join('');
+  const unplaced=d.signups.filter(s=>s.available&&!(d.assign[tttKey(s.name)]||[]).length).length;
+  return `<div class="card" style="padding:16px;margin-bottom:20px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button onclick="tttWrite('/api/ttt/status',{open:${!w.open}})" class="tab">${w.open?'🔒 Close sign-ups':'🔓 Reopen sign-ups'}</button>
+      <button onclick="tttWrite('/api/ttt/auto-assign')" class="tab">✨ Auto-assign unplaced (${unplaced})</button>
+      <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" class="tab" style="${w.published?'':'color:#10B981;border-color:rgba(16,185,129,0.3)'}">${w.published?'🙈 Unpublish line-ups':'📣 Publish line-ups'}</button>
+      <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
+      <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
+    </div>
+    ${tttEditingTeams?tttTeamsEditor(w):''}
+    <label class="lbl">Team builder · ${d.signups.length} signed up · ${unplaced} available and not placed</label>
+    ${d.signups.length?`<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:4px 8px">Cat</th><th style="padding:4px 8px">Rider</th><th style="padding:4px 8px">vELO</th><th style="padding:4px 8px">Preferences</th><th style="padding:4px 8px">Team</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div style="font-size:13px;color:#4b5563">Nobody has signed up yet.</div>`}
+  </div>`;
+}
+function tttTeamsEditor(w){
+  return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:14px">
+    <label class="lbl">Teams — one per line: Name | Level | Zone | Max riders</label>
+    <textarea id="ttt-teams" class="inp" rows="${Math.max(4,w.teams.length+1)}" style="font-family:monospace;font-size:12px">${esc(w.teams.map(t=>[t.name,t.level,t.zone,t.max].join(' | ')).join('\n'))}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="tttSaveTeams()">Save teams</button><span style="font-size:11px;color:#6b7280;align-self:center">Removing a team un-assigns its riders.</span></div>
+  </div>`;
+}
+function tttSaveTeams(){
+  const teams=document.getElementById('ttt-teams').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const [name,level,zone,max]=l.split('|').map(x=>(x||'').trim());return{name,level,zone,max};});
+  tttWrite('/api/ttt/teams',{teams}).then(ok=>{if(ok){tttEditingTeams=false;renderTtt();}});
+}
+function tttNewWeek(){
+  const next=new Date(); next.setDate(next.getDate()+((3-next.getDay()+7)%7||7)); // next Wednesday
+  const date=prompt('Date of the next TTT (YYYY-MM-DD). The current week will be archived with its line-ups.',next.toISOString().slice(0,10));
+  if(!date)return;
+  const title=prompt('Title for the week',`Weekly TTT · ${new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}`);
+  if(title===null)return;
+  tttWrite('/api/ttt/new-week',{date,title});
+}
+function renderTtt(){
+  const el=document.getElementById('ttt-root'); const d=tttArchiveView||tttData;
+  if(!d)return;
+  const history=tttData&&tttData.archive.length?`<select class="inp" style="width:auto;padding:5px 8px;font-size:12px" onchange="tttShowArchive(this.value)"><option value="">Current week</option>${tttData.archive.map(id=>`<option value="${esc(id)}" ${tttArchiveView&&tttArchiveView.week.id===id?'selected':''}>${esc(id)}</option>`).join('')}</select>`:'';
+  if(!d.week){
+    el.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:12px">${history}</div><div class="card" style="padding:30px;text-align:center;color:#6b7280;font-size:14px">No TTT week is running yet.${tttStaff()?`<div style="margin-top:14px"><button class="btn-cyan" style="width:auto;padding:9px 20px" onclick="tttNewWeek()">➕ Start the first week</button></div>`:''}</div>`;
+    return;
+  }
+  const w=d.week; const archived=!!tttArchiveView;
+  const avail=d.signups.filter(s=>s.available).length;
+  const badge=(on,txtOn,txtOff,col)=>`<span class="badge" style="background:${on?col+'22':'rgba(255,255,255,0.05)'};color:${on?col:'#6b7280'};border:1px solid ${on?col+'44':'rgba(255,255,255,0.1)'}">${on?txtOn:txtOff}</span>`;
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <div><div style="font-size:18px;font-weight:900">${esc(w.title)}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${archived?badge(true,'Archived','', '#9ca3af'):badge(w.open,'Sign-ups open','Sign-ups closed','#10B981')+badge(w.published,'Line-ups published','Line-ups not published yet','#00D4FF')}<span style="font-size:12px;color:#6b7280;align-self:center">${avail} available · ${d.signups.length} signed up</span></div></div>
+      ${history}
+    </div>
+    ${!archived&&role==='member'?tttSignupForm(d):''}
+    ${!archived&&tttStaff()?tttStaffPanel(d):''}
+    ${(w.published||tttStaff())?`<label class="lbl">${w.published?'Team line-ups':'Line-ups (preview — only staff can see this until published)'}</label>${tttLineups(d)}`:`<div class="card" style="padding:20px;text-align:center;color:#6b7280;font-size:13px">Team line-ups will appear here once the TTT admins publish them.</div>`}
+    ${!archived&&!w.published&&d.signups.length?`<div style="margin-top:20px"><label class="lbl">Signed up so far</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.signups.filter(s=>s.available).map(s=>`<span style="font-size:12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(s.name)}</span>`).join('')}</div></div>`:''}
+  `;
 }
 
 // ── Rides ──────────────────────────────────────────────────
