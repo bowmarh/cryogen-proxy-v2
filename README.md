@@ -61,3 +61,6 @@ Events fire once each (tracked in Redis `cg:ttt:sent`). They run from the GitHub
 
 ### Captains
 Riders can tick **⭐ Happy to captain** when signing up. Auto-assign makes the highest-vELO volunteer in each team its captain (teams with no volunteer are flagged); staff can change the captain from the team card. If a captain withdraws, another volunteer in that team takes over automatically, otherwise the admin channel is told the team needs a captain.
+
+### Results
+After the race, staff open **🏆 Enter results** on the TTT Week page and type each team's time, position (e.g. 12th of 45) and a results link, or tick DNF. Results show in a table on that week, on each team card and in riders' own status. Past weeks can be edited from the history dropdown, so results can be added after the Thursday rollover.

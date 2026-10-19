@@ -458,8 +458,44 @@ async function weekWith(changes){
   await redis([['SET', TTT_KEYS.week, JSON.stringify(week)]]);
 }
 
+// Team results are typed in by staff after the race and stored on the week (current or archived).
+function parseResults(body, teams){
+  const out = {};
+  for (const t of teams){
+    const r = (body && body[t.id]) || {};
+    const time = text(r.time, `${t.name} time`, 12, false);
+    if (time && !/^(\d{1,2}:)?\d{1,2}:\d{2}(\.\d{1,3})?$/.test(time)) throw new HttpError(400, `${t.name}: time must look like 24:31 or 1:02:05.`);
+    const position = r.position === '' || r.position == null ? null : parseInt(r.position, 10);
+    const of = r.of === '' || r.of == null ? null : parseInt(r.of, 10);
+    if (position !== null && !(position >= 1 && position <= 9999)) throw new HttpError(400, `${t.name}: position must be a number.`);
+    if (of !== null && !(of >= 1 && of <= 9999)) throw new HttpError(400, `${t.name}: number of teams must be a number.`);
+    if (position !== null && of !== null && position > of) throw new HttpError(400, `${t.name}: position can't be higher than the number of teams.`);
+    const link = linkOrEmpty(r.link);
+    const dnf = r.dnf === true;
+    if (time || position !== null || link || dnf) out[t.id] = { time, position, of, link, dnf };
+  }
+  return out;
+}
+
 const TTT_ROUTES = {
   'GET /api/ttt': async () => {},
+
+  'POST /api/ttt/results': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const weekId = String(body.weekId || '');
+    const current = await loadTtt();
+    if (current.week && current.week.id === weekId){
+      await weekWith({ results: parseResults(body.results, current.week.teams) });
+      return;
+    }
+    // Results usually arrive after the Thursday rollover, so archived weeks can be updated too.
+    const [snap] = await redis([['HGET', TTT_KEYS.archive, weekId]]);
+    if (!snap) throw new HttpError(404, 'That week was not found.');
+    const data = JSON.parse(snap);
+    data.week = { ...data.week, results: parseResults(body.results, data.week.teams) };
+    await redis([['HSET', TTT_KEYS.archive, weekId, JSON.stringify(data)]]);
+    return tttView({ ...data, archive: current.archive }, roleFromRequest(req));
+  },
 
   'GET /api/ttt/archive': async (req) => {
     const id = String(url.parse(req.url, true).query.id || '');
