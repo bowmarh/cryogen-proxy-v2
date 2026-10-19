@@ -509,22 +509,18 @@ const TTT_ROUTES = {
 
   'POST /api/ttt/auto-assign': async (req) => {
     requireRole(req, ['admin', 'mod']);
-    const { week, signups, assign } = await requireWeek();
-    const count = Object.fromEntries(week.teams.map(t => [t.id, 0]));
-    for (const ids of Object.values(assign)) for (const id of ids) if (id in count) count[id]++;
-    const max = Object.fromEntries(week.teams.map(t => [t.id, t.max]));
-    const commands = [];
-    // Earliest sign-ups get their preference first. Only riders not yet placed are touched.
-    for (const s of [...signups].sort((a, b) => a.ts.localeCompare(b.ts))){
-      const key = s.name.toLowerCase();
-      if (!s.available || assign[key]) continue;
-      const want = s.doubleUp ? 2 : 1;
-      const picked = s.preferred.filter(id => id in count && count[id] < max[id]).slice(0, want);
-      if (!picked.length) continue;
-      picked.forEach(id => count[id]++);
-      commands.push(['HSET', TTT_KEYS.assign, key, JSON.stringify(picked)]);
-    }
+    const data = await requireWeek();
+    const velo = await riderVelos(data.signups);
+    const { placements, summary } = planTeams({ teams: data.week.teams, signups: data.signups, assign: data.assign, velo });
+    const commands = Object.entries(placements).map(([key, ids]) => ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]);
     if (commands.length) await redis(commands);
+    return { ...tttView(await loadTtt(), roleFromRequest(req)), summary };
+  },
+
+  'POST /api/ttt/clear-assign': async (req) => {
+    requireRole(req, ['admin', 'mod']);
+    await requireWeek();
+    await redis([['DEL', TTT_KEYS.assign]]);
   },
 
   'POST /api/ttt/status': async (req, body) => {
@@ -561,6 +557,73 @@ const TTT_ROUTES = {
     await startWeek(date, text(body.title, 'title', 80, false) || weekTitle(date));
   },
 };
+
+// ── Auto-assign planner ────────────────────────────────────
+const TTT_MIN_TEAM = 4;                  // fewer than this can't really race a TTT
+const EMPTY_TEAM_PENALTY = 250;          // vELO points: prefer filling a started team over opening a new one
+const CAT_VELO = { 'A+': 2300, A: 1900, B: 1450, C: 1050, D: 650 }; // fallback when live vELO is unknown
+
+// vELO per rider (lowercase name), from the live club roster where possible.
+async function riderVelos(signups){
+  let byId = {};
+  try {
+    const { riders } = await fetchRoster();
+    byId = Object.fromEntries(riders.map(r => [String(r.riderId), r.race && r.race.current && r.race.current.rating]));
+  } catch (e) { /* fall back to categories */ }
+  return Object.fromEntries(signups.map(s => [s.name.toLowerCase(), Math.round(byId[s.zwid] || CAT_VELO[s.cat] || 1000)]));
+}
+
+// Places available, unplaced riders. Existing placements are never moved.
+// Hardest-to-place riders go first; each goes to the preferred team with room whose average vELO
+// is closest to theirs (empty teams count as EMPTY_TEAM_PENALTY away). Riders whose preferred
+// teams are full, or who gave none, go to the closest team with room and are reported as "outside".
+function planTeams({ teams, signups, assign, velo }){
+  const members = Object.fromEntries(teams.map(t => [t.id, []]));
+  for (const [key, ids] of Object.entries(assign)) for (const id of ids) if (members[id]) members[id].push(key);
+  const max = Object.fromEntries(teams.map(t => [t.id, t.max]));
+  const hasRoom = id => members[id] && members[id].length < max[id];
+  const distance = (id, key) => {
+    const m = members[id];
+    if (!m.length) return EMPTY_TEAM_PENALTY;
+    return Math.abs(m.reduce((sum, k) => sum + velo[k], 0) / m.length - velo[key]);
+  };
+  const pick = (key, ids) => ids.filter(hasRoom)
+    .sort((a, b) => (distance(a, key) - distance(b, key)) || (members[b].length - members[a].length))[0];
+
+  const todo = signups.filter(s => s.available && !(assign[s.name.toLowerCase()] || []).length);
+  const options = s => s.preferred.filter(hasRoom).length || Infinity;
+  todo.sort((a, b) => (options(a) - options(b)) || a.ts.localeCompare(b.ts));
+
+  const placements = {};
+  const summary = { placed: 0, preferred: 0, outside: [], unplaced: [], short: [] };
+  for (const s of todo){
+    const key = s.name.toLowerCase();
+    const chosen = [];
+    for (let i = 0; i < (s.doubleUp ? 2 : 1); i++){
+      const preferredLeft = s.preferred.filter(id => !chosen.includes(id));
+      let id = pick(key, preferredLeft);
+      let outside = false;
+      // Only fall back outside their choices for the first team; a double-up stays within preferences.
+      if (!id && i === 0){ id = pick(key, teams.map(t => t.id)); outside = !!id; }
+      if (!id) break;
+      chosen.push(id);
+      members[id].push(key);
+      if (outside) summary.outside.push(`${s.name} → ${teams.find(t => t.id === id).name}`);
+    }
+    if (chosen.length){
+      placements[key] = chosen;
+      summary.placed++;
+      if (chosen.some(id => s.preferred.includes(id))) summary.preferred++;
+    } else {
+      summary.unplaced.push(s.name);
+    }
+  }
+  for (const t of teams){
+    const n = members[t.id].length;
+    if (n > 0 && n < TTT_MIN_TEAM) summary.short.push(`${t.name} (${n})`);
+  }
+  return { placements, summary };
+}
 
 async function startWeek(date, title){
   const current = await loadTtt();

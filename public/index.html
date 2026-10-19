@@ -986,7 +986,7 @@ function exportSeriesCsv(series){
 }
 
 // ── TTT Week ───────────────────────────────────────────────
-let tttData=null, tttArchiveView=null, tttEditingTeams=false;
+let tttData=null, tttArchiveView=null, tttEditingTeams=false, tttSummary=null;
 const TTT_STYLE_LABEL={race:'Competitive (captain decides)',casual:'Not bothered / social'};
 const tttStaff=()=>role==='admin'||role==='mod';
 const tttKey=n=>String(n||'').toLowerCase();
@@ -1018,6 +1018,7 @@ async function tttWrite(path,payload){
   try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(payload||{})}); d=await res.json(); }
   catch(e){ alert('Could not reach the server. Please try again.'); return false; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  tttSummary=d.summary||null;
   tttData=d; tttArchiveView=null; renderTtt(); return true;
 }
 async function tttShowArchive(id){
@@ -1094,7 +1095,7 @@ function tttStaffPanel(d){
     const k=tttKey(s.name); const a=d.assign[k]||[]; const r=tttRider(s); const cat=s.cat||(r&&r.cat)||'';
     return `<tr style="${s.available?'':'opacity:.45'}">
       <td style="padding:6px 8px">${cat?catB(esc(cat)):''}</td>
-      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
+      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
       <td style="padding:6px 8px;color:#9ca3af">${r&&r.velo?r.velo:'—'}</td>
       <td style="padding:6px 8px;font-size:11px;color:#9ca3af">${s.available?'':'Not available · '}${esc(TTT_STYLE_LABEL[s.style]||'')}${s.doubleUp?' · double-up':''}<div>${esc(s.preferred.map(id=>teamName[id]||id).join(', '))}</div></td>
       <td style="padding:6px 8px;white-space:nowrap">
@@ -1106,14 +1107,30 @@ function tttStaffPanel(d){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <button onclick="tttWrite('/api/ttt/status',{open:${!w.open}})" class="tab">${w.open?'🔒 Close sign-ups':'🔓 Reopen sign-ups'}</button>
       <button onclick="tttWrite('/api/ttt/auto-assign')" class="tab">✨ Auto-assign unplaced (${unplaced})</button>
+      <button onclick="if(confirm('Remove every rider from every team? You can then auto-assign again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear assignments</button>
       <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" class="tab" style="${w.published?'':'color:#10B981;border-color:rgba(16,185,129,0.3)'}">${w.published?'🙈 Unpublish line-ups':'📣 Publish line-ups'}</button>
       <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
       <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
     </div>
+    ${tttSummaryBox()}
+    ${tttShortTeams(d)}
     ${tttEditingTeams?tttTeamsEditor(w):''}
     <label class="lbl">Team builder · ${d.signups.length} signed up · ${unplaced} available and not placed</label>
     ${d.signups.length?`<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:4px 8px">Cat</th><th style="padding:4px 8px">Rider</th><th style="padding:4px 8px">vELO</th><th style="padding:4px 8px">Preferences</th><th style="padding:4px 8px">Team</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div style="font-size:13px;color:#4b5563">Nobody has signed up yet.</div>`}
   </div>`;
+}
+function tttSummaryBox(){
+  const m=tttSummary; if(!m)return '';
+  const line=(icon,label,list)=>list.length?`<div style="margin-top:4px">${icon} ${label}: ${esc(list.join(', '))}</div>`:'';
+  return `<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#d1d5db">
+    <div style="display:flex;justify-content:space-between;gap:8px"><b style="color:#10B981">✨ Auto-assign: placed ${m.placed} rider${m.placed===1?'':'s'}${m.placed?` (${m.preferred} in a team they picked)`:''}</b><button onclick="tttSummary=null;renderTtt()" style="background:none;border:none;color:#6b7280">×</button></div>
+    ${line('⚠️','Outside their choices',m.outside)}${line('❌','Couldn\'t fit (all teams full)',m.unplaced)}${m.placed||m.unplaced.length?'':'<div style="margin-top:4px;color:#9ca3af">Nobody was waiting to be placed.</div>'}
+  </div>`;
+}
+function tttShortTeams(d){
+  const n={}; for(const ids of Object.values(d.assign))for(const id of ids)n[id]=(n[id]||0)+1;
+  const short=d.week.teams.filter(t=>n[t.id]&&n[t.id]<4).map(t=>`${t.name} (${n[t.id]})`);
+  return short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⚠️ Under 4 riders: ${esc(short.join(', '))} — consider merging or moving riders.</div>`:'';
 }
 function tttTeamsEditor(w){
   return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:14px">
