@@ -479,6 +479,28 @@ async function wpGet(pathname, auth){
   return r.json();
 }
 
+// Keep only what the dashboard shows. The upstream roster also has age, gender, height and
+// weight, which shouldn't be republished, and is ~10x bigger.
+const pick = (o, keys) => (o ? Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]])) : undefined);
+function slimRider(r){
+  const race = r.race || {};
+  return {
+    riderId: r.riderId,
+    name: r.name,
+    country: r.country,
+    zpCategory: r.zpCategory,
+    zpFTP: r.zpFTP,
+    club: r.club ? { name: r.club.name } : undefined,
+    power: pick(r.power, ['wkg5', 'wkg15', 'wkg30', 'wkg60', 'wkg120', 'wkg300', 'wkg1200']),
+    race: {
+      ...pick(race, ['finishes', 'dnfs', 'wins', 'podiums']),
+      current: race.current ? { rating: race.current.rating, mixed: race.current.mixed ? { category: race.current.mixed.category } : undefined } : undefined,
+    },
+    phenotype: r.phenotype ? { value: r.phenotype.value, scores: r.phenotype.scores } : undefined,
+    handicaps: r.handicaps && r.handicaps.profile ? { profile: r.handicaps.profile } : undefined,
+  };
+}
+
 async function fetchRoster(){
   if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache;
   const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
@@ -490,7 +512,7 @@ async function fetchRoster(){
   if (club.status === 'rejected') throw club.reason;
   rosterCache = {
     at: Date.now(),
-    riders: Array.isArray(club.value.riders) ? club.value.riders : [],
+    riders: Array.isArray(club.value.riders) ? club.value.riders.map(slimRider) : [],
     members: members.status === 'fulfilled' && Array.isArray(members.value) ? members.value : null,
     membersError: members.status === 'rejected' ? members.reason.message : null,
   };
