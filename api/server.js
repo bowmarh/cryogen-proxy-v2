@@ -271,6 +271,7 @@ const TTT_KEYS = {
   signups: 'cg:ttt:signups',   // field "<lowercase name>" -> signup JSON
   assign: 'cg:ttt:assign',     // field "<lowercase name>" -> JSON array of team ids
   archive: 'cg:ttt:archive',   // field "<week id>" -> snapshot JSON
+  sent: 'cg:ttt:sent',         // field "<week id>:<event>" -> ISO time; makes scheduled events fire once
 };
 const TTT_STYLES = ['race', 'casual'];
 const TTT_TEAM_MAX = 6; // default riders per team
@@ -300,6 +301,116 @@ function parseTeams(list){
       zone: text(t.zone, 'team zone', 30, false),
       max: Math.min(Math.max(parseInt(t.max, 10) || TTT_TEAM_MAX, 1), 20),
     };
+  });
+}
+
+// ── TTT schedule (UK time) ─────────────────────────────────
+// Race is on the week's date. Sign-ups close CLOSE_DAYS_BEFORE days earlier at CLOSE_TIME,
+// a reminder goes out 24h before that, and the next week starts the day after the race.
+const TTT_TZ = 'Europe/London';
+const TTT_CLOSE_DAYS_BEFORE = 2;   // Wednesday race -> Monday
+const TTT_CLOSE_HOUR = 19;         // 7pm
+const TTT_NEXT_WEEK_HOUR = 9;      // 9am the day after the race
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SITE_URL = process.env.SITE_URL || 'https://club.cryo-gen.team';
+
+function addDays(ymd, n){
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+function ukOffsetMinutes(ms){
+  const name = new Intl.DateTimeFormat('en-GB', { timeZone: TTT_TZ, timeZoneName: 'shortOffset' })
+    .formatToParts(new Date(ms)).find(p => p.type === 'timeZoneName').value; // "GMT" or "GMT+1"
+  const m = /GMT([+-]\d+)?(?::(\d+))?/.exec(name);
+  return m && m[1] ? Number(m[1]) * 60 + Math.sign(Number(m[1])) * Number(m[2] || 0) : 0;
+}
+
+// UK wall-clock time on a given date -> UTC milliseconds (handles BST/GMT).
+function ukTime(ymd, hour){
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, hour, 0);
+  return guess - ukOffsetMinutes(guess - ukOffsetMinutes(guess) * 60000) * 60000;
+}
+
+function ukLabel(ms){
+  return new Date(ms).toLocaleString('en-GB', { timeZone: TTT_TZ, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' UK';
+}
+
+function weekTitle(ymd){
+  return `Weekly TTT · ${new Date(ymd + 'T00:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' })}`;
+}
+
+function scheduleFor(week){
+  const closesAt = week.closesAt ? Date.parse(week.closesAt) : null;
+  return {
+    closesAt,
+    remindAt: closesAt ? closesAt - DAY_MS : null,
+    nextWeekAt: ukTime(addDays(week.date, 1), TTT_NEXT_WEEK_HOUR),
+  };
+}
+
+// ── Discord ────────────────────────────────────────────────
+// Posts via channel webhooks: DISCORD_WEBHOOK_PUBLIC (club channel) and DISCORD_WEBHOOK_ADMIN
+// (private admin channel). A missing webhook just means that message isn't sent.
+const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
+
+async function discord(channel, payload){
+  const hook = channel === 'admin' ? process.env.DISCORD_WEBHOOK_ADMIN : process.env.DISCORD_WEBHOOK_PUBLIC;
+  if (!hook) return false;
+  try {
+    const r = await fetch(hook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Never let rider-entered text ping @everyone, roles or users.
+      body: JSON.stringify({ username: 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) console.error(`Discord ${channel} webhook returned ${r.status}`);
+    return r.ok;
+  } catch (e) {
+    console.error(`Discord ${channel} webhook failed: ${e.message}`);
+    return false;
+  }
+}
+
+const teamLabel = t => [t.level, t.zone].filter(Boolean).join(' · ');
+
+function postSignupsOpen(week){
+  const close = week.closesAt ? `\nSign-ups close **${ukLabel(Date.parse(week.closesAt))}**.` : '';
+  return discord('public', {
+    content: `📣 **TTT sign-ups are open — ${discordEscape(week.title)}**\nSign up at ${SITE_URL} → 🏁 TTT Week.${close}`,
+    embeds: [{ title: 'Teams this week', color: 0x00d4ff,
+      description: week.teams.map(t => `**${discordEscape(t.name)}** — ${discordEscape(teamLabel(t))} (max ${t.max})`).join('\n').slice(0, 4000) }],
+  });
+}
+
+function postReminder(week, signups){
+  const n = signups.filter(s => s.available).length;
+  return discord('public', {
+    content: `⏰ **Last day to sign up for ${discordEscape(week.title)}** — ${n} rider${n === 1 ? '' : 's'} signed up so far.\nSign-ups close **${ukLabel(Date.parse(week.closesAt))}**: ${SITE_URL}`,
+  });
+}
+
+function postClosed(week, signups, assign){
+  const avail = signups.filter(s => s.available);
+  const unplaced = avail.filter(s => !(assign[s.name.toLowerCase()] || []).length).length;
+  return Promise.all([
+    discord('public', { content: `🔒 Sign-ups for **${discordEscape(week.title)}** are closed — ${avail.length} rider${avail.length === 1 ? '' : 's'}. Line-ups coming soon.` }),
+    discord('admin', { content: `🛠️ **${discordEscape(week.title)}**: sign-ups closed — ${avail.length} available, ${unplaced} not yet in a team.\nBuild and publish the teams: ${SITE_URL} → 🏁 TTT Week` }),
+  ]);
+}
+
+function postLineups(week, signups, assign){
+  const byTeam = Object.fromEntries(week.teams.map(t => [t.id, []]));
+  for (const s of signups) for (const id of assign[s.name.toLowerCase()] || []) if (byTeam[id]) byTeam[id].push(s);
+  return discord('public', {
+    content: `🏁 **Line-ups published — ${discordEscape(week.title)}**\nFull details: ${SITE_URL} → 🏁 TTT Week`,
+    embeds: [{ color: 0x10b981, fields: week.teams.slice(0, 25).map(t => ({
+      name: `${t.name} · ${teamLabel(t)} (${byTeam[t.id].length}/${t.max})`.slice(0, 256),
+      value: (byTeam[t.id].map(s => `${s.cat ? `[${s.cat}] ` : ''}${discordEscape(s.name)}`).join('\n') || '—').slice(0, 1024),
+      inline: true,
+    })) }],
   });
 }
 
@@ -374,7 +485,14 @@ const TTT_ROUTES = {
 
   'POST /api/ttt/withdraw': async (req, body) => {
     const key = text(body.name, 'name', 60).toLowerCase();
+    const { week, signups, assign } = await loadTtt();
     await redis([['HDEL', TTT_KEYS.signups, key], ['HDEL', TTT_KEYS.assign, key]]);
+    // Line-ups are already out: tell the admins a place has opened up.
+    const rider = signups.find(s => s.name.toLowerCase() === key);
+    if (week && week.published && rider && (assign[key] || []).length){
+      const teams = assign[key].map(id => (week.teams.find(t => t.id === id) || { name: id }).name).join(' and ');
+      await discord('admin', { content: `⚠️ **${discordEscape(rider.name)}** withdrew from **${discordEscape(teams)}** — ${discordEscape(week.title)}. A place is open.` });
+    }
   },
 
   'POST /api/ttt/assign': async (req, body) => {
@@ -414,7 +532,11 @@ const TTT_ROUTES = {
     const changes = {};
     if (typeof body.open === 'boolean') changes.open = body.open;
     if (typeof body.published === 'boolean') changes.published = body.published;
+    const before = await requireWeek();
     await weekWith(changes);
+    if (changes.published && !before.week.published){
+      await postLineups({ ...before.week, ...changes }, before.signups, before.assign);
+    }
   },
 
   'POST /api/ttt/teams': async (req, body) => {
@@ -436,23 +558,68 @@ const TTT_ROUTES = {
     requireRole(req, ['admin', 'mod']);
     const date = text(body.date, 'date', 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'The date must be YYYY-MM-DD.');
-    const title = text(body.title, 'title', 80, false) || `TTT ${date}`;
-    const current = await loadTtt();
-    if (current.week && current.week.id === date) throw new HttpError(409, 'A week with that date is already running.');
-    const commands = [];
-    if (current.week){
-      // Archive the finished week (with its line-ups) before starting the new one.
-      const snapshot = { week: { ...current.week, published: true, open: false }, signups: current.signups, assign: current.assign };
-      commands.push(['HSET', TTT_KEYS.archive, current.week.id, JSON.stringify(snapshot)]);
-    }
-    const teams = current.week ? current.week.teams : DEFAULT_TTT_TEAMS;
-    const week = { id: date, title, date, open: true, published: false, teams };
-    commands.push(['SET', TTT_KEYS.week, JSON.stringify(week)], ['DEL', TTT_KEYS.signups], ['DEL', TTT_KEYS.assign]);
-    await redis(commands);
+    await startWeek(date, text(body.title, 'title', 80, false) || weekTitle(date));
   },
 };
 
+async function startWeek(date, title){
+  const current = await loadTtt();
+  if (current.week && current.week.id === date) throw new HttpError(409, 'A week with that date is already running.');
+  const commands = [];
+  if (current.week){
+    // Archive the finished week (with its line-ups) before starting the new one.
+    const snapshot = { week: { ...current.week, published: true, open: false }, signups: current.signups, assign: current.assign };
+    commands.push(['HSET', TTT_KEYS.archive, current.week.id, JSON.stringify(snapshot)]);
+  }
+  const teams = current.week ? current.week.teams : DEFAULT_TTT_TEAMS;
+  // Sign-ups close automatically, unless that time has already passed (a week started late).
+  const closesAt = ukTime(addDays(date, -TTT_CLOSE_DAYS_BEFORE), TTT_CLOSE_HOUR);
+  const week = { id: date, title, date, open: true, published: false, teams, closesAt: closesAt > Date.now() ? new Date(closesAt).toISOString() : null };
+  commands.push(['SET', TTT_KEYS.week, JSON.stringify(week)], ['DEL', TTT_KEYS.signups], ['DEL', TTT_KEYS.assign]);
+  await redis(commands);
+  await postSignupsOpen(week);
+  return week;
+}
+
+// Runs whatever is due (reminder, auto-close, next week). Each event is claimed with HSETNX,
+// so it fires exactly once even if the scheduler and page visits overlap.
+async function runTttSchedule(now = Date.now()){
+  const data = await loadTtt();
+  const week = data.week;
+  if (!week) return [];
+  const { closesAt, remindAt, nextWeekAt } = scheduleFor(week);
+  const due = [];
+  if (closesAt && now >= remindAt && now < closesAt) due.push('reminder');
+  if (closesAt && now >= closesAt) due.push('close');
+  if (now >= nextWeekAt) due.push('next-week');
+  const done = [];
+  for (const event of due){
+    const [claimed] = await redis([['HSETNX', TTT_KEYS.sent, `${week.id}:${event}`, new Date(now).toISOString()]]);
+    if (!claimed) continue;
+    if (event === 'reminder') await postReminder(week, data.signups);
+    if (event === 'close'){
+      if (week.open) await redis([['SET', TTT_KEYS.week, JSON.stringify({ ...week, open: false })]]);
+      await postClosed(week, data.signups, data.assign);
+    }
+    if (event === 'next-week'){
+      const date = addDays(week.date, 7);
+      await startWeek(date, weekTitle(date));
+    }
+    done.push(event);
+  }
+  return done;
+}
+
+async function handleCron(req, res){
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
+  const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
+  if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
+  sendJSON(res, 200, { ran: await runTttSchedule() });
+}
+
 async function handleTtt(tttRoute, req, res){
+  if (req.method === 'GET') await runTttSchedule().catch(e => console.error('TTT schedule:', e.message));
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await tttRoute(req, body);
   sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
@@ -637,6 +804,7 @@ async function route(req, res){
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
+  if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
 
   const dataRoute = DATA_ROUTES[`${req.method} ${pathname}`];
   if (dataRoute) return handleData(dataRoute, req, res);

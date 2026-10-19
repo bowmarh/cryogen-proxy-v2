@@ -29,6 +29,9 @@ ADMIN_PASSWORD=... MOD_PASSWORD=... KV_REST_API_URL=... KV_REST_API_TOKEN=... np
 | `SHEET_ID` *(optional)* | Google Sheet to read rides and TTT data from. Defaults to the club sheet. |
 | `SHEET_TAB_RIDES`, `SHEET_TAB_TTT` *(optional)* | Tab names. Default `Social Rides` and `TEAM LIST`. |
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
+| `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
+| `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
+| `CRON_SECRET` | Shared secret for `/api/cron/tick`. Set the same value as a GitHub repository secret so the **TTT schedule** workflow (every 15 min) can run reminders, auto-close and the next-week rollover on time. |
 | `WP_API_USER`, `WP_API_APP_PASSWORD` *(optional)* | WordPress user + Application Password for the cryogen.team member records (tier/status). Without them the live Zwift club roster still loads and everyone counts as active. |
 
 No dependencies: it uses only Node's built-in modules.
@@ -39,3 +42,18 @@ No dependencies: it uses only Node's built-in modules.
 - **Google Sheets** (via `/api/proxy`): social rides and team time trial (TTT) data. The sheet must be shared as "Anyone with the link can view".
 - **Shared storage** (Upstash Redis, via `/api/state` and friends): event sign-ups, series locks, club-created rides and RSVPs.
 - **Browser `localStorage`**: admin tier/status edits and affiliation history (not shared yet).
+
+## Weekly TTT automation
+
+All times are UK time (`Europe/London`, follows BST/GMT). For a race on Wednesday:
+
+| When | What happens |
+|---|---|
+| Week starts | Discord: "sign-ups open" with the teams |
+| Sunday 19:00 | Discord: "last day to sign up" reminder |
+| Monday 19:00 | Sign-ups close automatically; Discord: "closed" (club) + "N unplaced, build teams" (admins) |
+| Admin presses **Publish** | Discord: full line-ups |
+| Rider withdraws after publishing | Discord (admins): "a place is open" |
+| Thursday 09:00 | This week is archived and next Wednesday's week starts automatically (same teams) |
+
+Events fire once each (tracked in Redis `cg:ttt:sent`). They run from the GitHub Actions schedule and, as a backup, whenever someone opens the TTT page. Admins can still reopen sign-ups after the automatic close.
