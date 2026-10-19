@@ -52,9 +52,12 @@ All times are UK time (`Europe/London`, follows BST/GMT). For a race on Wednesda
 | Week starts | Discord: "sign-ups open" with the teams |
 | Sunday 19:00 | Discord: "last day to sign up" reminder |
 | Monday 19:00 | Sign-ups close automatically; Discord: "closed" (club) + "N unplaced, build teams" (admins) |
-| Admin presses **Publish** | Discord: full line-ups |
+| Admin presses **Publish** | Discord: full line-ups, captains marked ⭐ |
 | Rider withdraws (or becomes unavailable) after publishing | First waitlisted rider who picked that team (else first waiting) is moved in automatically; Discord: "🎉 X moves up" (club) + what happened (admins) |
 | Late sign-up after publishing | Placed in a picked team with room, otherwise added to the waitlist; Discord (admins) |
 | Thursday 09:00 | This week is archived and next Wednesday's week starts automatically (same teams) |
 
 Events fire once each (tracked in Redis `cg:ttt:sent`). They run from the GitHub Actions schedule and, as a backup, whenever someone opens the TTT page. Admins can still reopen sign-ups after the automatic close.
+
+### Captains
+Riders can tick **⭐ Happy to captain** when signing up. Auto-assign makes the highest-vELO volunteer in each team its captain (teams with no volunteer are flagged); staff can change the captain from the team card. If a captain withdraws, another volunteer in that team takes over automatically, otherwise the admin channel is told the team needs a captain.

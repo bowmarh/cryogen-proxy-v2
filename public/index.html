@@ -1041,8 +1041,8 @@ function tttLineups(d,opts){
     return `<div class="card" style="padding:14px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px"><span style="font-weight:800">${esc(t.name)}</span><span style="font-size:11px;color:${full?'#f87171':'#6b7280'}">${list.length}/${t.max}</span></div>
       <div style="font-size:11px;color:#6b7280;margin-bottom:8px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
-      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:#00D4FF;font-weight:700':''}"><span>${cat?catB(esc(cat))+' ':''}${esc(s.name)}</span><span style="font-size:11px;color:#6b7280">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#4b5563">No riders yet</div>`}
-      ${opts&&opts.staff?'':''}
+      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';const cap=(d.captains||{})[t.id]===tttKey(s.name);return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:#00D4FF;font-weight:700':''}"><span>${cap?'<span title="Captain">⭐</span> ':''}${cat?catB(esc(cat))+' ':''}${esc(s.name)}${cap?' <span style="font-size:10px;color:#FBBF24">captain</span>':''}</span><span style="font-size:11px;color:#6b7280">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#4b5563">No riders yet</div>`}
+      ${tttStaff()&&!tttArchiveView&&list.length?`<select class="inp" style="margin-top:8px;padding:4px 6px;font-size:12px" data-team="${esc(t.id)}" onchange="tttWrite('/api/ttt/captain',{team:this.dataset.team,name:this.value})"><option value="">⭐ Captain: none</option>${list.map(s=>`<option value="${esc(s.name)}" ${(d.captains||{})[t.id]===tttKey(s.name)?'selected':''}>⭐ ${esc(s.name)}${s.captain?' (volunteer)':''}</option>`).join('')}</select>`:''}
     </div>`;}).join('')}</div>`;
 }
 function tttMyStatus(d){
@@ -1052,7 +1052,8 @@ function tttMyStatus(d){
   const teams=(d.assign[k]||[]).map(id=>(d.week.teams.find(t=>t.id===id)||{name:id}).name);
   const pos=(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1;
   const box=(c,t)=>`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${c}55;font-size:14px">${t}</div>`;
-  if(teams.length)return box('#10B981',`✅ You're riding for <b>${esc(teams.join(' and '))}</b> this week.`);
+  const capOf=d.week.teams.filter(t=>(d.captains||{})[t.id]===k).map(t=>t.name);
+  if(teams.length)return box('#10B981',`✅ You're riding for <b>${esc(teams.join(' and '))}</b> this week.${capOf.length?`<div style="margin-top:6px">⭐ You're <b>captain</b> of ${esc(capOf.join(' and '))}.</div>`:''}`);
   if(pos)return box('#FBBF24',`⏳ You're <b>#${pos}</b> on the waitlist. If a place opens up you'll be moved in automatically.`);
   return '';
 }
@@ -1072,6 +1073,7 @@ function tttSignupForm(d){
       <label><input type="radio" name="ttt-avail" value="yes" ${!existing||existing.available?'checked':''}/> Available this week</label>
       <label><input type="radio" name="ttt-avail" value="no" ${existing&&!existing.available?'checked':''}/> Not available</label>
       <label><input type="checkbox" id="ttt-double" ${existing&&existing.doubleUp?'checked':''}/> Happy to double up</label>
+      <label><input type="checkbox" id="ttt-captain" ${existing&&existing.captain?'checked':''}/> ⭐ Happy to captain</label>
     </div>
     <label class="lbl">Riding style</label>
     <select id="ttt-style" class="inp" style="margin-bottom:10px">${Object.entries(TTT_STYLE_LABEL).map(([k,v])=>`<option value="${k}" ${existing&&existing.style===k?'selected':''}>${v}</option>`).join('')}</select>
@@ -1089,6 +1091,7 @@ function tttSubmit(){
     name, zwid:document.getElementById('ttt-zwid').value.trim(), cat:document.getElementById('ttt-cat').value,
     available:document.querySelector('input[name="ttt-avail"]:checked').value==='yes',
     doubleUp:document.getElementById('ttt-double').checked, style:document.getElementById('ttt-style').value,
+    captain:document.getElementById('ttt-captain').checked,
     preferred:[...document.querySelectorAll('.ttt-pref:checked')].map(c=>c.value),
     comments:document.getElementById('ttt-comments').value,
   });
@@ -1106,7 +1109,7 @@ function tttStaffPanel(d){
     const k=tttKey(s.name); const a=d.assign[k]||[]; const r=tttRider(s); const cat=s.cat||(r&&r.cat)||'';
     return `<tr style="${s.available?'':'opacity:.45'}">
       <td style="padding:6px 8px">${cat?catB(esc(cat)):''}</td>
-      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${w.published&&!a.length&&s.available?` <span style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⏳ waitlist #${(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1}</span>`:''}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
+      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${s.captain?' <span title="Volunteered to captain" style="font-size:11px">⭐</span>':''}${w.published&&!a.length&&s.available?` <span style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⏳ waitlist #${(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1}</span>`:''}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
       <td style="padding:6px 8px;color:#9ca3af">${r&&r.velo?r.velo:'—'}</td>
       <td style="padding:6px 8px;font-size:11px;color:#9ca3af">${s.available?'':'Not available · '}${esc(TTT_STYLE_LABEL[s.style]||'')}${s.doubleUp?' · double-up':''}<div>${esc(s.preferred.map(id=>teamName[id]||id).join(', '))}</div></td>
       <td style="padding:6px 8px;white-space:nowrap">
@@ -1135,13 +1138,15 @@ function tttSummaryBox(){
   const line=(icon,label,list)=>list.length?`<div style="margin-top:4px">${icon} ${label}: ${esc(list.join(', '))}</div>`:'';
   return `<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#d1d5db">
     <div style="display:flex;justify-content:space-between;gap:8px"><b style="color:#10B981">✨ Auto-assign: placed ${m.placed} rider${m.placed===1?'':'s'}${m.placed?` (${m.preferred} in a team they picked)`:''}</b><button onclick="tttSummary=null;renderTtt()" style="background:none;border:none;color:#6b7280">×</button></div>
-    ${line('⚠️','Outside their choices',m.outside)}${line('❌','Couldn\'t fit (all teams full)',m.unplaced)}${m.placed||m.unplaced.length?'':'<div style="margin-top:4px;color:#9ca3af">Nobody was waiting to be placed.</div>'}
+    ${line('⚠️','Outside their choices',m.outside)}${line('⭐','No captain volunteer',m.noCaptain||[])}${line('❌','Couldn\'t fit (all teams full)',m.unplaced)}${m.placed||m.unplaced.length?'':'<div style="margin-top:4px;color:#9ca3af">Nobody was waiting to be placed.</div>'}
   </div>`;
 }
 function tttShortTeams(d){
   const n={}; for(const ids of Object.values(d.assign))for(const id of ids)n[id]=(n[id]||0)+1;
   const short=d.week.teams.filter(t=>n[t.id]&&n[t.id]<4).map(t=>`${t.name} (${n[t.id]})`);
-  return short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⚠️ Under 4 riders: ${esc(short.join(', '))} — consider merging or moving riders.</div>`:'';
+  const noCap=d.week.teams.filter(t=>n[t.id]&&!(d.captains||{})[t.id]).map(t=>t.name);
+  return (short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⚠️ Under 4 riders: ${esc(short.join(', '))} — consider merging or moving riders.</div>`:'')
+    +(noCap.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⭐ No captain yet: ${esc(noCap.join(', '))} — pick one on the team card below.</div>`:'');
 }
 function tttTeamsEditor(w){
   return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:14px">
