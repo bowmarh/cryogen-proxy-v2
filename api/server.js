@@ -405,7 +405,8 @@ function postLineups(week, signups, assign){
   const byTeam = Object.fromEntries(week.teams.map(t => [t.id, []]));
   for (const s of signups) for (const id of assign[s.name.toLowerCase()] || []) if (byTeam[id]) byTeam[id].push(s);
   return discord('public', {
-    content: `🏁 **Line-ups published — ${discordEscape(week.title)}**\nFull details: ${SITE_URL} → 🏁 TTT Week`,
+    content: `🏁 **Line-ups published — ${discordEscape(week.title)}**\nFull details: ${SITE_URL} → 🏁 TTT Week`
+      + (() => { const w = waitlistOf({ week, signups, assign }); return w.length ? `\n⏳ Waitlist: ${w.map(s => discordEscape(s.name)).join(', ')}` : ''; })(),
     embeds: [{ color: 0x10b981, fields: week.teams.slice(0, 25).map(t => ({
       name: `${t.name} · ${teamLabel(t)} (${byTeam[t.id].length}/${t.max})`.slice(0, 256),
       value: (byTeam[t.id].map(s => `${s.cat ? `[${s.cat}] ` : ''}${discordEscape(s.name)}`).join('\n') || '—').slice(0, 1024),
@@ -434,6 +435,7 @@ function tttView(data, role){
     week: data.week,
     signups: data.signups.map(s => (staff ? s : { ...s, comments: undefined })),
     assign: showLineups ? data.assign : {},
+    waitlist: data.week && (data.week.published || staff) ? waitlistOf(data).map(s => s.name) : [],
     archive: data.archive,
     role: role || null,
   };
@@ -479,19 +481,42 @@ const TTT_ROUTES = {
       comments: text(body.comments, 'comment', 300, false),
       ts: new Date().toISOString(),
     };
-    // Signing up again with the same name updates the entry.
-    await redis([['HSET', TTT_KEYS.signups, name.toLowerCase(), JSON.stringify(entry)]]);
+    // Signing up again with the same name updates the entry but keeps their place in the queue.
+    const data = await loadTtt();
+    const key = name.toLowerCase();
+    const existing = data.signups.find(s => s.name.toLowerCase() === key);
+    if (existing) entry.ts = existing.ts;
+    await redis([['HSET', TTT_KEYS.signups, key, JSON.stringify(entry)]]);
+    if (!week.published) return;
+    const placed = (data.assign[key] || []).length > 0;
+    const fresh = { ...data, signups: [...data.signups.filter(s => s.name.toLowerCase() !== key), entry] };
+    if (placed && !entry.available){
+      await freePlaces(fresh, key, name, 'is no longer available for');
+    } else if (!placed && entry.available && (!existing || !existing.available)){
+      // Late sign-up after publishing: straight into a picked team with room, otherwise the waitlist.
+      const velo = await riderVelos([entry]);
+      const { placements } = planTeams({ teams: week.teams, signups: [entry], assign: data.assign, velo: { ...velo } });
+      const ids = (placements[key] || []).filter(id => !entry.preferred.length || entry.preferred.includes(id));
+      if (ids.length){
+        await redis([['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]]);
+        await discord('admin', { content: `➕ Late sign-up: **${discordEscape(name)}** placed in **${discordEscape(ids.map(id => week.teams.find(t => t.id === id).name).join(' and '))}** — ${discordEscape(week.title)}.` });
+      } else {
+        const position = waitlistOf(fresh).findIndex(s => s.name.toLowerCase() === key) + 1;
+        await discord('admin', { content: `⏳ Late sign-up: **${discordEscape(name)}** joined the waitlist (#${position}) — ${discordEscape(week.title)}.` });
+      }
+    }
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
     const key = text(body.name, 'name', 60).toLowerCase();
-    const { week, signups, assign } = await loadTtt();
-    await redis([['HDEL', TTT_KEYS.signups, key], ['HDEL', TTT_KEYS.assign, key]]);
-    // Line-ups are already out: tell the admins a place has opened up.
-    const rider = signups.find(s => s.name.toLowerCase() === key);
-    if (week && week.published && rider && (assign[key] || []).length){
-      const teams = assign[key].map(id => (week.teams.find(t => t.id === id) || { name: id }).name).join(' and ');
-      await discord('admin', { content: `⚠️ **${discordEscape(rider.name)}** withdrew from **${discordEscape(teams)}** — ${discordEscape(week.title)}. A place is open.` });
+    const data = await loadTtt();
+    const rider = data.signups.find(s => s.name.toLowerCase() === key);
+    await redis([['HDEL', TTT_KEYS.signups, key]]);
+    // Free their place(s); once line-ups are out, the waitlist moves up automatically.
+    if (data.week && rider){
+      await freePlaces({ ...data, signups: data.signups.filter(s => s.name.toLowerCase() !== key) }, key, rider.name, 'withdrew from');
+    } else {
+      await redis([['HDEL', TTT_KEYS.assign, key]]);
     }
   },
 
@@ -623,6 +648,50 @@ function planTeams({ teams, signups, assign, velo }){
     if (n > 0 && n < TTT_MIN_TEAM) summary.short.push(`${t.name} (${n})`);
   }
   return { placements, summary };
+}
+
+// ── Waitlist ───────────────────────────────────────────────
+// Once line-ups are published, available riders without a team are on the waitlist, in
+// sign-up order. Freed places go to the first waitlisted rider who picked that team, else
+// the first rider waiting.
+function waitlistOf(data){
+  return data.signups
+    .filter(s => s.available && !(data.assign[s.name.toLowerCase()] || []).length)
+    .sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
+// Removes a rider from their teams and refills each freed place from the waitlist.
+// Returns the Discord-ready story of what happened.
+async function freePlaces(data, key, riderName, reason){
+  const week = data.week;
+  const freed = (data.assign[key] || []).filter(id => week.teams.some(t => t.id === id));
+  const assign = { ...data.assign };
+  delete assign[key];
+  const commands = [['HDEL', TTT_KEYS.assign, key]];
+  const promoted = [];
+  if (week.published){
+    for (const id of freed){
+      const waiting = waitlistOf({ ...data, signups: data.signups.filter(s => s.name.toLowerCase() !== key), assign });
+      const next = waiting.find(s => s.preferred.includes(id)) || waiting[0];
+      if (!next) continue;
+      const nk = next.name.toLowerCase();
+      assign[nk] = [...(assign[nk] || []), id];
+      commands.push(['HSET', TTT_KEYS.assign, nk, JSON.stringify(assign[nk])]);
+      promoted.push({ rider: next, team: week.teams.find(t => t.id === id) });
+    }
+  }
+  await redis(commands);
+  if (week.published && freed.length){
+    const teamNames = freed.map(id => week.teams.find(t => t.id === id).name).join(' and ');
+    const outcome = promoted.length
+      ? promoted.map(p => `**${discordEscape(p.rider.name)}** promoted from the waitlist into **${discordEscape(p.team.name)}**`).join(', ')
+      : 'nobody on the waitlist — a place is open';
+    await discord('admin', { content: `⚠️ **${discordEscape(riderName)}** ${reason} **${discordEscape(teamNames)}** — ${discordEscape(week.title)}. ${outcome}.` });
+    for (const p of promoted){
+      await discord('public', { content: `🎉 **${discordEscape(p.rider.name)}** moves up from the waitlist into **${discordEscape(p.team.name)}** for ${discordEscape(week.title)}.` });
+    }
+  }
+  return promoted;
 }
 
 async function startWeek(date, title){
