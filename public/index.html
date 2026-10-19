@@ -516,43 +516,44 @@ function showTab(id,btn){
 
 // ── Live Data ──────────────────────────────────────────────
 async function loadLive() {
-  setZRA('#FBBF24', 'Loading Database...');
+  setZRA('#FBBF24', 'Loading live roster...');
   try {
-    const dbData = await api('/members', 'GET'); 
+    const res = await fetch('/api/roster', { headers: tttHeaders() });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+    // Member records (tier/status) come from WordPress when the server has credentials for it.
+    // Without them, everyone on the live Zwift club roster counts as an active member.
+    const haveDb = Array.isArray(d.members);
     const dbLookup = {};
-    dbData.forEach(m => dbLookup[m.zwift_id] = m);
-
-    setZRA('#FBBF24', 'Connecting to ZRA...');
-    const r = await fetch(WP_URL + '/zwift/public/clubs/2740/0');
-    if (r.ok) {
-      const d = await r.json();
-      riders = d.riders.map(r => {
-        const dbRecord = dbLookup[r.riderId] || {};
-        return {
-          id: r.riderId, 
-          name: dbRecord.name || r.name, 
-          cc: ccClean(r.country), 
-          cat: r.zpCategory || 'D',
-          ftp: Math.round(r.zpFTP || 0),
-          wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
-          velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
-          zraCat: r.race?.current?.mixed?.category || '',
-          ph: phClean(r.phenotype?.value),
-          active: dbRecord.status === 'active', 
-          tier: dbRecord.tier || 'half',        
-          status: dbRecord.status || 'pending', 
-          ob_discord: dbRecord.offboard_discord === '1',
-          ob_fb: dbRecord.offboard_fb === '1',
-          ob_zp: dbRecord.offboard_zp === '1',
-          raw: r,
-        };
-      });
-      setZRA('#10B981', `Synced DB + Live · ${riders.length} riders ✓`);
-      trackAffiliations(riders);
-      renderAll();
-    }
-  } catch (e) { 
-    setZRA('#EF4444', e.message); 
+    (d.members || []).forEach(m => dbLookup[m.zwift_id] = m);
+    riders = d.riders.map(r => {
+      const dbRecord = dbLookup[r.riderId] || {};
+      const status = dbRecord.status || (haveDb ? 'pending' : 'active');
+      return {
+        id: r.riderId,
+        name: dbRecord.name || r.name,
+        cc: ccClean(r.country),
+        cat: r.zpCategory || 'D',
+        ftp: Math.round(r.zpFTP || 0),
+        wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
+        velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
+        zraCat: r.race?.current?.mixed?.category || '',
+        ph: phClean(r.phenotype?.value),
+        active: status === 'active',
+        tier: dbRecord.tier || 'half',
+        status,
+        ob_discord: dbRecord.offboard_discord === '1',
+        ob_fb: dbRecord.offboard_fb === '1',
+        ob_zp: dbRecord.offboard_zp === '1',
+        raw: r,
+      };
+    });
+    setZRA('#10B981', `${haveDb ? 'Synced DB + Live' : 'Live roster'} · ${riders.length} riders ✓`);
+    trackAffiliations(riders);
+    renderAll();
+    if (document.getElementById('page-ttt').classList.contains('active') && tttData) renderTtt();
+  } catch (e) {
+    setZRA('#EF4444', 'Live roster unavailable: ' + e.message);
   }
 }
 
@@ -1421,6 +1422,7 @@ function renderSheetPanel(d){
 }
 
 // ── Init ───────────────────────────────────────────────────
+if(!role) loadLive();
 if(role){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';

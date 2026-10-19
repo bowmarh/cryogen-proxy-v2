@@ -463,6 +463,73 @@ async function handleData(dataRoute, req, res){
   sendJSON(res, 200, result || await loadState());
 }
 
+// ── Live roster (WordPress plugin on cryogen.team) ─────────
+// Fetched here rather than in the browser: no cross-site issues, and the WordPress
+// credentials (needed for the member records) never reach the page.
+const WP_API = process.env.WP_API_URL || 'https://cryogen.team/wp-json/cryogen/v1';
+const ZWIFT_CLUB_ID = process.env.ZWIFT_CLUB_ID || '2740';
+const ROSTER_TTL_MS = 5 * 60 * 1000;
+let rosterCache = null; // { at, riders, members, membersError }
+
+async function wpGet(pathname, auth){
+  const headers = { 'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json' };
+  if (auth) headers.Authorization = `Basic ${Buffer.from(auth).toString('base64')}`;
+  const r = await fetch(`${WP_API}${pathname}`, { headers });
+  if (!r.ok) throw new HttpError(502, `cryogen.team returned ${r.status} for ${pathname}`);
+  return r.json();
+}
+
+// Keep only what the dashboard shows. The upstream roster also has age, gender, height and
+// weight, which shouldn't be republished, and is ~10x bigger.
+const pick = (o, keys) => (o ? Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]])) : undefined);
+function slimRider(r){
+  const race = r.race || {};
+  return {
+    riderId: r.riderId,
+    name: r.name,
+    country: r.country,
+    zpCategory: r.zpCategory,
+    zpFTP: r.zpFTP,
+    club: r.club ? { name: r.club.name } : undefined,
+    power: pick(r.power, ['wkg5', 'wkg15', 'wkg30', 'wkg60', 'wkg120', 'wkg300', 'wkg1200']),
+    race: {
+      ...pick(race, ['finishes', 'dnfs', 'wins', 'podiums']),
+      current: race.current ? { rating: race.current.rating, mixed: race.current.mixed ? { category: race.current.mixed.category } : undefined } : undefined,
+    },
+    phenotype: r.phenotype ? { value: r.phenotype.value, scores: r.phenotype.scores } : undefined,
+    handicaps: r.handicaps && r.handicaps.profile ? { profile: r.handicaps.profile } : undefined,
+  };
+}
+
+async function fetchRoster(){
+  if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache;
+  const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
+    ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
+  const [club, members] = await Promise.allSettled([
+    wpGet(`/zwift/public/clubs/${encodeURIComponent(ZWIFT_CLUB_ID)}/0`),
+    auth ? wpGet('/members', auth) : Promise.reject(new Error('not configured')),
+  ]);
+  if (club.status === 'rejected') throw club.reason;
+  rosterCache = {
+    at: Date.now(),
+    riders: Array.isArray(club.value.riders) ? club.value.riders.map(slimRider) : [],
+    members: members.status === 'fulfilled' && Array.isArray(members.value) ? members.value : null,
+    membersError: members.status === 'rejected' ? members.reason.message : null,
+  };
+  return rosterCache;
+}
+
+async function handleRoster(req, res){
+  const { riders, members, membersError } = await fetchRoster();
+  const staff = ['admin', 'mod'].includes(roleFromRequest(req));
+  // Everyone sees name/status/tier; off-boarding progress is staff-only.
+  const memberView = members && members.map(m => ({
+    zwift_id: m.zwift_id, name: m.name, status: m.status, tier: m.tier,
+    ...(staff ? { offboard_discord: m.offboard_discord, offboard_fb: m.offboard_fb, offboard_zp: m.offboard_zp } : {}),
+  }));
+  sendJSON(res, 200, { riders, members: memberView, membersError: staff ? membersError : undefined });
+}
+
 // ── Sheet proxy ────────────────────────────────────────────
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
@@ -568,6 +635,7 @@ async function route(req, res){
   }
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
+  if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
 
   const dataRoute = DATA_ROUTES[`${req.method} ${pathname}`];
   if (dataRoute) return handleData(dataRoute, req, res);
