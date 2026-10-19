@@ -1,0 +1,26 @@
+# Calls the dashboard every 15 minutes so TTT reminders, auto-close and the
+# next-week rollover happen on time. Needs the CRON_SECRET repository secret
+# (same value as the CRON_SECRET environment variable in Vercel).
+name: TTT schedule
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Run due TTT events
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET repository secret is not set; skipping."
+            exit 0
+          fi
+          curl -fsS --max-time 30 -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://club.cryo-gen.team/api/cron/tick

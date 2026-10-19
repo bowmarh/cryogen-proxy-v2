@@ -1148,7 +1148,8 @@ function renderTtt(){
   el.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <div><div style="font-size:18px;font-weight:900">${esc(w.title)}</div>
-        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${archived?badge(true,'Archived','', '#9ca3af'):badge(w.open,'Sign-ups open','Sign-ups closed','#10B981')+badge(w.published,'Line-ups published','Line-ups not published yet','#00D4FF')}<span style="font-size:12px;color:#6b7280;align-self:center">${avail} available · ${d.signups.length} signed up</span></div></div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${archived?badge(true,'Archived','', '#9ca3af'):badge(w.open,'Sign-ups open','Sign-ups closed','#10B981')+badge(w.published,'Line-ups published','Line-ups not published yet','#00D4FF')}<span style="font-size:12px;color:#6b7280;align-self:center">${avail} available · ${d.signups.length} signed up</span></div>
+        ${!archived&&w.open&&w.closesAt?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">⏱️ Sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK</div>`:''}</div>
       ${history}
     </div>
     ${!archived&&role==='member'?tttSignupForm(d):''}
