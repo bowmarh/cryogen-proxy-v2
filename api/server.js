@@ -402,6 +402,7 @@ function postClosed(week, signups, assign){
 }
 
 function postLineups(week, signups, assign){
+  const captains = captainsOf({ week, assign });
   const byTeam = Object.fromEntries(week.teams.map(t => [t.id, []]));
   for (const s of signups) for (const id of assign[s.name.toLowerCase()] || []) if (byTeam[id]) byTeam[id].push(s);
   return discord('public', {
@@ -409,7 +410,10 @@ function postLineups(week, signups, assign){
       + (() => { const w = waitlistOf({ week, signups, assign }); return w.length ? `\n⏳ Waitlist: ${w.map(s => discordEscape(s.name)).join(', ')}` : ''; })(),
     embeds: [{ color: 0x10b981, fields: week.teams.slice(0, 25).map(t => ({
       name: `${t.name} · ${teamLabel(t)} (${byTeam[t.id].length}/${t.max})`.slice(0, 256),
-      value: (byTeam[t.id].map(s => `${s.cat ? `[${s.cat}] ` : ''}${discordEscape(s.name)}`).join('\n') || '—').slice(0, 1024),
+      value: (byTeam[t.id].map(s => {
+        const cap = captains[t.id] === s.name.toLowerCase();
+        return `${cap ? '⭐ ' : ''}${s.cat ? `[${s.cat}] ` : ''}${discordEscape(s.name)}${cap ? ' (captain)' : ''}`;
+      }).join('\n') || '—').slice(0, 1024),
       inline: true,
     })) }],
   });
@@ -435,6 +439,7 @@ function tttView(data, role){
     week: data.week,
     signups: data.signups.map(s => (staff ? s : { ...s, comments: undefined })),
     assign: showLineups ? data.assign : {},
+    captains: showLineups ? captainsOf(data) : {},
     waitlist: data.week && (data.week.published || staff) ? waitlistOf(data).map(s => s.name) : [],
     archive: data.archive,
     role: role || null,
@@ -479,6 +484,7 @@ const TTT_ROUTES = {
       doubleUp: body.doubleUp === true,
       preferred,
       comments: text(body.comments, 'comment', 300, false),
+      captain: body.captain === true,
       ts: new Date().toISOString(),
     };
     // Signing up again with the same name updates the entry but keeps their place in the queue.
@@ -538,14 +544,39 @@ const TTT_ROUTES = {
     const velo = await riderVelos(data.signups);
     const { placements, summary } = planTeams({ teams: data.week.teams, signups: data.signups, assign: data.assign, velo });
     const commands = Object.entries(placements).map(([key, ids]) => ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]);
-    if (commands.length) await redis(commands);
+    // Give every team without a captain its strongest volunteer.
+    const assign = { ...data.assign, ...placements };
+    const captains = captainsOf({ week: data.week, assign });
+    summary.noCaptain = [];
+    for (const t of data.week.teams){
+      const inTeam = Object.values(assign).some(ids => ids.includes(t.id));
+      if (!inTeam || captains[t.id]) continue;
+      const pick = pickCaptain(t.id, data.signups, assign, velo);
+      if (pick) captains[t.id] = pick; else summary.noCaptain.push(t.name);
+    }
+    commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
+    await redis(commands);
     return { ...tttView(await loadTtt(), roleFromRequest(req)), summary };
+  },
+
+  'POST /api/ttt/captain': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const data = await requireWeek();
+    const team = data.week.teams.find(t => t.id === body.team);
+    if (!team) throw new HttpError(400, 'Unknown team.');
+    const captains = { ...captainsOf(data) };
+    const key = typeof body.name === 'string' ? body.name.trim().toLowerCase() : '';
+    if (!key) delete captains[team.id];
+    else if (!(data.assign[key] || []).includes(team.id)) throw new HttpError(400, `That rider isn't in ${team.name}.`);
+    else captains[team.id] = key;
+    await weekWith({ captains });
   },
 
   'POST /api/ttt/clear-assign': async (req) => {
     requireRole(req, ['admin', 'mod']);
     await requireWeek();
     await redis([['DEL', TTT_KEYS.assign]]);
+    await weekWith({ captains: {} });
   },
 
   'POST /api/ttt/status': async (req, body) => {
@@ -650,6 +681,24 @@ function planTeams({ teams, signups, assign, velo }){
   return { placements, summary };
 }
 
+// ── Captains ───────────────────────────────────────────────
+// Stored on the week as {teamId: riderKey}. A captain only counts while they're still in that team.
+function captainsOf(data){
+  const out = {};
+  for (const [id, key] of Object.entries((data.week && data.week.captains) || {})){
+    if ((data.assign[key] || []).includes(id)) out[id] = key;
+  }
+  return out;
+}
+
+// The volunteer with the highest vELO in a team, or null.
+function pickCaptain(teamId, signups, assign, velo, excludeKey){
+  return signups
+    .filter(s => s.captain && s.name.toLowerCase() !== excludeKey && (assign[s.name.toLowerCase()] || []).includes(teamId))
+    .sort((a, b) => (velo[b.name.toLowerCase()] || 0) - (velo[a.name.toLowerCase()] || 0))
+    .map(s => s.name.toLowerCase())[0] || null;
+}
+
 // ── Waitlist ───────────────────────────────────────────────
 // Once line-ups are published, available riders without a team are on the waitlist, in
 // sign-up order. Freed places go to the first waitlisted rider who picked that team, else
@@ -665,6 +714,7 @@ function waitlistOf(data){
 async function freePlaces(data, key, riderName, reason){
   const week = data.week;
   const freed = (data.assign[key] || []).filter(id => week.teams.some(t => t.id === id));
+  const wasCaptainOf = freed.filter(id => captainsOf(data)[id] === key);
   const assign = { ...data.assign };
   delete assign[key];
   const commands = [['HDEL', TTT_KEYS.assign, key]];
@@ -680,13 +730,26 @@ async function freePlaces(data, key, riderName, reason){
       promoted.push({ rider: next, team: week.teams.find(t => t.id === id) });
     }
   }
+  // A departing captain is replaced by another volunteer in that team, if there is one.
+  const captainNews = [];
+  if (wasCaptainOf.length){
+    const velo = await riderVelos(data.signups);
+    const captains = { ...(week.captains || {}) };
+    for (const id of wasCaptainOf){
+      const next = pickCaptain(id, data.signups, assign, velo, key);
+      const team = week.teams.find(t => t.id === id).name;
+      if (next){ captains[id] = next; captainNews.push(`⭐ **${discordEscape(data.signups.find(s => s.name.toLowerCase() === next).name)}** is now captain of **${discordEscape(team)}**`); }
+      else { delete captains[id]; captainNews.push(`⭐ **${discordEscape(team)}** has no captain — please pick one`); }
+    }
+    commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...week, captains })]);
+  }
   await redis(commands);
   if (week.published && freed.length){
     const teamNames = freed.map(id => week.teams.find(t => t.id === id).name).join(' and ');
     const outcome = promoted.length
       ? promoted.map(p => `**${discordEscape(p.rider.name)}** promoted from the waitlist into **${discordEscape(p.team.name)}**`).join(', ')
       : 'nobody on the waitlist — a place is open';
-    await discord('admin', { content: `⚠️ **${discordEscape(riderName)}** ${reason} **${discordEscape(teamNames)}** — ${discordEscape(week.title)}. ${outcome}.` });
+    await discord('admin', { content: `⚠️ **${discordEscape(riderName)}** ${reason} **${discordEscape(teamNames)}** — ${discordEscape(week.title)}. ${outcome}.${captainNews.length ? '\n' + captainNews.join('\n') : ''}` });
     for (const p of promoted){
       await discord('public', { content: `🎉 **${discordEscape(p.rider.name)}** moves up from the waitlist into **${discordEscape(p.team.name)}** for ${discordEscape(week.title)}.` });
     }
