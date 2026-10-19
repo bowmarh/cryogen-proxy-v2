@@ -1045,6 +1045,17 @@ function tttLineups(d,opts){
       ${opts&&opts.staff?'':''}
     </div>`;}).join('')}</div>`;
 }
+function tttMyStatus(d){
+  if(role!=='member'||!memberRider||!d.week.published)return '';
+  const k=tttKey(memberRider.name); const me=d.signups.find(s=>tttKey(s.name)===k);
+  if(!me)return '';
+  const teams=(d.assign[k]||[]).map(id=>(d.week.teams.find(t=>t.id===id)||{name:id}).name);
+  const pos=(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1;
+  const box=(c,t)=>`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${c}55;font-size:14px">${t}</div>`;
+  if(teams.length)return box('#10B981',`✅ You're riding for <b>${esc(teams.join(' and '))}</b> this week.`);
+  if(pos)return box('#FBBF24',`⏳ You're <b>#${pos}</b> on the waitlist. If a place opens up you'll be moved in automatically.`);
+  return '';
+}
 function tttSignupForm(d){
   const week=d.week; const me=memberRider||{};
   const existing=d.signups.find(s=>tttKey(s.name)===tttKey(me.name));
@@ -1095,7 +1106,7 @@ function tttStaffPanel(d){
     const k=tttKey(s.name); const a=d.assign[k]||[]; const r=tttRider(s); const cat=s.cat||(r&&r.cat)||'';
     return `<tr style="${s.available?'':'opacity:.45'}">
       <td style="padding:6px 8px">${cat?catB(esc(cat)):''}</td>
-      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
+      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${w.published&&!a.length&&s.available?` <span style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⏳ waitlist #${(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1}</span>`:''}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
       <td style="padding:6px 8px;color:#9ca3af">${r&&r.velo?r.velo:'—'}</td>
       <td style="padding:6px 8px;font-size:11px;color:#9ca3af">${s.available?'':'Not available · '}${esc(TTT_STYLE_LABEL[s.style]||'')}${s.doubleUp?' · double-up':''}<div>${esc(s.preferred.map(id=>teamName[id]||id).join(', '))}</div></td>
       <td style="padding:6px 8px;white-space:nowrap">
@@ -1169,9 +1180,10 @@ function renderTtt(){
         ${!archived&&w.open&&w.closesAt?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">⏱️ Sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK</div>`:''}</div>
       ${history}
     </div>
+    ${!archived?tttMyStatus(d):''}
     ${!archived&&role==='member'?tttSignupForm(d):''}
     ${!archived&&tttStaff()?tttStaffPanel(d):''}
-    ${(w.published||tttStaff())?`<label class="lbl">${w.published?'Team line-ups':'Line-ups (preview — only staff can see this until published)'}</label>${tttLineups(d)}`:`<div class="card" style="padding:20px;text-align:center;color:#6b7280;font-size:13px">Team line-ups will appear here once the TTT admins publish them.</div>`}
+    ${(w.published||tttStaff())?`<label class="lbl">${w.published?'Team line-ups':'Line-ups (preview — only staff can see this until published)'}</label>${tttLineups(d)}${(w.published&&(d.waitlist||[]).length)?`<div class="card" style="padding:14px 16px;margin-top:12px"><label class="lbl">⏳ Waitlist — moves up automatically when someone withdraws</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.waitlist.map((n,i)=>`<span style="font-size:12px;background:rgba(251,191,36,0.08);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:99px">#${i+1} ${esc(n)}</span>`).join('')}</div></div>`:''}`:`<div class="card" style="padding:20px;text-align:center;color:#6b7280;font-size:13px">Team line-ups will appear here once the TTT admins publish them.</div>`}
     ${!archived&&!w.published&&d.signups.length?`<div style="margin-top:20px"><label class="lbl">Signed up so far</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.signups.filter(s=>s.available).map(s=>`<span style="font-size:12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(s.name)}</span>`).join('')}</div></div>`:''}
   `;
 }
