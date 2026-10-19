@@ -17,7 +17,8 @@ const SHEET_TABS = {
 };
 
 // ── Shared data ────────────────────────────────────────────
-const SERIES_MAX = { ttt: 40, ladder: 30, zrl: 24, dirt: 20, herd: 30 };
+// Weekly TTT moved to its own TTT Week feature (/api/ttt).
+const SERIES_MAX = { ladder: 30, zrl: 24, dirt: 20, herd: 30 };
 const CATS = ['A+', 'A', 'B', 'C', 'D'];
 const KEYS = {
   signups: 'cg:signups', // field "<series>|<lowercase name>"

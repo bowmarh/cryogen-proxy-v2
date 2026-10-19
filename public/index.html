@@ -167,7 +167,7 @@ table{width:100%;border-collapse:collapse}
     <div class="stat4">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#00D4FF;margin-bottom:8px">👥 Roster</div><div id="s-riders" style="font-size:22px;font-weight:900">—</div><div id="s-riders-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">📈 Avg vELO</div><div id="s-velo" style="font-size:22px;font-weight:900">—</div><div id="s-velo-s" style="font-size:11px;color:#6b7280;margin-top:3px">loading</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">0/40</div><div style="font-size:11px;color:#6b7280;margin-top:3px">Wed 28 May</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">—</div><div id="s-ttt-s" style="font-size:11px;color:#6b7280;margin-top:3px">TTT Week</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#F59E0B;margin-bottom:8px">🚴 Rides</div><div id="s-rides" style="font-size:22px;font-weight:900">—</div><div style="font-size:11px;color:#6b7280;margin-top:3px">upcoming</div></div>
     </div>
     <div class="grid2" style="margin-bottom:20px">
@@ -208,6 +208,10 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Events & Sign-Up</h2><p style="font-size:13px;color:#6b7280">Race series · team events</p></div>
       <div style="display:flex;gap:8px" id="event-admin-btns"></div>
+    </div>
+    <div class="card" style="padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-color:rgba(0,212,255,0.25)">
+      <span style="font-size:13px">🏁 <b>Weekly TTT sign-ups have moved</b> <span style="color:#9ca3af">— pick your preferred teams and see your line-up on the TTT Week page.</span></span>
+      <button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Go to TTT Week →</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
@@ -329,7 +333,6 @@ const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder
 const ZRA_RANK  = {Diamond:1,Ruby:2,Emerald:3,Sapphire:4,Amethyst:5,Platinum:6,Gold:7,Silver:8,Bronze:9,Copper:10};
 const CAT_RANK  = {"A+":1,A:2,B:3,C:4,D:5};
 const SERIES = [
-  {id:'ttt',    name:'Weekly TTT',           emoji:'⏱️', max:40, desc:'Team Time Trial · Wed 19:00 UTC · Tempus Fugit · 17.3km'},
   {id:'ladder', name:'Ladder League',        emoji:'🏅', max:30, desc:'Weekly handicap racing · Tuesdays · all categories welcome'},
   {id:'zrl',    name:'Zwift Racing League',  emoji:'🏆', max:24, desc:'ZRL Team Series · divisional racing · season format'},
   {id:'dirt',   name:'Dirt Race Series',     emoji:'🚵', max:20, desc:'Gravel & off-road racing · mixed terrain events'},
@@ -359,7 +362,7 @@ let rides=[];
 let rsvps={};
 let sharedError='';
 let mPage=1,mActive=false,rsvpId=null;
-let activeSeries='ttt';
+let activeSeries='ladder';
 let mSort={col:'velo',dir:'desc'};
 let rSort={col:'velo',dir:'desc'};
 let liveResults = [];
@@ -483,6 +486,7 @@ function launchApp(r){
   renderAll();
   loadLive();
   loadShared();
+  loadTttSummary();
 }
 function doLogout(){sessionStorage.clear();location.reload();}
 
@@ -694,7 +698,12 @@ function renderAll(){
   document.getElementById('s-riders-s').textContent=riders.length?`${riders.length} in roster`:'mock data';
   document.getElementById('s-velo').textContent=avg||'—';
   document.getElementById('s-velo-s').textContent=riders.length?'Live':'mock data';
-  document.getElementById('s-ttt').textContent=`${(allSignups.ttt||[]).length}/40`;
+  if(tttData&&tttData.week){
+    const avail=tttData.signups.filter(s=>s.available).length;
+    const spots=tttData.week.teams.reduce((n,t)=>n+t.max,0);
+    document.getElementById('s-ttt').textContent=`${avail}/${spots}`;
+    document.getElementById('s-ttt-s').textContent=new Date(tttData.week.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+  }
   document.getElementById('s-rides').textContent=rides.length;
 
   const top=[...active].sort((a,b)=>b.velo-a.velo).slice(0,10);
@@ -1000,6 +1009,9 @@ async function loadTtt(){
     tttData=d;
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;color:#FBBF24;font-size:13px">⚠️ TTT data could not be loaded: ${esc(e.message)}</div>`; return; }
   renderTtt();
+}
+async function loadTttSummary(){
+  try{ const res=await fetch('/api/ttt',{headers:tttHeaders()}); if(res.ok){ tttData=await res.json(); renderAll(); } }catch(e){}
 }
 async function tttWrite(path,payload){
   let res,d;
@@ -1431,6 +1443,7 @@ if(role){
   renderAll();
   loadLive();
   loadShared();
+  loadTttSummary();
 }
 </script>
 </body>
