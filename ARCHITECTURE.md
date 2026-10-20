@@ -2,13 +2,12 @@
 
 ```
 Browser (public/index.html)
- ├─ fetch https://cryogen.team/wp-json/cryogen/v1/...   → WordPress plugin on Hostinger
- │     /members                     member records (tier, status, offboarding)
+ ├─ fetch /api/roster, POST /api/members/{zwiftId}       → api/server.js → WordPress plugin on Hostinger
+ │     /members                     member records (tier, status, offboarding), read + PATCH
  │     /zwift/public/clubs/2740/0   live roster from ZwiftRacing.app
- │     /zwift/public/results        race results
  ├─ fetch /api/proxy?endpoint=rides|ttt-sheet           → api/server.js → Google Sheets (gviz JSON)
  ├─ fetch /api/state, POST /api/signups|rsvps|rides|…   → api/server.js → Upstash Redis (shared)
- └─ localStorage                                         admin tier/status edits (per browser)
+ └─ localStorage                                         affiliation history (per browser)
 ```
 
 ## Frontend (`public/index.html`)
@@ -16,11 +15,11 @@ Browser (public/index.html)
 A single file with no build step. Tabs: Team Overview, Racing Dashboard, Events & Sign-Up, Social Rides, Members, plus a profile page.
 
 - **Roles:** admin, moderator and member. Admin and moderator passwords are checked by `POST /api/login` against the `ADMIN_PASSWORD` / `MOD_PASSWORD` environment variables. Members pick themselves from the live roster by name or Zwift ID. The role is kept in `sessionStorage`.
-- **Data loading:** `loadLive()` reads `/members` from WordPress, then the club roster, and merges the two by Zwift ID. If loading fails, it falls back to a small `MOCK` roster.
-- **WordPress auth:** the `api()` helper sends `X-WP-Nonce` when the page runs inside WordPress (`window.wpApiSettings`), and otherwise a Basic auth header.
+- **Data loading:** `loadLive()` reads `/api/roster`, which merges the club roster with the WordPress member records by Zwift ID. If loading fails, it falls back to a small `MOCK` roster.
+- **Member edits:** tier, status and off-boarding checkboxes call `POST /api/members/{zwiftId}` (staff only). The server PATCHes the WordPress record, reads it back, and reports an error if a field didn't save. The browser never holds WordPress credentials.
 - **Shared state:** sign-ups, series locks, club-created rides and RSVPs come from `/api/state`. Every write returns the full new state, which the page re-renders from.
 - **Escaping:** everything people type is shown to other people, so it's rendered through `esc()`. Values passed to click handlers go through `data-*` attributes, never inline into the JS.
-- **Local state:** admin tier/status edits and affiliation history are still saved to `localStorage`.
+- **Local state:** affiliation history is still saved to `localStorage`.
 
 ## Proxy (`api/server.js`)
 

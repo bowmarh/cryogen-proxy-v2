@@ -17,6 +17,5 @@
 - **The old admin and moderator passwords are still in git history.** They must not be reused.
 
 ### Functionality
-- **Admin tier/status edits are still per browser.** They belong with the member records in WordPress.
 - **Member login only searches the live roster once it has loaded.** Before that it falls back to the small `MOCK` list.
 - **`schema.sql` is empty.**

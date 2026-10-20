@@ -929,6 +929,53 @@ async function handleRoster(req, res){
   sendJSON(res, 200, { riders, members: memberView, membersError: staff ? membersError : undefined });
 }
 
+// Staff edits to a member record, saved to WordPress with the server's credentials.
+const MEMBER_FIELDS = {
+  tier: ['full', 'half'],
+  status: ['active', 'suspended', 'left'],
+  offboard_discord: ['0', '1'],
+  offboard_fb: ['0', '1'],
+  offboard_zp: ['0', '1'],
+};
+const MEMBER_VIEW_KEYS = ['zwift_id', 'name', 'status', 'tier', 'offboard_discord', 'offboard_fb', 'offboard_zp'];
+
+async function handleMemberUpdate(req, res, zwiftId){
+  requireRole(req, ['admin', 'mod']);
+  const body = await readJSONBody(req);
+  const changes = {};
+  for (const [k, allowed] of Object.entries(MEMBER_FIELDS)){
+    if (body[k] === undefined) continue;
+    if (!allowed.includes(String(body[k]))) throw new HttpError(400, `invalid ${k}`);
+    changes[k] = String(body[k]);
+  }
+  if (!Object.keys(changes).length) throw new HttpError(400, 'nothing to change');
+  const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
+    ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
+  if (!auth) throw new HttpError(503, 'WordPress member records are not configured on the server.');
+
+  const find = list => (Array.isArray(list) ? list : []).find(m => String(m.zwift_id) === String(zwiftId));
+  const record = find(await wpGet('/members', auth));
+  if (!record) throw new HttpError(404, 'This rider has no member record in WordPress.');
+  const r = await fetch(`${WP_API}/members/${encodeURIComponent(record.id ?? zwiftId)}`, {
+    method: 'PATCH',
+    headers: {
+      'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json', 'Content-Type': 'application/json',
+      Authorization: `Basic ${Buffer.from(auth).toString('base64')}`,
+    },
+    body: JSON.stringify(changes),
+  });
+  if (!r.ok){
+    const d = await r.json().catch(() => ({}));
+    throw new HttpError(502, `WordPress refused the change (${r.status}${d.message ? `: ${d.message}` : ''}).`);
+  }
+  // The plugin doesn't document its fields, so read the record back rather than trust the 200.
+  const after = find(await wpGet('/members', auth));
+  const missed = Object.keys(changes).filter(k => String(after?.[k]) !== changes[k]);
+  if (missed.length) throw new HttpError(502, `WordPress accepted the request but didn't save: ${missed.join(', ')}.`);
+  rosterCache = null;
+  sendJSON(res, 200, { member: pick(after, MEMBER_VIEW_KEYS) });
+}
+
 // ── Sheet proxy ────────────────────────────────────────────
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
@@ -1035,6 +1082,8 @@ async function route(req, res){
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
+  const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
+  if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
 
   const dataRoute = DATA_ROUTES[`${req.method} ${pathname}`];
