@@ -967,7 +967,8 @@ async function handleMemberUpdate(req, res, zwiftId){
   const find = list => uniqueMembers(list).find(m => String(m.zwift_id) === String(zwiftId));
   const record = find(await wpGet('/members', auth));
   if (!record) throw new HttpError(404, 'This rider has no member record in WordPress.');
-  const r = await fetch(`${WP_API}/members/${encodeURIComponent(record.id ?? zwiftId)}`, {
+  const recordId = record.id ?? zwiftId;
+  const r = await fetch(`${WP_API}/members/${encodeURIComponent(recordId)}`, {
     method: 'PATCH',
     headers: {
       'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json', 'Content-Type': 'application/json',
@@ -975,14 +976,21 @@ async function handleMemberUpdate(req, res, zwiftId){
     },
     body: JSON.stringify(changes),
   });
+  const replyText = await r.text();
   if (!r.ok){
-    const d = await r.json().catch(() => ({}));
-    throw new HttpError(502, `WordPress refused the change (${r.status}${d.message ? `: ${d.message}` : ''}).`);
+    let message = '';
+    try { message = JSON.parse(replyText).message || ''; } catch (e) { /* not JSON */ }
+    throw new HttpError(502, `WordPress refused the change (${r.status}${message ? `: ${message}` : ''}).`);
   }
   // The plugin doesn't document its fields, so read the record back rather than trust the 200.
   const after = find(await wpGet('/members', auth));
   const missed = Object.keys(changes).filter(k => String(after?.[k]) !== changes[k]);
-  if (missed.length) throw new HttpError(502, `WordPress accepted the request but didn't save: ${missed.join(', ')}.`);
+  if (missed.length){
+    // The plugin's fields aren't documented, so say what was sent and what came back (no secrets in any of it).
+    throw new HttpError(502, `WordPress accepted the request but didn't save: ${missed.join(', ')}. ` +
+      `Patched /members/${recordId} with ${JSON.stringify(changes)}; WordPress replied ${replyText.slice(0, 200)}; ` +
+      `record fields: ${Object.keys(record).join(', ')}.`);
+  }
   rosterCache = null;
   sendJSON(res, 200, { member: pick(after, MEMBER_VIEW_KEYS) });
 }
