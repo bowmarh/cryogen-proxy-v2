@@ -918,8 +918,19 @@ async function fetchRoster(){
   return rosterCache;
 }
 
+// WordPress can hold several records for one Zwift ID (test entries, re-registrations).
+// Everything here uses the last one, so what the page shows is what a save changes.
+function uniqueMembers(list){
+  const byId = new Map();
+  for (const m of Array.isArray(list) ? list : []){
+    if (/^\d+$/.test(String(m.zwift_id))) byId.set(String(m.zwift_id), m);
+  }
+  return [...byId.values()];
+}
+
 async function handleRoster(req, res){
-  const { riders, members, membersError } = await fetchRoster();
+  const { riders, members: allMembers, membersError } = await fetchRoster();
+  const members = allMembers && uniqueMembers(allMembers);
   const staff = ['admin', 'mod'].includes(roleFromRequest(req));
   // Everyone sees name/status/tier; off-boarding progress is staff-only.
   const memberView = members && members.map(m => ({
@@ -953,7 +964,7 @@ async function handleMemberUpdate(req, res, zwiftId){
     ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
   if (!auth) throw new HttpError(503, 'WordPress member records are not configured on the server.');
 
-  const find = list => (Array.isArray(list) ? list : []).find(m => String(m.zwift_id) === String(zwiftId));
+  const find = list => uniqueMembers(list).find(m => String(m.zwift_id) === String(zwiftId));
   const record = find(await wpGet('/members', auth));
   if (!record) throw new HttpError(404, 'This rider has no member record in WordPress.');
   const r = await fetch(`${WP_API}/members/${encodeURIComponent(record.id ?? zwiftId)}`, {
