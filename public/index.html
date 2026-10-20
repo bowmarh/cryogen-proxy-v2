@@ -354,7 +354,7 @@ let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
 let allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
 let lockedSeries={};
-let localMemberState = load('cg_member_state') || {}; 
+localStorage.removeItem('cg_member_state');
 let affiliationLog = JSON.parse(localStorage.getItem('cg_aff') || '{}');
 localStorage.removeItem('cg_ri');
 let zwiftEventRides = [];
@@ -377,19 +377,25 @@ function setZRA(color, msg) {
 
 // ── API Bridge to WordPress ──────────────────────────────
 const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
-const WP_AUTH = window.wpApiSettings ? window.wpApiSettings.nonce : 'Basic ' + btoa('admin_username:application_password'); 
 
-async function api(endpoint, method = 'GET', payload = null) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (window.wpApiSettings) { headers['X-WP-Nonce'] = WP_AUTH; } 
-  else { headers['Authorization'] = WP_AUTH; }
-  const options = { method, headers };
-  if (payload) options.body = JSON.stringify(payload);
-  const res = await fetch(WP_URL + endpoint, options);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
-  return data;
-} 
+// Member edits go through our server, which holds the WordPress login.
+async function saveMember(id, changes) {
+  let res, d;
+  try {
+    res = await fetch('/api/members/' + encodeURIComponent(id), { method: 'POST', headers: tttHeaders(), body: JSON.stringify(changes) });
+    d = await res.json();
+  } catch (e) { alert('Could not reach the server. Please try again.'); return false; }
+  if (!res.ok) { alert('Not saved: ' + (d.error || ('HTTP ' + res.status))); return false; }
+  const r = riders.find(x => x.id === id);
+  if (r) applyMemberRecord(r, d.member || {});
+  renderMembers();
+  return true;
+}
+function applyMemberRecord(r, m) {
+  if (m.tier) r.tier = m.tier;
+  if (m.status) { r.status = m.status; r.active = m.status === 'active'; }
+  for (const k of ['discord', 'fb', 'zp']) if (m['offboard_' + k] !== undefined) r['ob_' + k] = String(m['offboard_' + k]) === '1';
+}
 
 const MOCK=[
   {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"half",status:"active"},
@@ -546,9 +552,9 @@ async function loadLive() {
         active: status === 'active',
         tier: dbRecord.tier || 'half',
         status,
-        ob_discord: dbRecord.offboard_discord === '1',
-        ob_fb: dbRecord.offboard_fb === '1',
-        ob_zp: dbRecord.offboard_zp === '1',
+        ob_discord: String(dbRecord.offboard_discord) === '1',
+        ob_fb: String(dbRecord.offboard_fb) === '1',
+        ob_zp: String(dbRecord.offboard_zp) === '1',
         raw: r,
       };
     });
@@ -562,24 +568,14 @@ async function loadLive() {
 }
 
 // ── Action Functions (Tier Toggle & Off-boarding) ──────────
-function changeTier(id, tier) {
-  localMemberState[id] = localMemberState[id] || {};
-  localMemberState[id].tier = tier;
-  save('cg_member_state', localMemberState);
-  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
-  if(r) r.tier = tier;
-  renderMembers();
+async function changeTier(id, tier) {
+  if (!await saveMember(id, { tier })) renderMembers();
 }
 
 function updateStatus(id, action, days) {
-  let msg = action === 'left' ? 'Permanently offboard this rider?' : (action === 'suspended' ? `Suspend rider for ${days} days?` : 'Unsuspend rider?');
+  let msg = action === 'left' ? 'Permanently offboard this rider?' : (action === 'suspended' ? 'Suspend this rider?' : 'Unsuspend rider?');
   if(!confirm(msg)) return;
-  localMemberState[id] = localMemberState[id] || {};
-  localMemberState[id].status = action;
-  save('cg_member_state', localMemberState);
-  const r = (riders.length ? riders : MOCK).find(x => x.id === id);
-  if(r) { r.status = action; r.active = (action === 'active'); }
-  renderMembers();
+  saveMember(id, { status: action });
 }
 
 function renderOffboarding() {
@@ -587,10 +583,7 @@ function renderOffboarding() {
   if (!el) return;
   const pendingOffboard = (riders.length ? riders : MOCK).filter(r => r.status === 'left');
   if (pendingOffboard.length === 0) { el.innerHTML = ''; return; }
-  const incomplete = pendingOffboard.filter(r => {
-    const state = localMemberState[r.id] || {};
-    return !(state.ob_discord && state.ob_fb && state.ob_zp);
-  });
+  const incomplete = pendingOffboard.filter(r => !(r.ob_discord && r.ob_fb && r.ob_zp));
   if (incomplete.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = `
     <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
@@ -610,7 +603,7 @@ function renderOffboarding() {
           </thead>
           <tbody>
             ${incomplete.map(r => {
-              const state = localMemberState[r.id] || {};
+              const state = r;
               return `
               <tr style="border-top:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:10px 0; font-weight:600;">${r.name}</td>
@@ -632,14 +625,8 @@ function renderOffboarding() {
 }
 
 async function toggleOffboard(id, platform, isChecked) {
-  try {
-    await api(`/members/${id}/offboard-step`, 'POST', { platform: platform, state: isChecked ? 1 : 0 });
-    const r = riders.find(x => x.id === id);
-    if(r) r[platform] = isChecked;
-    renderOffboarding();
-  } catch(e) {
-    alert("Failed to save to database: " + e.message);
-  }
+  // platform is ob_discord / ob_fb / ob_zp; WordPress calls the same fields offboard_*.
+  if (!await saveMember(id, { [platform.replace('ob_', 'offboard_')]: isChecked ? '1' : '0' })) renderOffboarding();
 }
 
 // ── Sort helpers ───────────────────────────────────────────
