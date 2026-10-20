@@ -1044,8 +1044,9 @@ function parseGviz(textBody){
     }
   }
   headers = headers.map((h, i) => h || `Column ${i + 1}`);
-  // This data is public, so never pass on email columns or email-looking values.
-  const keep = headers.map((h, i) => !/e-?mail/i.test(h) && !rows.some(r => EMAIL_RE.test(r[i])));
+  // This data is public, so never pass on email columns or email-looking values, nor the
+  // personal columns (gender, free-text comments) that the dashboard doesn't use.
+  const keep = headers.map((h, i) => !/e-?mail|^\s*(gender|sex|comments?|notes?)\s*$/i.test(h) && !rows.some(r => EMAIL_RE.test(r[i])));
   headers = headers.filter((h, i) => keep[i]);
   rows = rows
     .filter(r => r.some(v => v !== ''))
