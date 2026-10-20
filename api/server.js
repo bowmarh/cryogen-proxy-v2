@@ -75,13 +75,13 @@ function tokenSecret(){
     .digest('hex');
 }
 
-function signToken(role){
-  const payload = Buffer.from(JSON.stringify({ role, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
+function signToken(role, extra = {}){
+  const payload = Buffer.from(JSON.stringify({ ...extra, role, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
   const sig = crypto.createHmac('sha256', tokenSecret()).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
-function roleFromRequest(req){
+function sessionFromRequest(req){
   const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
   if (!m) return null;
   const [payload, sig] = m[1].split('.');
@@ -89,9 +89,36 @@ function roleFromRequest(req){
   const expected = crypto.createHmac('sha256', tokenSecret()).update(payload).digest('base64url');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
-    const { role, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return exp > Date.now() && ROLE_PASSWORD_ENV[role] ? role : null;
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return session.exp > Date.now() ? session : null;
   } catch (e) { return null; }
+}
+
+// Staff role ('admin' / 'mod'), or null. A member session is never a staff role.
+function roleFromRequest(req){
+  const session = sessionFromRequest(req);
+  return session && ROLE_PASSWORD_ENV[session.role] ? session.role : null;
+}
+
+// A rider who signed in with their cryogen.team account: { zwid, name }, or null.
+function memberFromRequest(req){
+  const session = sessionFromRequest(req);
+  return session && session.role === 'member' && /^\d{1,12}$/.test(String(session.zwid)) && session.name
+    ? { zwid: String(session.zwid), name: String(session.name) } : null;
+}
+
+// Who a sign-up / withdrawal / RSVP is for. A signed-in member always acts as themselves.
+// Staff and (until REQUIRE_MEMBER_LOGIN=1) guests name the rider in the request.
+function identify(req, body){
+  const member = memberFromRequest(req);
+  if (member) return member;
+  if (!roleFromRequest(req) && process.env.REQUIRE_MEMBER_LOGIN === '1'){
+    throw new HttpError(401, 'Please sign in with your cryogen.team account.');
+  }
+  return {
+    name: text(body.name, 'name', 60),
+    zwid: /^\d{1,12}$/.test(String(body.zwid || '')) ? String(body.zwid) : '',
+  };
 }
 
 function requireRole(req, roles){
@@ -195,9 +222,8 @@ const DATA_ROUTES = {
 
   'POST /api/signups': async (req, body) => {
     const s = series(body.series);
-    const name = text(body.name, 'name', 60);
+    const { name, zwid } = identify(req, body);
     const cat = CATS.includes(body.cat) ? body.cat : 'B';
-    const zwid = /^\d{1,12}$/.test(String(body.zwid || '')) ? String(body.zwid) : '';
     const [locked, all] = await redis([['HGET', KEYS.locks, s], ['HKEYS', KEYS.signups]]);
     if (locked === '1') throw new HttpError(409, 'Sign-ups are locked.');
     if (all.filter(f => f.startsWith(`${s}|`)).length >= SERIES_MAX[s]) throw new HttpError(409, 'Event is full.');
@@ -252,14 +278,14 @@ const DATA_ROUTES = {
 
   'POST /api/rsvps': async (req, body) => {
     const id = rideId(body.rideId);
-    const name = text(body.name, 'name', 60);
+    const { name } = identify(req, body);
     const entry = { name, ts: new Date().toISOString() };
     const [added] = await redis([['HSETNX', KEYS.rsvps, `${id}|${name.toLowerCase()}`, JSON.stringify(entry)]]);
     if (!added) throw new HttpError(409, "Already RSVP'd!");
   },
 
   'POST /api/rsvps/cancel': async (req, body) => {
-    await redis([['HDEL', KEYS.rsvps, `${rideId(body.rideId)}|${text(body.name, 'name', 60).toLowerCase()}`]]);
+    await redis([['HDEL', KEYS.rsvps, `${rideId(body.rideId)}|${identify(req, body).name.toLowerCase()}`]]);
   },
 };
 
@@ -508,12 +534,12 @@ const TTT_ROUTES = {
   'POST /api/ttt/signup': async (req, body) => {
     const { week } = await requireWeek();
     if (!week.open) throw new HttpError(409, 'TTT sign-ups are closed for this week.');
-    const name = text(body.name, 'name', 60);
+    const { name, zwid } = identify(req, body);
     const teamIds = new Set(week.teams.map(t => t.id));
     const preferred = (Array.isArray(body.preferred) ? body.preferred : []).filter(id => teamIds.has(id)).slice(0, 5);
     const entry = {
       name,
-      zwid: /^\d{1,12}$/.test(String(body.zwid || '')) ? String(body.zwid) : '',
+      zwid,
       cat: CATS.includes(body.cat) ? body.cat : '',
       available: body.available !== false,
       style: TTT_STYLES.includes(body.style) ? body.style : 'casual',
@@ -550,7 +576,7 @@ const TTT_ROUTES = {
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
-    const key = text(body.name, 'name', 60).toLowerCase();
+    const key = identify(req, body).name.toLowerCase();
     const data = await loadTtt();
     const rider = data.signups.find(s => s.name.toLowerCase() === key);
     await redis([['HDEL', TTT_KEYS.signups, key]]);
@@ -1004,6 +1030,63 @@ async function handleMemberUpdate(req, res, zwiftId){
   sendJSON(res, 200, { member: { ...pick(after, MEMBER_VIEW_KEYS), ...changes } });
 }
 
+// ── Member sign-in (cryogen.team account) ──────────────────
+// A small snippet on cryogen.team sends a logged-in member back here with a short-lived token:
+//   base64url(JSON {zwid, name, exp, n}) + '.' + base64url(HMAC-SHA256(WP_SSO_SECRET, that first part))
+// We check the signature, accept each token once, and hand the browser a member session.
+const SSO_MAX_AGE_MS = 10 * 60 * 1000;
+const WP_SSO_LOGIN_URL = process.env.WP_SSO_LOGIN_URL || 'https://cryogen.team/club-login';
+
+function ssoRedirect(res, fragment){
+  res.writeHead(302, { Location: `/#${fragment}`, 'Cache-Control': 'no-store' });
+  res.end();
+}
+
+function readSsoToken(token){
+  const secret = process.env.WP_SSO_SECRET;
+  if (!secret) throw new HttpError(503, 'Sign-in with cryogen.team is not set up yet.');
+  const [payload, sig] = String(token || '').split('.');
+  if (!payload || !sig) throw new HttpError(400, 'That sign-in link is not valid.');
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))){
+    throw new HttpError(400, 'That sign-in link is not valid.');
+  }
+  let data;
+  try { data = JSON.parse(Buffer.from(payload, 'base64url').toString()); } catch (e) { data = null; }
+  if (!data || !/^\d{1,12}$/.test(String(data.zwid)) || !/^[\w-]{8,64}$/.test(String(data.n))){
+    throw new HttpError(400, 'That sign-in link is not valid.');
+  }
+  const now = Date.now();
+  if (!(data.exp > now) || data.exp > now + SSO_MAX_AGE_MS) throw new HttpError(400, 'That sign-in link has expired. Please try again.');
+  return { zwid: String(data.zwid), name: String(data.name || ''), n: String(data.n) };
+}
+
+async function handleWpSso(req, res, token){
+  try {
+    const t = readSsoToken(token);
+    const [fresh] = await redis([['SET', `cg:sso:${t.n}`, '1', 'NX', 'EX', '900']]);
+    if (fresh !== 'OK') throw new HttpError(400, 'That sign-in link was already used. Please try again.');
+    const { riders, members } = await fetchRoster();
+    const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === t.zwid);
+    if (record && record.status === 'left') throw new HttpError(403, 'Your membership is no longer active.');
+    const rider = riders.find(r => String(r.riderId) === t.zwid);
+    const name = (rider && rider.name) || t.name;
+    if (!name) throw new HttpError(403, 'Your Zwift ID is not in the club roster yet. Ask a moderator.');
+    ssoRedirect(res, `sso=${signToken('member', { zwid: t.zwid, name })}`);
+  } catch (e) {
+    if (!(e instanceof HttpError)) throw e;
+    ssoRedirect(res, `sso_error=${encodeURIComponent(e.message)}`);
+  }
+}
+
+async function handleMe(req, res){
+  const member = memberFromRequest(req);
+  if (!member) return sendJSON(res, 401, { error: 'Not signed in as a member.' });
+  const { members } = await fetchRoster();
+  const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === member.zwid);
+  sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && record.tier, status: record && record.status });
+}
+
 // ── Sheet proxy ────────────────────────────────────────────
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
@@ -1111,6 +1194,11 @@ async function route(req, res){
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
+  if (pathname === '/api/auth/status' && req.method === 'GET'){
+    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: process.env.REQUIRE_MEMBER_LOGIN === '1' });
+  }
+  if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
+  if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
   const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);

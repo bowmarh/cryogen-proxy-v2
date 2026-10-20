@@ -86,14 +86,18 @@ table{width:100%;border-collapse:collapse}
     </div>
     <div id="login-step1" class="card" style="padding:24px">
       <div style="font-size:13px;color:#9ca3af;margin-bottom:20px;text-align:center">Select your access level</div>
+      <div id="sso-err" style="margin-bottom:12px;font-size:12px;color:#f87171;text-align:center;display:none"></div>
       <div style="display:flex;flex-direction:column;gap:10px">
+        <a id="sso-btn" href="#" style="display:none;padding:14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;align-items:center;gap:12px;text-decoration:none">
+          <span style="font-size:20px">✅</span><div><div>Sign in with your cryogen.team account</div><div style="font-size:11px;color:#6b7280;font-weight:400">Verified · sign up and RSVP as yourself</div></div>
+        </a>
         <button onclick="loginStep('admin')" style="padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
           <span style="font-size:20px">🔑</span><div><div>Administrator</div><div style="font-size:11px;color:#6b7280;font-weight:400">Full access · manage all settings</div></div>
         </button>
         <button onclick="loginStep('mod')" style="padding:14px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
           <span style="font-size:20px">🛡️</span><div><div>Moderator</div><div style="font-size:11px;color:#6b7280;font-weight:400">View all riders · manage events</div></div>
         </button>
-        <button onclick="loginStep('member')" style="padding:14px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
+        <button id="guest-btn" onclick="loginStep('member')" style="padding:14px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:white;font-size:14px;font-weight:700;text-align:left;display:flex;align-items:center;gap:12px">
           <span style="font-size:20px">🚴</span><div><div>Member</div><div style="font-size:11px;color:#6b7280;font-weight:400">Your profile · sign up for events</div></div>
         </button>
       </div>
@@ -495,6 +499,33 @@ function launchApp(r){
   loadTttSummary();
 }
 function doLogout(){sessionStorage.clear();location.reload();}
+
+// ── Sign in with cryogen.team ──────────────────────────────
+function showSsoError(msg){const el=document.getElementById('sso-err');el.textContent=msg;el.style.display='block';}
+async function loginScreenSetup(err){
+  if(err) showSsoError(err);
+  try{
+    const d=await (await fetch('/api/auth/status')).json();
+    if(d.sso){const b=document.getElementById('sso-btn');b.href=d.url;b.style.display='flex';}
+    if(d.requireLogin) document.getElementById('guest-btn').style.display='none';
+  }catch(e){ /* guest login still works */ }
+}
+async function ssoLogin(token){
+  sessionStorage.setItem('token',token);
+  await loadLive();
+  let me;
+  try{
+    const res=await fetch('/api/me',{headers:tttHeaders()});
+    me=await res.json();
+    if(!res.ok) throw new Error(me.error||('HTTP '+res.status));
+  }catch(e){ sessionStorage.removeItem('token'); showSsoError('Sign-in failed: '+e.message); return; }
+  const rider=riders.find(x=>String(x.id)===me.zwid);
+  if(!rider){ sessionStorage.removeItem('token'); showSsoError('Your Zwift ID ('+me.zwid+') is not on the club roster yet. Ask a moderator.'); return; }
+  sessionStorage.setItem('memberRider',JSON.stringify(rider));
+  sessionStorage.setItem('sso','1');
+  memberRider=rider;
+  launchApp('member');
+}
 
 // ── Role Setup ─────────────────────────────────────────────
 function setupRole(){
@@ -1328,6 +1359,7 @@ function renderProfile(){
           <span style="font-size:12px;color:#6b7280">${PH_EMOJI[r.ph]||'⭐'} ${r.ph}</span>
           <span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">vELO ${r.velo}</span>
         </div>
+        <div style="margin-top:6px;font-size:12px;color:#6b7280">Membership: ${esc(r.tier==='full'?'Full':'Half')} · ${esc(r.status||'active')}${sessionStorage.getItem('sso')?' · <span style="color:#10B981">✓ signed in with cryogen.team</span>':''}</div>
       </div>
     </div>
 
@@ -1513,8 +1545,14 @@ function renderSheetPanel(d){
 }
 
 // ── Init ───────────────────────────────────────────────────
-if(!role) loadLive();
-if(role){
+// Coming back from cryogen.team the server puts the result in the URL fragment (never sent to servers or logs).
+const ssoParams=new URLSearchParams(location.hash.slice(1));
+const ssoToken=ssoParams.get('sso'), ssoError=ssoParams.get('sso_error');
+if(ssoToken||ssoError) history.replaceState(null,'',location.pathname+location.search);
+if(ssoToken) ssoLogin(ssoToken);
+else if(!role) loginScreenSetup(ssoError);
+if(!role && !ssoToken) loadLive();
+if(role && !ssoToken){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
