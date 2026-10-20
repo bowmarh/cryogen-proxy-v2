@@ -872,8 +872,14 @@ let rosterCache = null; // { at, riders, members, membersError }
 
 async function wpGet(pathname, auth){
   const headers = { 'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json' };
-  if (auth) headers.Authorization = `Basic ${Buffer.from(auth).toString('base64')}`;
-  const r = await fetch(`${WP_API}${pathname}`, { headers });
+  let query = '';
+  if (auth){
+    headers.Authorization = `Basic ${Buffer.from(auth).toString('base64')}`;
+    // Member records change when staff edit them; don't let a page cache on the WordPress side serve an old copy.
+    headers['Cache-Control'] = 'no-cache';
+    query = `${pathname.includes('?') ? '&' : '?'}_cb=${Date.now()}`;
+  }
+  const r = await fetch(`${WP_API}${pathname}${query}`, { headers });
   if (!r.ok) throw new HttpError(502, `cryogen.team returned ${r.status} for ${pathname}`);
   return r.json();
 }
@@ -984,7 +990,10 @@ async function handleMemberUpdate(req, res, zwiftId){
   }
   // The plugin doesn't document its fields, so read the record back rather than trust the 200.
   const after = find(await wpGet('/members', auth));
-  const missed = Object.keys(changes).filter(k => String(after?.[k]) !== changes[k]);
+  // WordPress echoes the fields it applied (e.g. {"ok":true,"id":1,"tier":"half"}); that counts as saved too.
+  let echoed = {};
+  try { echoed = JSON.parse(replyText) || {}; } catch (e) { /* not JSON */ }
+  const missed = Object.keys(changes).filter(k => String(after?.[k]) !== changes[k] && String(echoed[k]) !== changes[k]);
   if (missed.length){
     // The plugin's fields aren't documented, so say what was sent and what came back (no secrets in any of it).
     throw new HttpError(502, `WordPress accepted the request but didn't save: ${missed.join(', ')}. ` +
@@ -992,7 +1001,7 @@ async function handleMemberUpdate(req, res, zwiftId){
       `record fields: ${Object.keys(record).join(', ')}.`);
   }
   rosterCache = null;
-  sendJSON(res, 200, { member: pick(after, MEMBER_VIEW_KEYS) });
+  sendJSON(res, 200, { member: { ...pick(after, MEMBER_VIEW_KEYS), ...changes } });
 }
 
 // ── Sheet proxy ────────────────────────────────────────────
