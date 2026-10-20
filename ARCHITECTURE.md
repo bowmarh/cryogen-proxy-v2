@@ -14,7 +14,7 @@ Browser (public/index.html)
 
 A single file with no build step. Tabs: Team Overview, Racing Dashboard, Events & Sign-Up, Social Rides, Members, plus a profile page.
 
-- **Roles:** admin, moderator and member. Admin and moderator passwords are checked by `POST /api/login` against the `ADMIN_PASSWORD` / `MOD_PASSWORD` environment variables. Members pick themselves from the live roster by name or Zwift ID. The role is kept in `sessionStorage`.
+- **Roles:** admin, moderator and member. Admin and moderator passwords are checked by `POST /api/login` against the `ADMIN_PASSWORD` / `MOD_PASSWORD` environment variables. Members either sign in with their cryogen.team account (verified) or pick themselves from the live roster by name or Zwift ID (guest). The role is kept in `sessionStorage`.
 - **Data loading:** `loadLive()` reads `/api/roster`, which merges the club roster with the WordPress member records by Zwift ID. If loading fails, it falls back to a small `MOCK` roster.
 - **Member edits:** tier, status and off-boarding checkboxes call `POST /api/members/{zwiftId}` (staff only). The server PATCHes the WordPress record, reads it back, and reports an error if a field didn't save. The browser never holds WordPress credentials.
 - **Shared state:** sign-ups, series locks, club-created rides and RSVPs come from `/api/state`. Every write returns the full new state, which the page re-renders from.
@@ -49,6 +49,18 @@ A plain Node.js request handler:
 - When run locally, all other paths serve files from `public/`.
 
 The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, and `npm start` runs it as a local server.
+
+## Member sign-in
+
+Riders can sign in with their cryogen.team account instead of picking a name.
+
+1. The "Sign in" button goes to `WP_SSO_LOGIN_URL` on WordPress. A snippet there logs the member in if needed, then redirects to `/api/auth/wp?t=<token>`.
+2. The token is `base64url(JSON {zwid, name, exp, n}) + "." + base64url(HMAC-SHA256(WP_SSO_SECRET, first part))`. It must expire within 10 minutes and can be used once (nonce stored in Redis as `cg:sso:<n>`).
+3. The server issues a 12-hour member session (same signing as staff sessions, `role: "member"`, with `zwid` and the roster name) and redirects to `/#sso=<session>`. The page reads the fragment, stores the token and removes it from the URL. Members whose WordPress record is `left` are refused.
+4. With a member session, `identify()` forces the sign-up, withdrawal and RSVP routes to act as that rider whatever the request body says. A member session is never a staff role.
+5. Guests (name-picker) can still write until `REQUIRE_MEMBER_LOGIN=1`; then they get a 401 asking them to sign in. Staff can still act for others.
+
+`GET /api/auth/status` tells the page whether to show the button; `GET /api/me` returns the signed-in member's tier and status.
 
 ## Hosting
 

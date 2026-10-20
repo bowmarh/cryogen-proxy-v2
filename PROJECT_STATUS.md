@@ -12,7 +12,7 @@
 
 ### Security
 - **Roles are partly enforced in the browser.** Staff-only shared-data actions are checked on the server. The admin view itself, and anything that writes to WordPress, still relies on the WordPress API's own auth.
-- **Anyone can cancel anyone's RSVP** (same as before). Members aren't authenticated.
+- **Guests can still sign up, withdraw and RSVP as anyone** until `REQUIRE_MEMBER_LOGIN=1` is set. Riders who sign in with cryogen.team can only act as themselves.
 - **The non-WordPress fallback sends placeholder Basic auth credentials.** Real credentials must never go in this file.
 - **The old admin and moderator passwords are still in git history.** They must not be reused.
 
