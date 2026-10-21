@@ -17,5 +17,6 @@
 - **The old admin and moderator passwords are still in git history.** They must not be reused.
 
 ### Functionality
+- **The TEAM LIST tab must not be the first tab of the Google Sheet.** Google answers an unknown tab name with the first tab, and the server detects a missing tab by comparing against a deliberately fake name. If the named tab were itself first, the two answers match and the dashboard reports "no tab named …". (Pinned by a test.)
 - **Member login only searches the live roster once it has loaded.** Before that it falls back to the small `MOCK` list.
 - **`schema.sql` is empty.**
