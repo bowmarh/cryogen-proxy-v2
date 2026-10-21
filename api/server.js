@@ -932,18 +932,42 @@ function slimRider(r){
   };
 }
 
+// The club roster comes from ZwiftRacing.app through the WordPress plugin, which throttles
+// (HTTP 429) when asked often. Every server instance asks separately, so one copy is kept in
+// shared storage: fresh for RIDERS_FRESH_MS, and the last good copy is used if the source fails.
+const RIDERS_KEY = 'cg:roster:riders';
+const RIDERS_FRESH_MS = 10 * 60 * 1000;
+
+async function loadRiders(){
+  let saved = null;
+  try {
+    const [raw] = await redis([['GET', RIDERS_KEY]]);
+    saved = raw ? JSON.parse(raw) : null;
+  } catch (e) { /* shared storage unavailable: ask the source directly */ }
+  if (saved && Date.now() - saved.at < RIDERS_FRESH_MS) return saved.riders;
+  try {
+    const club = await wpGet(`/zwift/public/clubs/${encodeURIComponent(ZWIFT_CLUB_ID)}/0`);
+    const riders = Array.isArray(club.riders) ? club.riders.map(slimRider) : [];
+    await redis([['SET', RIDERS_KEY, JSON.stringify({ at: Date.now(), riders }), 'EX', '604800']]).catch(() => {});
+    return riders;
+  } catch (e) {
+    if (saved) return saved.riders;
+    throw e;
+  }
+}
+
 async function fetchRoster(){
   if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache;
   const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
     ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
   const [club, members] = await Promise.allSettled([
-    wpGet(`/zwift/public/clubs/${encodeURIComponent(ZWIFT_CLUB_ID)}/0`),
+    loadRiders(),
     auth ? wpGet('/members', auth) : Promise.reject(new Error('not configured')),
   ]);
   if (club.status === 'rejected') throw club.reason;
   rosterCache = {
     at: Date.now(),
-    riders: Array.isArray(club.value.riders) ? club.value.riders.map(slimRider) : [],
+    riders: club.value,
     members: members.status === 'fulfilled' && Array.isArray(members.value) ? members.value : null,
     membersError: members.status === 'rejected' ? members.reason.message : null,
   };
