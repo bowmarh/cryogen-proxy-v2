@@ -20,6 +20,16 @@ cd api
 ADMIN_PASSWORD=... MOD_PASSWORD=... KV_REST_API_URL=... KV_REST_API_TOKEN=... npm start   # http://localhost:3000
 ```
 
+## Tests
+
+```
+node --test test/*.test.js
+```
+
+About 70 tests, about a second, no packages and no network (Node 20+; CI uses 22). They run against in-memory fakes of Redis, WordPress, Google Sheets and Discord (`test/helpers.js`) and cover logins and sessions, member sign-in, who a sign-up is recorded for, the TTT week (sign-up, line-ups, waitlist, captains, results, rollover, Discord posts), member record edits, the roster cache, the public sheet data, the health panel, and the dashboard page itself (scripts parse, every route it calls exists). GitHub runs them on every pull request.
+
+When you change behaviour, change or add a test with it. A test file runs in its own process, so settings from `setEnv()` don't leak between files.
+
 ## Configuration (Vercel environment variables)
 
 | Variable | Purpose |

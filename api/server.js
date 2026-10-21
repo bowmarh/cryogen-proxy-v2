@@ -1173,7 +1173,11 @@ async function handleMe(req, res){
 // ── System health (admin) ──────────────────────────────────
 // Reports what is configured and reachable, never any secret values. Nothing here posts to
 // Discord or calls the (rate-limited) club roster source.
-const withTimeout = (promise, ms = 8000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
+const withTimeout = (promise, ms = 8000) => {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timed out')), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 const ago = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 const ukWhen = ms => `${new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} UK`;
 const wpAuth = () => (process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null);
