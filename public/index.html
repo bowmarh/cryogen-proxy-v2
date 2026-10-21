@@ -158,7 +158,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
-      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex'">⚙️ Admin</button>
+      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex';loadHealth()">⚙️ Admin</button>
     </div>
   </aside>
 
@@ -297,6 +297,13 @@ table{width:100%;border-collapse:collapse}
         <button onclick="syncSheet()" style="flex:1;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Sync Sheet</button>
       </div>
       <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">🩺 System health</div>
+          <button onclick="loadHealth()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Check now</button>
+        </div>
+        <div id="health-panel" style="font-size:12px;color:#6b7280">Press “Check now”.</div>
+      </div>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
         <button onclick="if(confirm('Clear ALL event sign-ups?')){sharedWrite('/api/signups/clear').then(ok=>{if(ok)document.getElementById('adminModal').style.display='none'})}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
@@ -499,6 +506,21 @@ function launchApp(r){
   loadTttSummary();
 }
 function doLogout(){sessionStorage.clear();location.reload();}
+
+// ── System health (admin) ──────────────────────────────────
+async function loadHealth(){
+  const el=document.getElementById('health-panel'); if(!el) return;
+  el.innerHTML='Checking…';
+  try{
+    const res=await fetch('/api/health',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    const icon={ok:'✅',warn:'⚠️',fail:'❌',info:'ℹ️'};
+    const count=k=>d.checks.filter(c=>c.status===k).length;
+    el.innerHTML=`<div style="margin-bottom:8px;color:#9ca3af">${count('fail')?`<b style="color:#f87171">${count('fail')} failing</b> · `:''}${count('warn')?`<b style="color:#FBBF24">${count('warn')} to look at</b> · `:''}${count('ok')} OK · checked ${esc(new Date(d.checked).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</div>`+
+      d.checks.map(c=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[c.status]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(c.label)}</div><div style="color:${c.status==='fail'?'#f87171':c.status==='warn'?'#FBBF24':'#9ca3af'}">${esc(c.detail)}</div></div></div>`).join('');
+  }catch(e){ el.innerHTML=`<span style="color:#f87171">Could not run the checks: ${esc(e.message)}</span>`; }
+}
 
 // ── Sign in with cryogen.team ──────────────────────────────
 function showSsoError(msg){const el=document.getElementById('sso-err');el.textContent=msg;el.style.display='block';}

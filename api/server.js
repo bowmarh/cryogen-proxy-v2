@@ -921,12 +921,17 @@ async function runTttSchedule(now = Date.now()){
   return done;
 }
 
+const CRON_LAST_KEY = 'cg:cron:last';
+
 async function handleCron(req, res){
   const secret = process.env.CRON_SECRET;
   if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
   const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
   if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-  sendJSON(res, 200, { ran: await runTttSchedule() });
+  const ran = await runTttSchedule();
+  // The health panel reads this to show whether the scheduled workflow is really running.
+  await redis([['SET', CRON_LAST_KEY, new Date().toISOString()]]).catch(() => {});
+  sendJSON(res, 200, { ran });
 }
 
 async function handleTtt(tttRoute, req, res){
@@ -1165,6 +1170,78 @@ async function handleMe(req, res){
   sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && record.tier, status: record && record.status });
 }
 
+// ── System health (admin) ──────────────────────────────────
+// Reports what is configured and reachable, never any secret values. Nothing here posts to
+// Discord or calls the (rate-limited) club roster source.
+const withTimeout = (promise, ms = 8000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
+const ago = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const ukWhen = ms => `${new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} UK`;
+const wpAuth = () => (process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null);
+
+async function healthChecks(){
+  const run = (id, label, fn) => withTimeout(Promise.resolve().then(fn))
+    .then(([status, detail]) => ({ id, label, status, detail }))
+    .catch(e => ({ id, label, status: 'fail', detail: e.message }));
+  return Promise.all([
+    run('storage', 'Shared storage (Redis)', async () => {
+      const started = Date.now();
+      await redis([['GET', TTT_KEYS.week]]);
+      return ['ok', `Reachable (${Date.now() - started} ms)`];
+    }),
+    run('members', 'WordPress member records', async () => {
+      const auth = wpAuth();
+      if (!auth) return ['warn', 'Not configured (WP_API_USER / WP_API_APP_PASSWORD): everyone shows as active and member edits are unavailable.'];
+      const list = await wpGet('/members', auth);
+      const unique = uniqueMembers(list);
+      return ['ok', `${unique.length} members read; ${list.length - unique.length} duplicate or placeholder rows ignored.`];
+    }),
+    run('roster', 'Club roster (ZwiftRacing.app)', async () => {
+      const [raw] = await redis([['GET', RIDERS_KEY]]);
+      if (!raw) return ['warn', 'No saved copy yet. It is fetched the first time someone opens the dashboard.'];
+      const saved = JSON.parse(raw);
+      const age = Date.now() - saved.at;
+      return [age > 24 * 3600 * 1000 ? 'warn' : 'ok', `${saved.riders.length} riders; shared copy refreshed ${ago(age)}.`];
+    }),
+    run('sheet', 'Google Sheet (TEAM LIST)', async () => {
+      const { rows } = parseGviz(await fetchTab(SHEET_TABS['ttt-sheet']));
+      return ['ok', `Reachable; ${rows.length} rows.`];
+    }),
+    run('discord', 'Discord webhooks', async () => {
+      const pub = Boolean(process.env.DISCORD_WEBHOOK_PUBLIC), adm = Boolean(process.env.DISCORD_WEBHOOK_ADMIN);
+      return [pub && adm ? 'ok' : 'warn', `Club channel: ${pub ? 'set' : 'NOT set'} · Admin channel: ${adm ? 'set' : 'NOT set'}. (Not tested here, to avoid posting.)`];
+    }),
+    run('week', 'TTT week', async () => {
+      const { week } = await loadTtt();
+      if (!week) return ['warn', 'No TTT week is running.'];
+      const sch = scheduleFor(week);
+      const state = `${week.title}: sign-ups ${week.open ? 'open' : 'closed'}${week.published ? ', line-ups published' : ''}.`;
+      if (week.open && !sch.closesAt) return ['warn', `${state} No close time is set, so it won't close by itself.`];
+      return ['ok', `${state}${week.open && sch.closesAt ? ` Closes ${ukWhen(sch.closesAt)}.` : ''} Next week starts ${ukWhen(sch.nextWeekAt)}.`];
+    }),
+    run('cron', 'Scheduled runs (GitHub workflow)', async () => {
+      if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
+      const [last] = await redis([['GET', CRON_LAST_KEY]]);
+      if (!last) return ['warn', 'CRON_SECRET is set but no scheduled run has been recorded yet (the workflow runs every 15 minutes).'];
+      const age = Date.now() - Date.parse(last);
+      return [age <= 45 * 60000 ? 'ok' : age <= 3 * 3600000 ? 'warn' : 'fail', `Last scheduled run ${ago(age)}.`];
+    }),
+    run('signin', 'Member sign-in (cryogen.team)', async () => process.env.WP_SSO_SECRET
+      ? ['ok', 'On. Riders can sign in with their cryogen.team account.']
+      : ['warn', 'WP_SSO_SECRET is not set, so the sign-in button is hidden.']),
+    run('guests', 'Guest sign-ups', async () => process.env.REQUIRE_MEMBER_LOGIN === '1'
+      ? ['ok', 'Blocked: only signed-in members and staff can sign up, withdraw or RSVP.']
+      : ['info', 'Allowed: anyone using the name-picker can sign up as anyone. Set REQUIRE_MEMBER_LOGIN=1 to block this.']),
+    run('staff', 'Staff passwords and sessions', async () => {
+      const missing = ['ADMIN_PASSWORD', 'MOD_PASSWORD'].filter(k => !process.env[k]);
+      if (missing.length) return ['fail', `${missing.join(' and ')} not set, so that login is unavailable.`];
+      return process.env.SESSION_SECRET
+        ? ['ok', 'Both passwords set; sessions use SESSION_SECRET.']
+        : ['info', 'Both passwords set. SESSION_SECRET is not set, so sessions are derived from the passwords (changing a password signs everyone out).'];
+    }),
+    run('deploy', 'Deployment', async () => ['info', `${process.env.VERCEL_ENV || 'local'}${process.env.VERCEL_GIT_COMMIT_SHA ? `, commit ${process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)}` : ''}.`]),
+  ]);
+}
+
 // ── Sheet proxy ────────────────────────────────────────────
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
@@ -1277,6 +1354,10 @@ async function route(req, res){
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
+  if (pathname === '/api/health' && req.method === 'GET'){
+    requireRole(req, ['admin']);
+    return sendJSON(res, 200, { checked: new Date().toISOString(), checks: await healthChecks() });
+  }
   const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
