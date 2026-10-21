@@ -153,6 +153,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
       <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
       <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
+      <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
@@ -220,6 +221,12 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
     <div id="sheet-panel"></div>
+  </div>
+
+  <div id="page-season" class="page">
+    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">TTT Season</h2>
+      <p style="font-size:13px;color:#6b7280">Team results, who rides most, and every week so far</p></div>
+    <div id="season-root"><div style="color:#6b7280;font-size:13px">Loading…</div></div>
   </div>
 
   <div id="page-ttt" class="page">
@@ -574,6 +581,7 @@ function showTab(id,btn){
   if(id==='profile')renderProfile();
   if(id==='rides')loadZwiftEvents();
   if(id==='ttt')loadTtt();
+  if(id==='season')loadSeason();
   if(id==='members')renderMembers(); 
 }
 
@@ -1427,6 +1435,39 @@ function renderProfile(){
     </div>`:''}`
   ;
   loadMyTtt();
+}
+
+// ── TTT Season page ────────────────────────────────────────
+function renderSeason(d){
+  const t=d.totals;
+  if(!t.weeks) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No finished weeks yet. The season builds up as each week's line-ups and results are entered.</div>`;
+  const me=(memberRider&&memberRider.name||'').toLowerCase();
+  const stat=(label,val)=>`<div class="card" style="padding:14px 16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">${label}</div><div style="font-size:24px;font-weight:900;color:#00D4FF">${esc(val)}</div></div>`;
+  const th=(h,right)=>`<th style="padding:8px 10px;text-align:${right?'right':'left'};font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;white-space:nowrap">${h}</th>`;
+  const td=(v,right,extra='')=>`<td style="padding:8px 10px;text-align:${right?'right':'left'};font-size:13px;${extra}">${v}</td>`;
+  const table=(head,rows)=>`<div class="card" style="margin-bottom:20px;overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
+  const teamRows=d.teams.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)">${td('<b>'+esc(x.name)+'</b>')}${td(x.weeks,true)}${td(x.best?ordinal(x.best):'—',true)}${td(x.avgPosition==null?'—':x.avgPosition,true)}${td(x.podiums||'—',true,x.podiums?'color:#FBBF24;font-weight:700':'')}${td(x.dnfs||'—',true)}</tr>`).join('');
+  const riderRows=d.riders.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05);${x.name.toLowerCase()===me?'background:rgba(0,212,255,0.08)':''}">${td(esc(x.name)+(x.name.toLowerCase()===me?' ★':''))}${td(x.weeks,true)}${td(x.captain||'—',true)}${td(x.podiums||'—',true,x.podiums?'color:#FBBF24;font-weight:700':'')}</tr>`).join('');
+  const weekCards=d.weeks.map(w=>`<div class="card" style="padding:14px 16px;margin-bottom:10px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">${esc(w.title)}</div>
+      ${w.teams.map(x=>`<div style="padding:6px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:13px">
+        <div><b>${esc(x.name)}</b> <span style="color:#6b7280">${esc([x.zone,x.level].filter(Boolean).join(' · '))}</span> — ${x.result?`<span style="color:#10B981;font-weight:700">${esc(tttResultText(x.result))}</span>`:'<span style="color:#6b7280">no result entered</span>'}</div>
+        <div style="color:#9ca3af;font-size:12px;margin-top:2px">${x.riders.map(n=>(n===x.captain?'⭐ ':'')+(n.toLowerCase()===me?'<b style="color:#00D4FF">'+esc(n)+'</b>':esc(n))).join(', ')||'—'}</div></div>`).join('')}
+    </div>`).join('');
+  return `<div class="stat4" style="margin-bottom:20px">${stat('Weeks',t.weeks)}${stat('Riders',t.riders)}${stat('Avg riders / week',t.avgPerWeek)}${stat('Podiums',t.podiums)}</div>
+    ${h3('Teams')}${table(th('Team')+th('Weeks',1)+th('Best',1)+th('Avg place',1)+th('Podiums',1)+th('DNF',1),teamRows)}
+    ${h3('Riders'+(t.riders>d.riders.length?` (top ${d.riders.length} of ${t.riders})`:''))}${table(th('Rider')+th('Weeks',1)+th('Captain',1)+th('Podiums',1),riderRows)}
+    ${h3('Week by week')}${weekCards}`;
+}
+async function loadSeason(){
+  const el=document.getElementById('season-root'); if(!el) return;
+  try{
+    const res=await fetch('/api/ttt/season',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    el.innerHTML=renderSeason(d);
+  }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load the season: ${esc(e.message)}</div>`; }
 }
 
 // ── My TTT (profile page) ──────────────────────────────────

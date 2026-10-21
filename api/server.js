@@ -531,6 +531,15 @@ const TTT_ROUTES = {
     return tttView({ ...data, archive: [] }, roleFromRequest(req));
   },
 
+  'GET /api/ttt/season': async () => {
+    const data = await loadTtt();
+    const ids = data.archive.slice(0, SEASON_MAX_WEEKS);
+    const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => (x ? JSON.parse(x) : null)) : [];
+    // This week counts once results have been entered, even before it rolls over.
+    if (data.week && Object.keys(data.week.results || {}).length) snaps.unshift({ week: data.week, signups: data.signups, assign: data.assign });
+    return seasonSummary(snaps);
+  },
+
   'GET /api/ttt/mine': async (req) => {
     const member = memberFromRequest(req);
     if (!member) throw new HttpError(401, 'Sign in with your cryogen.team account to see your status.');
@@ -823,6 +832,71 @@ function myTttStatus(data, key, snapshots){
     });
   }
   return out;
+}
+
+// The Season page: totals, per-team results, a rider leaderboard and a week-by-week list, built from
+// the archived weeks (and the current week once it has results). `snapshots` are { week, signups, assign }.
+const SEASON_MAX_WEEKS = 60;
+function seasonSummary(snapshots){
+  const weeks = [];
+  const teams = new Map();   // team name -> stats
+  const riders = new Map();  // lowercase name -> stats
+  for (const snap of snapshots){
+    const w = snap && snap.week;
+    if (!w) continue;
+    const assign = snap.assign || {};
+    const names = new Map((snap.signups || []).map(s => [s.name.toLowerCase(), s.name]));
+    const nameOf = k => names.get(k) || k;
+    const rows = [];
+    for (const t of w.teams || []){
+      const members = Object.entries(assign).filter(([, ids]) => ids.includes(t.id)).map(([k]) => k);
+      const result = (w.results || {})[t.id] || null;
+      if (!members.length && !result) continue;
+      const capKey = (w.captains || {})[t.id];
+      const captain = capKey && members.includes(capKey) ? capKey : null;
+      rows.push({ name: t.name, level: t.level, zone: t.zone, result, riders: members.map(nameOf).sort((a, b) => a.localeCompare(b)), captain: captain && nameOf(captain) });
+
+      const stat = teams.get(t.name) || { name: t.name, weeks: 0, positions: [], best: null, podiums: 0, dnfs: 0 };
+      stat.weeks++;
+      const placed = result && !result.dnf && result.position ? result.position : null;
+      if (result && result.dnf) stat.dnfs++;
+      if (placed){
+        stat.positions.push(placed);
+        stat.best = stat.best == null ? placed : Math.min(stat.best, placed);
+        if (placed <= 3) stat.podiums++;
+      }
+      teams.set(t.name, stat);
+
+      for (const k of members){
+        const r = riders.get(k) || { name: nameOf(k), weeks: new Set(), captain: 0, podiums: 0 };
+        r.weeks.add(w.id);
+        if (k === captain) r.captain++;
+        if (placed && placed <= 3) r.podiums++;
+        riders.set(k, r);
+      }
+    }
+    if (rows.length) weeks.push({ id: w.id, title: w.title, date: w.date, teams: rows });
+  }
+  weeks.sort((a, b) => b.date.localeCompare(a.date));
+  const teamList = [...teams.values()].map(({ positions, ...t }) => ({
+    ...t,
+    raced: positions.length,
+    avgPosition: positions.length ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length * 10) / 10 : null,
+  })).sort((a, b) => (b.podiums - a.podiums) || ((a.avgPosition ?? 999) - (b.avgPosition ?? 999)) || (b.weeks - a.weeks) || a.name.localeCompare(b.name));
+  const riderList = [...riders.values()].map(r => ({ name: r.name, weeks: r.weeks.size, captain: r.captain, podiums: r.podiums }))
+    .sort((a, b) => (b.weeks - a.weeks) || (b.podiums - a.podiums) || a.name.localeCompare(b.name));
+  const riderWeeks = riderList.reduce((n, r) => n + r.weeks, 0);
+  return {
+    totals: {
+      weeks: weeks.length,
+      riders: riderList.length,
+      avgPerWeek: weeks.length ? Math.round(riderWeeks / weeks.length * 10) / 10 : 0,
+      podiums: teamList.reduce((n, t) => n + t.podiums, 0),
+    },
+    teams: teamList,
+    riders: riderList.slice(0, 25),
+    weeks,
+  };
 }
 
 // Removes a rider from their teams and refills each freed place from the waitlist.
