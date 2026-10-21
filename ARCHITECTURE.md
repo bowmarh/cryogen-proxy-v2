@@ -66,6 +66,8 @@ Riders can sign in with their cryogen.team account instead of picking a name.
 
 `GET /api/auth/status` tells the page whether to show the button; `GET /api/me` returns the signed-in member's tier and status.
 
+`GET /api/ttt/mine` (member session only) powers the **My TTT** card on the profile page: the rider's own sign-up for the current week, and once line-ups are published their team(s), zone, captain, teammates, waitlist place and result, plus up to 10 earlier weeks they rode (from the archive). Line-ups stay hidden until published, exactly as on the TTT page.
+
 ## Hosting
 
 - The dashboard is deployed on **Vercel** (project `cryogen-proxy-v2`). Set `ADMIN_PASSWORD` and `MOD_PASSWORD` in the project's environment variables.

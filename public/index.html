@@ -1363,6 +1363,8 @@ function renderProfile(){
       </div>
     </div>
 
+    <div id="my-ttt" style="margin-bottom:24px"></div>
+
     <div class="stat4" style="margin-bottom:24px">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">FTP</div><div style="font-size:22px;font-weight:900;color:#00D4FF">${r.ftp}w</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.wkg} w/kg @ 20min</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">Races</div><div style="font-size:22px;font-weight:900">${r.finishes||'—'}</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.dnfs||0} DNFs</div></div>
@@ -1402,6 +1404,62 @@ function renderProfile(){
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}`
   ;
+  loadMyTtt();
+}
+
+// ── My TTT (profile page) ──────────────────────────────────
+function myTttLine(label,html){return `<div style="display:flex;gap:10px;font-size:13px;margin-top:6px"><div style="width:110px;flex:none;color:#6b7280">${label}</div><div>${html}</div></div>`;}
+function renderMyTtt(m){
+  const w=m.week;
+  const card=(inner)=>`<div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:10px">🏁 My TTT</div>${inner}</div>`;
+  const goBtn=(t)=>`<button class="btn-cyan" style="width:auto;padding:8px 16px;margin-top:12px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">${t}</button>`;
+  let body='';
+  if(!w) body='<div style="font-size:13px;color:#9ca3af">No TTT week is open yet.</div>';
+  else{
+    const closes=w.open&&w.closesAt?` · sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK`:'';
+    body+=`<div style="font-size:14px;font-weight:700">${esc(w.title)}<span style="font-weight:400;color:#9ca3af;font-size:12px">${closes}</span></div>`;
+    const s=m.signup;
+    if(!s){
+      body+=`<div style="font-size:13px;color:#FBBF24;margin-top:8px">You haven't signed up for this week.</div>`+(w.open?goBtn('Sign up →'):`<div style="font-size:12px;color:#6b7280;margin-top:6px">Sign-ups are closed.</div>`);
+    }else if(!s.available){
+      body+=`<div style="font-size:13px;color:#9ca3af;margin-top:8px">You've told us you're <b>not available</b> this week.</div>`+(w.open?goBtn('Change my sign-up →'):'');
+    }else if(m.teams.length){
+      body+=m.teams.map(t=>`<div style="margin-top:10px;padding:10px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.06)">
+        <div style="font-weight:700">✅ ${esc(t.name)}${t.iAmCaptain?' · ⭐ You are captain':''}</div>
+        ${myTttLine('Zone / level',esc([t.zone,t.level].filter(Boolean).join(' · ')||'—'))}
+        ${myTttLine('Captain',t.iAmCaptain?'You':esc(t.captain||'Not chosen yet'))}
+        ${myTttLine('Teammates',t.mates.length?t.mates.map(esc).join(', '):'—')}
+        ${t.result?myTttLine('Result','🏁 '+esc(tttResultText(t.result))):''}
+      </div>`).join('');
+    }else if(m.waitlist){
+      body+=`<div style="font-size:13px;color:#FBBF24;margin-top:8px">⏳ You're <b>#${m.waitlist}</b> on the waitlist. If a place opens up you'll be moved in automatically.</div>`;
+    }else{
+      body+=`<div style="font-size:13px;color:#10B981;margin-top:8px">✅ You're signed up.${w.published?'':' Line-ups are published after sign-ups close.'}</div>`;
+    }
+    if(s){
+      body+=`<div style="margin-top:10px">${myTttLine('Your picks',s.preferred.length?s.preferred.map(esc).join(', '):'No preference')}${myTttLine('Style',esc(TTT_STYLE_LABEL[s.style]||s.style||'—'))}${s.captain?myTttLine('Volunteer','⭐ Happy to captain'):''}</div>`;
+      if(w.open&&s.available) body+=goBtn('Update my sign-up →');
+    }
+  }
+  if(m.history.length){
+    body+=`<div style="margin-top:16px;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Previous weeks</div>
+      <table style="width:100%;font-size:12px;margin-top:6px"><tbody>${m.history.map(h=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:6px 8px 6px 0;color:#9ca3af;white-space:nowrap">${esc(h.date)}</td><td style="padding:6px 8px">${h.teams.map(t=>esc(t.name)+(t.result?' — '+esc(tttResultText(t.result)):'')).join('<br>')}</td></tr>`).join('')}</tbody></table>`;
+  }
+  return card(body);
+}
+async function loadMyTtt(){
+  const el=document.getElementById('my-ttt'); if(!el) return;
+  if(!sessionStorage.getItem('sso')){
+    el.innerHTML='<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">🔒 Sign out and use <b>Sign in with your cryogen.team account</b> to see your personal TTT status here.</div>';
+    return;
+  }
+  el.innerHTML='<div class="card" style="padding:16px;font-size:13px;color:#6b7280">Loading your TTT status…</div>';
+  try{
+    const res=await fetch('/api/ttt/mine',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    el.innerHTML=renderMyTtt(d);
+  }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load your TTT status: ${esc(e.message)}</div>`; }
 }
 
 // ── Live Results ──────────────────────────────────────────
