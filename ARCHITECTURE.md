@@ -54,6 +54,10 @@ The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, 
 
 The roster comes from ZwiftRacing.app through the WordPress plugin, which answers 429 when asked too often. Each server instance used to ask on its own. The slimmed rider list is now kept in Redis (`cg:roster:riders`): reused for 10 minutes by every instance, and the last good copy is served if the source fails. Member records are not cached there; they are read each time the 5-minute in-memory cache expires.
 
+## System health
+
+`GET /api/health` (admin only) powers the **System health** section of the Admin dialog. It reports status (ok / warn / fail / info) for shared storage, WordPress member records, the club roster copy, the Google Sheet, Discord webhook configuration, the TTT week (including a missing close time), scheduled runs, member sign-in, guest sign-ups, staff passwords and the deployed commit. It only reports whether things are set and reachable, never values. It does not post to Discord or call the rate-limited roster source. The workflow's last run comes from `cg:cron:last`, written by every `/api/cron/tick`.
+
 ## Member sign-in
 
 Riders can sign in with their cryogen.team account instead of picking a name.
