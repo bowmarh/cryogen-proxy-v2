@@ -10,5 +10,11 @@
       "source": "/api/(.*)",
       "destination": "/api/server"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/tick",
+      "schedule": "0 9 * * *"
+    }
   ]
 }

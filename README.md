@@ -70,7 +70,14 @@ All times are UK time (`Europe/London`, follows BST/GMT). For a race on Wednesda
 | Late sign-up after publishing | Placed in a picked team with room, otherwise added to the waitlist; Discord (admins) |
 | Thursday 09:00 | This week is archived and next Wednesday's week starts automatically (same teams) |
 
-Events fire once each (tracked in Redis `cg:ttt:sent`). They run from the GitHub Actions schedule and, as a backup, whenever someone opens the TTT page. Admins can still reopen sign-ups after the automatic close.
+Events fire once each (tracked in Redis `cg:ttt:sent`), so several triggers can overlap safely. They are driven from:
+
+- **GitHub Actions** (`ttt-schedule.yml`): meant to run every 15 minutes, but GitHub throttles scheduled jobs in quiet repositories, so in practice it can be hours apart.
+- **Vercel Cron** (`vercel.json`): once a day at 09:00 UTC (Hobby plan: once a day, any time within that hour, so 10:xx BST or 09:xx GMT). Vercel sends `Authorization: Bearer <CRON_SECRET>` itself. It reliably catches the Thursday 09:00 UK rollover.
+- **Upstash QStash** (optional, set up in the Upstash console): a schedule that calls `GET /api/cron/tick` every 15 minutes with the same Bearer header. This is what makes the Monday 19:00 close and the reminder prompt.
+- Whenever someone opens the TTT page.
+
+The Admin **System health** panel shows when the last scheduled run happened. Admins can still reopen sign-ups after the automatic close.
 
 ### Captains
 Riders can tick **⭐ Happy to captain** when signing up. Auto-assign makes the highest-vELO volunteer in each team its captain (teams with no volunteer are flagged); staff can change the captain from the team card. If a captain withdraws, another volunteer in that team takes over automatically, otherwise the admin channel is told the team needs a captain.
