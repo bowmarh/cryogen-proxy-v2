@@ -1438,9 +1438,9 @@ function renderProfile(){
 }
 
 // ── TTT Season page ────────────────────────────────────────
-function renderSeason(d){
+function renderSeasonBody(d){
   const t=d.totals;
-  if(!t.weeks) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No finished weeks yet. The season builds up as each week's line-ups and results are entered.</div>`;
+  if(!t.weeks) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">${d.season.id==='all'?'No finished weeks yet. The season builds up as each week\'s line-ups and results are entered.':'No finished weeks in this season yet.'}</div>`;
   const me=(memberRider&&memberRider.name||'').toLowerCase();
   const stat=(label,val)=>`<div class="card" style="padding:14px 16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">${label}</div><div style="font-size:24px;font-weight:900;color:#00D4FF">${esc(val)}</div></div>`;
   const th=(h,right)=>`<th style="padding:8px 10px;text-align:${right?'right':'left'};font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;white-space:nowrap">${h}</th>`;
@@ -1460,10 +1460,51 @@ function renderSeason(d){
     ${h3('Riders'+(t.riders>d.riders.length?` (top ${d.riders.length} of ${t.riders})`:''))}${table(th('Rider')+th('Weeks',1)+th('Captain',1)+th('Podiums',1),riderRows)}
     ${h3('Week by week')}${weekCards}`;
 }
-async function loadSeason(){
+// A season is a name and a start date; it runs until the next one starts.
+let seasonId=null; // null = the latest season
+const seasonDay=iso=>new Date(iso+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const dayBefore=iso=>new Date(Date.parse(iso+'T12:00:00Z')-86400000).toISOString().slice(0,10);
+function renderSeason(d){
+  const s=d.season;
+  const range=s.id==='all'?'Every week so far':`${s.start?seasonDay(s.start):'The beginning'} – ${s.end?seasonDay(dayBefore(s.end)):'now'}`;
+  const picker=d.seasons.length>1?`<select onchange="loadSeason(this.value)" style="width:auto;padding:6px 10px;font-size:13px;background:#0f1623;color:white;border:1px solid rgba(255,255,255,0.15);border-radius:8px">${d.seasons.map(x=>`<option value="${esc(x.id)}" ${x.id===s.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`:'';
+  const head=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(s.name)}</div>${picker}<div style="font-size:12px;color:#6b7280">${esc(range)}</div></div>`;
+  const staff=role==='admin'||role==='mod';
+  const defined=d.seasons.filter(x=>x.id!=='all'&&x.id!=='before');
+  const weekDate=(typeof tttData!=='undefined'&&tttData&&tttData.week&&tttData.week.date)||new Date().toISOString().slice(0,10);
+  const manage=staff?`<div class="card" style="padding:14px 16px;margin-top:20px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">Seasons (staff)</div>
+      ${defined.length?defined.map(x=>`<div style="display:flex;align-items:center;gap:10px;font-size:13px;padding:4px 0"><span style="flex:1"><b>${esc(x.name)}</b> <span style="color:#6b7280">from ${esc(seasonDay(x.start))}</span></span><button data-id="${esc(x.id)}" data-name="${esc(x.name)}" onclick="removeSeasonUi(this.dataset.id,this.dataset.name)" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px">Remove</button></div>`).join(''):'<div style="font-size:12px;color:#6b7280;margin-bottom:6px">No seasons yet, so this page covers every week.</div>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <input id="season-name" class="inp" maxlength="40" placeholder="e.g. Season ${defined.length+(d.seasons.some(x=>x.id==='before')?2:1)}" style="flex:1;min-width:150px"/>
+        <input id="season-start" type="date" class="inp" value="${esc(weekDate)}" style="width:auto"/>
+        <button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="addSeasonUi()">Start new season</button>
+      </div>
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">A season runs until the next one starts. Weeks before the first season show as "Earlier weeks". Nothing is deleted when you add or remove a season.</div>
+    </div>`:'';
+  return head+renderSeasonBody(d)+manage;
+}
+async function seasonCall(path,body){
+  let res,d;
+  try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); d=await res.json(); }
+  catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  return true;
+}
+async function addSeasonUi(){
+  const name=document.getElementById('season-name').value.trim(), start=document.getElementById('season-start').value;
+  if(!name||!start){ alert('Enter a season name and a start date.'); return; }
+  if(await seasonCall('/api/ttt/seasons',{name,start})){ seasonId=start; loadSeason(); }
+}
+async function removeSeasonUi(id,name){
+  if(!confirm('Remove "'+name+'"? Its weeks move into the season before it. No results are deleted.')) return;
+  if(await seasonCall('/api/ttt/seasons/remove',{id})){ seasonId=null; loadSeason(); }
+}
+async function loadSeason(id){
+  if(id!==undefined) seasonId=id;
   const el=document.getElementById('season-root'); if(!el) return;
   try{
-    const res=await fetch('/api/ttt/season',{headers:tttHeaders()});
+    const res=await fetch('/api/ttt/season'+(seasonId?'?season='+encodeURIComponent(seasonId):''),{headers:tttHeaders()});
     const d=await res.json();
     if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
     el.innerHTML=renderSeason(d);
