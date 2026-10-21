@@ -484,6 +484,32 @@ async function weekWith(changes){
   await redis([['SET', TTT_KEYS.week, JSON.stringify(week)]]);
 }
 
+// Results to Discord: one club-channel message listing every team whose result was just entered for
+// the first time. Corrections to an existing result stay quiet.
+const hasResult = r => Boolean(r && (r.dnf || r.position || r.time));
+const newResultIds = (before, after) => Object.keys(after).filter(id => hasResult(after[id]) && !hasResult((before || {})[id]));
+const ordinalWord = n => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
+const resultWords = r => (r.dnf ? 'DNF' : [r.position ? `${ordinalWord(r.position)}${r.of ? ` of ${r.of}` : ''}` : '', r.time].filter(Boolean).join(' · '));
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+function postResults(week, signups, assign, teamIds){
+  const names = new Map(signups.map(s => [s.name.toLowerCase(), s.name]));
+  const rows = week.teams.filter(t => teamIds.includes(t.id)).map(t => ({ t, r: week.results[t.id] }))
+    .sort((a, b) => (Boolean(a.r.dnf) - Boolean(b.r.dnf)) || ((a.r.position || 9999) - (b.r.position || 9999)) || String(a.r.time).localeCompare(String(b.r.time)));
+  const build = withRiders => rows.map(({ t, r }) => {
+    const medal = !r.dnf && r.position >= 1 && r.position <= 3 ? MEDALS[r.position - 1] : '🏁';
+    const link = r.link && !/[<>\s]/.test(r.link) ? ` · [results](<${r.link}>)` : '';
+    const captain = (week.captains || {})[t.id];
+    const riders = Object.entries(assign || {}).filter(([, ids]) => ids.includes(t.id))
+      .map(([k]) => `${k === captain ? '⭐ ' : ''}${discordEscape(names.get(k) || k)}`);
+    return `${medal} **${discordEscape(t.name)}** — ${resultWords(r)}${link}` + (withRiders && riders.length ? `\n      ${riders.join(', ')}` : '');
+  }).join('\n');
+  const head = `🏁 **Results — ${discordEscape(week.title)}**\n`;
+  let body = build(true);
+  if (head.length + body.length > 1900) body = build(false); // drop the rider lists before cutting anything
+  return discord('public', { content: (head + body).slice(0, 1990) });
+}
+
 // Team results are typed in by staff after the race and stored on the week (current or archived).
 function parseResults(body, teams){
   const out = {};
@@ -511,15 +537,21 @@ const TTT_ROUTES = {
     const weekId = String(body.weekId || '');
     const current = await loadTtt();
     if (current.week && current.week.id === weekId){
-      await weekWith({ results: parseResults(body.results, current.week.teams) });
+      const results = parseResults(body.results, current.week.teams);
+      await weekWith({ results });
+      const fresh = newResultIds(current.week.results, results);
+      if (fresh.length) await postResults({ ...current.week, results }, current.signups, current.assign, fresh);
       return;
     }
     // Results usually arrive after the Thursday rollover, so archived weeks can be updated too.
     const [snap] = await redis([['HGET', TTT_KEYS.archive, weekId]]);
     if (!snap) throw new HttpError(404, 'That week was not found.');
     const data = JSON.parse(snap);
-    data.week = { ...data.week, results: parseResults(body.results, data.week.teams) };
+    const results = parseResults(body.results, data.week.teams);
+    const fresh = newResultIds(data.week.results, results);
+    data.week = { ...data.week, results };
     await redis([['HSET', TTT_KEYS.archive, weekId, JSON.stringify(data)]]);
+    if (fresh.length) await postResults(data.week, data.signups || [], data.assign || {}, fresh);
     return tttView({ ...data, archive: current.archive }, roleFromRequest(req));
   },
 

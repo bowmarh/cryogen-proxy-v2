@@ -66,6 +66,7 @@ All times are UK time (`Europe/London`, follows BST/GMT). For a race on Wednesda
 | Sunday 19:00 | Discord: "last day to sign up" reminder |
 | Monday 19:00 | Sign-ups close automatically; Discord: "closed" (club) + "N unplaced, build teams" (admins) |
 | Admin presses **Publish** | Discord: full line-ups, captains marked ⭐ |
+| Staff save a team's result | Discord (club): one "🏁 Results" post listing the teams whose result is new (best first, 🥇🥈🥉, riders and ⭐ captain). Corrections to an existing result are not re-posted. Works for archived weeks too |
 | Rider withdraws (or becomes unavailable) after publishing | First waitlisted rider who picked that team (else first waiting) is moved in automatically; Discord: "🎉 X moves up" (club) + what happened (admins) |
 | Late sign-up after publishing | Placed in a picked team with room, otherwise added to the waitlist; Discord (admins) |
 | Thursday 09:00 | This week is archived and next Wednesday's week starts automatically (same teams) |

@@ -1131,7 +1131,7 @@ function tttResultsEditor(d){
       <td style="padding:4px"><input class="inp" data-f="link" placeholder="https://…" value="${esc(r.link||'')}" style="min-width:160px;padding:5px 7px"/></td>
       <td style="padding:4px;text-align:center"><input type="checkbox" data-f="dnf" ${r.dnf?'checked':''}/></td></tr>`;}).join('')}
     </tbody></table>
-    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="tttSaveResults('${esc(w.id)}')">Save results</button><span style="font-size:11px;color:#6b7280;align-self:center">Leave a team blank if it didn't race.</span></div>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="tttSaveResults('${esc(w.id)}')">Save results</button><span style="font-size:11px;color:#6b7280;align-self:center">Leave a team blank if it didn't race. New results are posted to the club Discord once; later corrections are not.</span></div>
   </div>`;
 }
 async function tttSaveResults(weekId){
