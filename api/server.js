@@ -573,13 +573,43 @@ const TTT_ROUTES = {
     return tttView({ ...data, archive: [] }, roleFromRequest(req));
   },
 
-  'GET /api/ttt/season': async () => {
-    const data = await loadTtt();
-    const ids = data.archive.slice(0, SEASON_MAX_WEEKS);
+  'GET /api/ttt/season': async (req) => {
+    const [data, seasons] = await Promise.all([loadTtt(), loadSeasons()]);
+    const choices = seasonChoices(seasons, data.archive);
+    const wanted = parseRequestUrl(req).query.season || choices[choices.length - 1].id; // default: the latest season
+    const choice = choices.find(c => c.id === wanted);
+    if (!choice) throw new HttpError(404, 'That season does not exist.');
+    const ids = data.archive.filter(id => inSeason(id, choice)).slice(0, SEASON_MAX_WEEKS);
     const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => (x ? JSON.parse(x) : null)) : [];
     // This week counts once results have been entered, even before it rolls over.
-    if (data.week && Object.keys(data.week.results || {}).length) snaps.unshift({ week: data.week, signups: data.signups, assign: data.assign });
-    return seasonSummary(snaps);
+    if (data.week && inSeason(data.week.date, choice) && Object.keys(data.week.results || {}).length) {
+      snaps.unshift({ week: data.week, signups: data.signups, assign: data.assign });
+    }
+    return { ...seasonSummary(snaps), season: choice, seasons: choices };
+  },
+
+  'POST /api/ttt/seasons': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const name = text(body.name, 'season name', 40);
+    const start = String(body.start || '');
+    if (!validDate(start)) throw new HttpError(400, 'The start date must be a real date, like 2026-10-28.');
+    const seasons = await loadSeasons();
+    const last = seasons[seasons.length - 1];
+    if (last && start <= last.start) throw new HttpError(409, `A new season must start after ${last.name} (${last.start}).`);
+    seasons.push({ id: start, name, start });
+    await redis([['SET', SEASONS_KEY, JSON.stringify(seasons)]]);
+    const data = await loadTtt();
+    return { seasons: seasonChoices(seasons, data.archive) };
+  },
+
+  'POST /api/ttt/seasons/remove': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const seasons = await loadSeasons();
+    const kept = seasons.filter(x => x.id !== String(body.id || ''));
+    if (kept.length === seasons.length) throw new HttpError(404, 'That season does not exist.');
+    await redis([kept.length ? ['SET', SEASONS_KEY, JSON.stringify(kept)] : ['DEL', SEASONS_KEY]]);
+    const data = await loadTtt();
+    return { seasons: seasonChoices(kept, data.archive) }; // its weeks fall back into the season before it
   },
 
   'GET /api/ttt/mine': async (req) => {
@@ -879,6 +909,28 @@ function myTttStatus(data, key, snapshots){
 // The Season page: totals, per-team results, a rider leaderboard and a week-by-week list, built from
 // the archived weeks (and the current week once it has results). `snapshots` are { week, signups, assign }.
 const SEASON_MAX_WEEKS = 60;
+
+// Seasons are a name and a start date; each runs until the next one starts. Until the first is
+// defined the page covers every week ("All weeks"); weeks before the first start are "Earlier weeks".
+const SEASONS_KEY = 'cg:ttt:seasons';   // JSON [{ id: <start date>, name, start }] in start order
+
+async function loadSeasons(){
+  const [raw] = await redis([['GET', SEASONS_KEY]]);
+  try {
+    const list = JSON.parse(raw || '[]');
+    return Array.isArray(list) ? list.sort((a, b) => a.start.localeCompare(b.start)) : [];
+  } catch (e) { return []; }
+}
+
+function seasonChoices(seasons, archiveIds){
+  if (!seasons.length) return [{ id: 'all', name: 'All weeks', start: null, end: null }];
+  const out = seasons.map((x, i) => ({ id: x.start, name: x.name, start: x.start, end: seasons[i + 1] ? seasons[i + 1].start : null }));
+  if (archiveIds.some(id => id < seasons[0].start)) out.unshift({ id: 'before', name: 'Earlier weeks', start: null, end: seasons[0].start });
+  return out;
+}
+
+const inSeason = (date, c) => (!c.start || date >= c.start) && (!c.end || date < c.end);
+const validDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 function seasonSummary(snapshots){
   const weeks = [];
   const teams = new Map();   // team name -> stats

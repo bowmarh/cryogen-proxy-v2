@@ -56,7 +56,9 @@ The roster comes from ZwiftRacing.app through the WordPress plugin, which answer
 
 ## TTT Season page
 
-`GET /api/ttt/season` (public) feeds the **TTT Season** tab. `seasonSummary()` reads up to the latest 60 archived weeks, plus the current week once it has results, and returns totals, per-team stats (weeks, best and average place, podiums, DNFs), a rider leaderboard (weeks ridden, times captain, podiums; top 25) and a week-by-week list. A team counts for a week only if it had riders or a result. It uses only names, line-ups, captains and results, never comments or Zwift IDs. There is no season boundary yet: it covers every archived week (up to 60).
+`GET /api/ttt/season` (public) feeds the **TTT Season** tab. `seasonSummary()` reads up to the latest 60 archived weeks, plus the current week once it has results, and returns totals, per-team stats (weeks, best and average place, podiums, DNFs), a rider leaderboard (weeks ridden, times captain, podiums; top 25) and a week-by-week list. A team counts for a week only if it had riders or a result. It uses only names, line-ups, captains and results, never comments or Zwift IDs. 
+
+**Seasons.** A season is a name and a start date (Redis `cg:ttt:seasons`, JSON `[{id: <start date>, name, start}]`); it runs until the next season starts. `GET /api/ttt/season?season=<id>` returns that season's summary plus the list of seasons to choose from; the default is the latest. Until the first season is defined there is a single "All weeks" entry (the old behaviour), and once one exists, weeks before it appear as "Earlier weeks". Staff (admin or moderator) add a season with `POST /api/ttt/seasons {name, start}` (must start after the latest) and remove one with `POST /api/ttt/seasons/remove {id}`, whose weeks then fall back into the season before it. Nothing is ever deleted: seasons only decide which archived weeks the page shows.
 
 ## System health
 

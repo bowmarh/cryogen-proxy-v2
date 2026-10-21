@@ -79,6 +79,8 @@ Events fire once each (tracked in Redis `cg:ttt:sent`), so several triggers can 
 - **Upstash QStash** (optional, set up in the Upstash console): a schedule that calls `GET /api/cron/tick` every 15 minutes with the same Bearer header. This is what makes the Monday 19:00 close and the reminder prompt.
 - Whenever someone opens the TTT page.
 
+The **TTT Season** tab can be split into seasons: staff add a season (name and start date) at the bottom of that page, and riders pick any season from a drop-down. Starting a new season doesn't delete anything; it only decides which weeks the page counts.
+
 The Admin **System health** panel shows when the last scheduled run happened. Admins can still reopen sign-ups after the automatic close.
 
 ### Captains
