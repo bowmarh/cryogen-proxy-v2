@@ -69,3 +69,28 @@ test('known limitation: if TEAM LIST were the first tab of the sheet it would be
   world.sheet = { first: 'TEAM LIST', tabs: { 'TEAM LIST': { cols: ['Name'], rows: [['Alice']] } }, html: false };
   assert.equal((await fetchSheet()).status, 404);
 });
+
+test('a slow Google fails fast with a clear message, then recovers', async () => {
+  process.env.SHEET_TIMEOUT_MS = '200';
+  setTab({ cols: ['Name'], rows: [['Alice']] });
+  world.sheet.hang = true;
+  try {
+    const started = Date.now();
+    const r = await fetchSheet();
+    assert.equal(r.status, 504);
+    assert.match(r.body.error, /did not answer in time/);
+    assert.ok(Date.now() - started < 3000, 'it did not hang');
+    world.sheet.hang = false;
+    assert.equal((await fetchSheet()).status, 200, 'the next request works');
+  } finally { delete process.env.SHEET_TIMEOUT_MS; world.sheet.hang = false; }
+});
+
+test('Google being unreachable is reported plainly', async () => {
+  setTab({ cols: ['Name'], rows: [['Alice']] });
+  world.sheet.fail = true;
+  try {
+    const r = await fetchSheet();
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, /could not be reached/);
+  } finally { world.sheet.fail = false; }
+});

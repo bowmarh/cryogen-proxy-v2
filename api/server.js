@@ -1,7 +1,6 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
@@ -43,6 +42,17 @@ function sendJSON(res, statusCode, obj){
     'Access-Control-Allow-Origin': '*'
   });
   res.end(s);
+}
+
+// Reads the path and query of a request with the standard URL class (url.parse is deprecated and
+// logged a warning on every request). Leading double slashes are collapsed so they can't be read as a host.
+function parseRequestUrl(req){
+  try {
+    const u = new URL(String(req.url || '/').replace(/^\/{2,}/, '/'), 'http://localhost');
+    return { pathname: u.pathname, query: Object.fromEntries(u.searchParams) };
+  } catch (e) {
+    throw new HttpError(400, 'bad request');
+  }
 }
 
 function readJSONBody(req){
@@ -556,7 +566,7 @@ const TTT_ROUTES = {
   },
 
   'GET /api/ttt/archive': async (req) => {
-    const id = String(url.parse(req.url, true).query.id || '');
+    const id = String(parseRequestUrl(req).query.id || '');
     const [snap] = await redis([['HGET', TTT_KEYS.archive, id]]);
     if (!snap) throw new HttpError(404, 'That week is not in the archive.');
     const data = JSON.parse(snap);
@@ -1404,10 +1414,19 @@ function parseGviz(textBody){
   return { headers, rows };
 }
 
+// Google can be slow; without a limit the request would hang until Vercel cuts the function off with no message.
+const sheetTimeoutMs = () => Number(process.env.SHEET_TIMEOUT_MS) || 6000;
+
 async function fetchTab(tab){
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tab)}`;
-  const r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' } });
-  const body = await r.text();
+  let r, body;
+  try {
+    r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(sheetTimeoutMs()) });
+    body = await r.text();
+  } catch (e) {
+    if (e && e.name === 'TimeoutError') throw new HttpError(504, 'Google Sheets did not answer in time. Try again in a moment.');
+    throw new HttpError(502, 'Google Sheets could not be reached.');
+  }
   if (!r.ok) throw new HttpError(502, `Google Sheets returned ${r.status} for tab "${tab}".`);
   if (/^\s*</.test(body)) throw new HttpError(502, 'The Google Sheet is not shared publicly ("Anyone with the link can view").');
   return body;
@@ -1447,7 +1466,7 @@ function serveStatic(res, reqPath){
 
 // ── Router ─────────────────────────────────────────────────
 async function route(req, res){
-  const parsed = url.parse(req.url, true);
+  const parsed = parseRequestUrl(req);
   const pathname = parsed.pathname || '/';
 
   if (req.method === 'OPTIONS'){

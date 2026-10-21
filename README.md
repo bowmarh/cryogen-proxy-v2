@@ -38,6 +38,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Shared storage (Upstash Redis). Added automatically when Upstash for Redis is connected to the project in Vercel → Storage. |
 | `SHEET_ID` *(optional)* | Google Sheet to read rides and TTT data from. Defaults to the club sheet. |
 | `SHEET_TAB_RIDES`, `SHEET_TAB_TTT` *(optional)* | Tab names. Default `Social Rides` and `TEAM LIST`. |
+| `SHEET_TIMEOUT_MS` *(optional)* | How long to wait for Google before answering "did not answer in time" (504). Default 6000. |
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
 | `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
