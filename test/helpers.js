@@ -134,8 +134,12 @@ function handleWp(world, u, opts) {
   return json({ message: `no stub for ${method} ${path}` }, 404);
 }
 
-function handleSheet(world, u) {
+function handleSheet(world, u, opts = {}) {
   const name = u.searchParams.get('sheet');
+  if (world.sheet.fail) return Promise.reject(new TypeError('fetch failed'));
+  if (world.sheet.hang && opts.signal) { // never answers; ends only when the caller's timeout aborts the request
+    return new Promise((_, reject) => opts.signal.addEventListener('abort', () => reject(opts.signal.reason)));
+  }
   if (world.sheet.html) return new Response('<html>Sign in</html>', { status: 200 });
   // Like Google: an unknown tab name silently returns the first tab.
   const tab = world.sheet.tabs[name] || world.sheet.tabs[world.sheet.first];
@@ -153,7 +157,7 @@ function installFetch(world) {
       return json(out);
     }
     if (u.host === 'wp.test') return handleWp(world, u, opts);
-    if (u.host === 'docs.google.com') return handleSheet(world, u);
+    if (u.host === 'docs.google.com') return handleSheet(world, u, opts);
     if (u.host === 'discord.test') {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body
