@@ -60,6 +60,15 @@ The roster comes from ZwiftRacing.app through the WordPress plugin, which answer
 
 **Seasons.** A season is a name and a start date (Redis `cg:ttt:seasons`, JSON `[{id: <start date>, name, start}]`); it runs until the next season starts. `GET /api/ttt/season?season=<id>` returns that season's summary plus the list of seasons to choose from; the default is the latest. Until the first season is defined there is a single "All weeks" entry (the old behaviour), and once one exists, weeks before it appear as "Earlier weeks". Staff (admin or moderator) add a season with `POST /api/ttt/seasons {name, start}` (must start after the latest) and remove one with `POST /api/ttt/seasons/remove {id}`, whose weeks then fall back into the season before it. Nothing is ever deleted: seasons only decide which archived weeks the page shows.
 
+## ZRL round sign-up
+
+Logic lives in `lib/zrl.js` (a factory that `api/server.js` wires up; not in `api/`, since every file there becomes a public function). Redis keys: `cg:zrl:round` (name, start, closes, weeks, open, published, teams), `cg:zrl:signups` (one field per rider), `cg:zrl:assign`, `cg:zrl:archive`, `cg:zrl:sent`. Regions are `eu`, `am`, `ap` (Asia-Pacific).
+
+- `GET /api/zrl` is public: the round, the demand per region (riders, teams, places still to fill) and the sign-up pool. Comments, Zwift IDs and preferred team are staff-only.
+- `POST /api/zrl/signup` and `/withdraw` use `identify`, so a signed-in member can only sign themselves up. At least one time zone is required when racing; category defaults to the rider's profile category.
+- Staff only: `POST /api/zrl/round` (starts a round, archives the previous one, keeps the teams, posts "sign-ups open" to Discord), `/status` (open or closed, published) and `/teams` (replace the team list).
+- `runSchedule` (called from `/api/cron/tick` and when the page loads) posts a reminder 24 hours before sign-ups close and closes the round at the deadline. Both are claimed once in `cg:zrl:sent`.
+
 ## System health
 
 `GET /api/health` (admin only) powers the **System health** section of the Admin dialog. It reports status (ok / warn / fail / info) for shared storage, WordPress member records, the club roster copy, the Google Sheet, Discord webhook configuration, the TTT week (including a missing close time), scheduled runs, member sign-in, guest sign-ups, staff passwords and the deployed commit. It only reports whether things are set and reachable, never values. It does not post to Discord or call the rate-limited roster source. The workflow's last run comes from `cg:cron:last`, written by every `/api/cron/tick`.

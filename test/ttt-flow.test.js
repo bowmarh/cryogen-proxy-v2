@@ -34,6 +34,8 @@ test('only staff can start a week, and the date must be valid and new', async ()
   assert.equal((await app.post('/api/ttt/new-week', { date: h.ymd(20) })).status, 401);
   assert.equal((await app.post('/api/ttt/new-week', { date: h.ymd(20) }, { token: await app.memberSession('1002') })).status, 401);
   assert.equal((await app.post('/api/ttt/new-week', { date: 'next friday' }, { token: admin })).status, 400);
+  assert.equal((await app.post('/api/ttt/new-week', { date: '2026-13-45' }, { token: admin })).status, 400, 'a date that does not exist is refused, not a crash');
+  assert.equal((await app.post('/api/ttt/new-week', { date: '2026-02-30' }, { token: admin })).status, 400);
   assert.equal((await app.post('/api/ttt/new-week', { date: WEEK() }, { token: admin })).status, 409, 'same week twice');
   const week = (await view()).week;
   assert.equal(week.open, true);

@@ -46,6 +46,7 @@ test('only staff can add or remove seasons, with a real name and date', async ()
   assert.equal((await addSeason('x'.repeat(41), h.ymd(24))).status, 400, 'and a short one');
   assert.equal((await addSeason('Season 2', 'next week')).status, 400);
   assert.equal((await addSeason('Season 2', '2026-02-30')).status, 400, 'a date that does not exist');
+  assert.equal((await addSeason('Season 2', '2026-13-45')).status, 400, 'a month that does not exist is refused, not a crash');
   assert.equal((await addSeason('Season 2', h.ymd(24), mod)).status, 200, 'a moderator can');
   assert.equal((await removeSeason(h.ymd(24), null)).status, 401);
 });
