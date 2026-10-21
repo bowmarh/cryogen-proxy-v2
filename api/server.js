@@ -531,6 +531,15 @@ const TTT_ROUTES = {
     return tttView({ ...data, archive: [] }, roleFromRequest(req));
   },
 
+  'GET /api/ttt/mine': async (req) => {
+    const member = memberFromRequest(req);
+    if (!member) throw new HttpError(401, 'Sign in with your cryogen.team account to see your status.');
+    const data = await loadTtt();
+    const ids = data.archive.slice(0, MY_TTT_HISTORY);
+    const snaps = ids.length ? await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id])) : [];
+    return myTttStatus(data, member.name.toLowerCase(), snaps.map(x => (x ? JSON.parse(x) : null)));
+  },
+
   'POST /api/ttt/signup': async (req, body) => {
     const { week } = await requireWeek();
     if (!week.open) throw new HttpError(409, 'TTT sign-ups are closed for this week.');
@@ -769,6 +778,51 @@ function waitlistOf(data){
   return data.signups
     .filter(s => s.available && !(data.assign[s.name.toLowerCase()] || []).length)
     .sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
+// One rider's own view of the TTT: this week's sign-up, and (once line-ups are published) their team(s),
+// teammates, captain, waitlist place and result, plus the weeks they rode before. `snapshots` are archived weeks.
+const MY_TTT_HISTORY = 10;
+function myTttStatus(data, key, snapshots){
+  const week = data.week;
+  const names = new Map(data.signups.map(s => [s.name.toLowerCase(), s.name]));
+  const teamName = id => ((week && week.teams.find(t => t.id === id)) || { name: id }).name;
+  const mine = data.signups.find(s => s.name.toLowerCase() === key) || null;
+  const out = {
+    week: week && { id: week.id, title: week.title, date: week.date, open: week.open, published: week.published, closesAt: week.closesAt || null },
+    signup: mine && {
+      available: mine.available, style: mine.style, doubleUp: mine.doubleUp, captain: mine.captain,
+      preferred: (mine.preferred || []).map(teamName),
+    },
+    teams: [],
+    waitlist: 0,
+    history: [],
+  };
+  if (week && week.published){
+    const captains = captainsOf(data);
+    out.teams = (data.assign[key] || []).filter(id => week.teams.some(t => t.id === id)).map(id => {
+      const team = week.teams.find(t => t.id === id);
+      return {
+        name: team.name, level: team.level, zone: team.zone,
+        captain: captains[id] ? names.get(captains[id]) || captains[id] : null,
+        iAmCaptain: captains[id] === key,
+        mates: Object.entries(data.assign).filter(([k, ids]) => k !== key && ids.includes(id)).map(([k]) => names.get(k) || k),
+        result: (week.results || {})[id] || null,
+      };
+    });
+    out.waitlist = waitlistOf(data).findIndex(s => s.name.toLowerCase() === key) + 1;
+  }
+  for (const snap of snapshots){
+    const w = snap && snap.week;
+    if (!w || !w.published) continue;
+    const ids = ((snap.assign || {})[key] || []).filter(id => w.teams.some(t => t.id === id));
+    if (!ids.length) continue;
+    out.history.push({
+      id: w.id, title: w.title, date: w.date,
+      teams: ids.map(id => ({ name: w.teams.find(t => t.id === id).name, result: (w.results || {})[id] || null })),
+    });
+  }
+  return out;
 }
 
 // Removes a rider from their teams and refills each freed place from the waitlist.
