@@ -52,3 +52,20 @@ test('files outside the public folder cannot be fetched', async () => {
     assert.ok(!r.body.includes('module.exports'), `${p} leaked the server source`);
   }
 });
+
+test('a date that does not exist is refused with a 400 everywhere dates are accepted, never a crash', async () => {
+  const admin = await app.login('admin');
+  for (const bad of ['2026-13-45', '2026-02-30', '2026-00-10', 'tomorrow', '']) {
+    for (const [path, body] of [
+      ['/api/ttt/new-week', { date: bad }],
+      ['/api/rides', { date: bad, title: 'Ride' }],
+      ['/api/ttt/seasons', { name: 'S', start: bad }],
+      ['/api/zrl/round', { name: 'R', start: bad }],
+      ['/api/zrl/round', { name: 'R', start: '2026-11-17', closes: bad || 'x' }],
+    ]) {
+      const r = await app.post(path, body, { token: admin });
+      assert.ok(r.status >= 400 && r.status < 500, `${path} with "${bad}" answered ${r.status}`);
+    }
+  }
+  assert.equal((await app.get('/api/auth/status')).status, 200, 'the server is still fine');
+});

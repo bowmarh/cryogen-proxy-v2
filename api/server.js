@@ -261,7 +261,7 @@ const DATA_ROUTES = {
   'POST /api/rides': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const date = text(body.date, 'date', 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'The date must be YYYY-MM-DD.');
+    if (!validDate(date)) throw new HttpError(400, 'The date must be a real date, like 2026-10-28.');
     const ride = {
       id: String(Date.now()),
       title: text(body.title, 'title', 100),
@@ -761,7 +761,7 @@ const TTT_ROUTES = {
   'POST /api/ttt/new-week': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const date = text(body.date, 'date', 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'The date must be YYYY-MM-DD.');
+    if (!validDate(date)) throw new HttpError(400, 'The date must be a real date, like 2026-10-28.');
     await startWeek(date, text(body.title, 'title', 80, false) || weekTitle(date));
   },
 };
@@ -930,7 +930,12 @@ function seasonChoices(seasons, archiveIds){
 }
 
 const inSeason = (date, c) => (!c.start || date >= c.start) && (!c.end || date < c.end);
-const validDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+// A real calendar date as YYYY-MM-DD. (A month like 13 makes Date throw, so it is checked, not trusted.)
+const validDate = d => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const t = new Date(`${d}T00:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+};
 function seasonSummary(snapshots){
   const weeks = [];
   const teams = new Map();   // team name -> stats
@@ -1096,7 +1101,7 @@ async function handleCron(req, res){
   if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
   const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
   if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-  const ran = await runTttSchedule();
+  const ran = [...await runTttSchedule(), ...await zrl.runSchedule()];
   // The health panel reads this to show whether the scheduled workflow is really running.
   await redis([['SET', CRON_LAST_KEY, new Date().toISOString()]]).catch(() => {});
   sendJSON(res, 200, { ran });
@@ -1516,6 +1521,20 @@ function serveStatic(res, reqPath){
   fs.createReadStream(filePath).pipe(res);
 }
 
+// ── ZRL (Zwift Racing League) ──────────────────────────────
+// Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
+const zrl = require('../lib/zrl')({
+  redis, HttpError, text, requireRole, roleFromRequest, identify, discord, discordEscape, fetchRoster,
+  validDate, ukTime, ukLabel, teamId, siteUrl: SITE_URL,
+});
+
+async function handleZrl(zrlRoute, req, res){
+  if (req.method === 'GET') await zrl.runSchedule().catch(e => console.error('ZRL schedule:', e.message));
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await zrlRoute(req, body);
+  sendJSON(res, 200, result || zrl.view(await zrl.load(), req));
+}
+
 // ── Router ─────────────────────────────────────────────────
 async function route(req, res){
   const parsed = parseRequestUrl(req);
@@ -1550,6 +1569,9 @@ async function route(req, res){
 
   const tttRoute = TTT_ROUTES[`${req.method} ${pathname}`];
   if (tttRoute) return handleTtt(tttRoute, req, res);
+
+  const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
+  if (zrlRoute) return handleZrl(zrlRoute, req, res);
 
   if (pathname === '/api/proxy'){
     // Only named sheet tabs are allowed, so the proxy can't be used to fetch arbitrary URLs.

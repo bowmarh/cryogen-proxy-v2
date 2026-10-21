@@ -154,6 +154,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
       <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
       <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
+      <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
@@ -221,6 +222,12 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
     <div id="sheet-panel"></div>
+  </div>
+
+  <div id="page-zrl" class="page">
+    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Zwift Racing League</h2>
+      <p style="font-size:13px;color:#6b7280">Sign up for the round · see where we need riders</p></div>
+    <div id="zrl-root"><div style="color:#6b7280;font-size:13px">Loading…</div></div>
   </div>
 
   <div id="page-season" class="page">
@@ -582,6 +589,7 @@ function showTab(id,btn){
   if(id==='rides')loadZwiftEvents();
   if(id==='ttt')loadTtt();
   if(id==='season')loadSeason();
+  if(id==='zrl')loadZrl();
   if(id==='members')renderMembers(); 
 }
 
@@ -1435,6 +1443,147 @@ function renderProfile(){
     </div>`:''}`
   ;
   loadMyTtt();
+}
+
+// ── ZRL page ───────────────────────────────────────────────
+let zrlData=null;
+const ZRL_CATS=['A','B','C','D','E'];
+function zrlMine(d){
+  if(!memberRider) return null;
+  const key=String(memberRider.id), nm=(memberRider.name||'').toLowerCase();
+  return d.signups.find(x=>x.key===key||x.name.toLowerCase()===nm)||null;
+}
+function zrlDemandCard(r,round){
+  const pct=r.places?Math.min(100,Math.round(r.riders/r.places*100)):0;
+  let note,color='#9ca3af';
+  if(!r.teams){ note=r.riders?`${r.riders} interested but no team yet. ${Math.max(0,round.rosterSize-r.riders)} more would fill a new team.`:'No team in this time zone yet.'; color=r.riders?'#FBBF24':'#6b7280'; }
+  else if(r.riders<r.places){ note=`${r.places-r.riders} more rider${r.places-r.riders===1?'':'s'} needed to fill the team${r.teams===1?'':'s'}.`; color='#FBBF24'; }
+  else { note=r.riders>r.places?`Full, with ${r.riders-r.places} spare.`:'Full.'; color='#10B981'; }
+  return `<div class="card" style="padding:14px 16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">${esc(r.name)}</div>
+    <div style="font-size:22px;font-weight:900;color:#00D4FF">${r.riders} <span style="font-size:12px;font-weight:400;color:#6b7280">rider${r.riders===1?'':'s'} · ${r.teams} team${r.teams===1?'':'s'}</span></div>
+    ${r.places?`<div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin:8px 0"><div style="height:6px;width:${pct}%;background:${color==='#10B981'?'#10B981':'#00D4FF'};border-radius:3px"></div></div>`:''}
+    <div style="font-size:12px;color:${color};margin-top:6px">${esc(note)}</div></div>`;
+}
+function zrlSignupCard(d){
+  const round=d.round, mine=zrlMine(d);
+  if(!memberRider) return `<div class="card" style="padding:16px;font-size:13px;color:#9ca3af;margin-bottom:20px">Sign in as a member to sign up for the round.</div>`;
+  const status=mine?(mine.in?`<div style="font-size:13px;color:#10B981;margin-bottom:10px">✅ You're signed up for ${esc(mine.regions.map(id=>(round.regions.find(r=>r.id===id)||{name:id}).name).join(' and '))}. You can change anything below.</div>`
+    :`<div style="font-size:13px;color:#9ca3af;margin-bottom:10px">You've told us you're not racing this round. Changed your mind? Sign up below.</div>`):'';
+  if(!round.open) return `<div class="card" style="padding:16px;margin-bottom:20px"><div style="font-size:13px;color:#f87171">🔒 Sign-ups for this round are closed.</div>${status}</div>`;
+  const regs=new Set(mine&&mine.in?mine.regions:[]);
+  const cat=(mine&&mine.cat)||String(memberRider.cat||'').replace('+','');
+  const teamsIn=id=>round.teams.filter(t=>t.region===id).map(t=>t.name+(t.slot?' · '+t.slot:''));
+  return `<div class="card" style="padding:16px;margin-bottom:20px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:10px">${mine&&mine.in?'Update your sign-up':'Sign up for '+esc(round.name)}</div>
+    ${status}
+    <label class="lbl">Which time zones can you race in? (pick all that work)</label>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+      ${round.regions.map(r=>`<label style="font-size:14px;display:flex;gap:8px;align-items:flex-start"><input type="checkbox" class="zrl-region" value="${esc(r.id)}" ${regs.has(r.id)?'checked':''} style="margin-top:3px"/><span><b>${esc(r.name)}</b>${teamsIn(r.id).length?`<span style="display:block;font-size:11px;color:#6b7280">${esc(teamsIn(r.id).join(' · '))}</span>`:'<span style="display:block;font-size:11px;color:#6b7280">no team yet: your interest helps us start one</span>'}</span></label>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div><label class="lbl">Your category</label><select id="zrl-cat" class="inp" style="width:auto">${['',...ZRL_CATS].map(c=>`<option ${c===cat?'selected':''}>${c}</option>`).join('')}</select></div>
+      ${round.teams.length?`<div style="flex:1;min-width:180px"><label class="lbl">Team you'd like (optional)</label><select id="zrl-pref" class="inp"><option value="">No preference</option>${round.teams.map(t=>`<option value="${esc(t.id)}" ${mine&&mine.preferred===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>`:''}
+    </div>
+    <label style="font-size:13px;display:block;margin-bottom:10px"><input type="checkbox" id="zrl-captain" ${mine&&mine.captain?'checked':''}/> ⭐ I'm happy to captain a team</label>
+    <textarea id="zrl-comments" class="inp" rows="2" maxlength="300" placeholder="Anything captains should know? (only staff can see this)" style="margin-bottom:10px">${mine?esc(mine.comments||''):''}</textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-cyan" style="width:auto;padding:9px 20px" onclick="zrlSubmit(true)">${mine&&mine.in?'Update':'Sign me up'}</button>
+      <button onclick="zrlSubmit(false)" style="padding:9px 14px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:13px">I'm not racing this round</button>
+      ${mine?`<button onclick="zrlWithdraw()" style="padding:9px 14px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Withdraw</button>`:''}
+    </div></div>`;
+}
+function zrlPoolTable(d,staff){
+  const ins=d.signups.filter(x=>x.in), out=d.signups.length-ins.length;
+  if(!ins.length) return `<div class="card" style="padding:14px 16px;font-size:13px;color:#6b7280">Nobody has signed up yet. Be the first!</div>`;
+  const reg=ids=>ids.map(id=>({eu:'EU',am:'AM',ap:'AP'}[id]||id)).join(' · ');
+  const me=memberRider?String(memberRider.id):'';
+  return `<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr>
+    <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Rider</th>
+    <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Cat</th>
+    <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Time zones</th>
+    ${staff?'<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Comments</th>':''}</tr></thead><tbody>
+    ${ins.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05);${x.key===me?'background:rgba(0,212,255,0.08)':''}"><td style="padding:8px 10px;font-size:13px">${esc(x.name)}${x.captain?' ⭐':''}</td><td style="padding:8px 10px;font-size:13px">${esc(x.cat||'—')}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>${staff?`<td style="padding:8px 10px;font-size:12px;color:#9ca3af">${esc(x.comments||'')}</td>`:''}</tr>`).join('')}
+    </tbody></table></div><div style="font-size:11px;color:#6b7280">${ins.length} signed up${out?` · ${out} not racing this round`:''} · ⭐ = happy to captain</div>`;
+}
+function zrlStaffPanel(d){
+  const round=d.round;
+  const teamRow=t=>`<div class="zt-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <input class="inp zt-name" maxlength="40" placeholder="Team name" value="${esc(t.name||'')}" style="flex:2;min-width:130px"/>
+      <select class="inp zt-region" style="width:auto">${(round?round.regions:[]).map(r=>`<option value="${esc(r.id)}" ${t.region===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
+      <input class="inp zt-slot" maxlength="40" placeholder="Race time, e.g. Tue 19:00 UK" value="${esc(t.slot||'')}" style="flex:2;min-width:130px"/>
+      <input class="inp zt-cap" inputmode="numeric" placeholder="Captain Zwift ID" value="${esc(t.captain||'')}" style="width:130px"/>
+      <button onclick="this.closest('.zt-row').remove()" style="padding:4px 10px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px;font-size:11px">Remove</button></div>`;
+  const label=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">${x}</div>`;
+  const start=`<div class="card" style="padding:14px 16px;margin-top:16px">${label('Start a new round (staff)')}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="zrl-new-name" class="inp" maxlength="60" placeholder="e.g. Round 2 · Team Tempo" style="flex:2;min-width:180px"/>
+        <div><label class="lbl">First race</label><input id="zrl-new-start" type="date" class="inp" style="width:auto"/></div>
+        <div><label class="lbl">Sign-ups close</label><input id="zrl-new-closes" type="date" class="inp" style="width:auto"/></div>
+        <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlStartRound()">Start round</button></div>
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">The club channel is told sign-ups are open. Your teams carry over; riders sign up afresh and the old round is kept.</div></div>`;
+  if(!round) return start;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
+      <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' UK (automatic)':''}
+        <button onclick="zrlSetOpen(${!round.open})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">${round.open?'Close now':'Reopen'}</button></div>
+      ${label('Teams (staff)')}<div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:6px"><button onclick="zrlAddTeam()" style="padding:6px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">+ Add team</button><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSaveTeams()">Save teams</button></div>
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">Pick each team's time zone and Tuesday race time. The captain is found by Zwift ID.</div></div>${start}`;
+}
+function renderZrl(d){
+  const staff=role==='admin'||role==='mod';
+  if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No ZRL round is open right now. We'll announce it in Discord when the next one starts.</div>${staff?zrlStaffPanel(d):''}`;
+  const r=d.round, dem=d.demand;
+  const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} UK`:'';
+  const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
+  return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
+      <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
+    ${zrlSignupCard(d)}
+    ${h3('Where we need riders')}<div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
+    ${h3('Who is in ('+dem.riders+')')}${zrlPoolTable(d,staff)}
+    ${staff?zrlStaffPanel(d):''}`;
+}
+async function zrlPost(path,body){
+  let res,d;
+  try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); d=await res.json(); }
+  catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  loadZrl(); return true;
+}
+function zrlSubmit(inFlag){
+  const regions=[...document.querySelectorAll('.zrl-region:checked')].map(x=>x.value);
+  if(inFlag&&!regions.length){ alert('Tick at least one time zone you can race in.'); return; }
+  const pref=document.getElementById('zrl-pref');
+  zrlPost('/api/zrl/signup',{ in:inFlag, regions, cat:document.getElementById('zrl-cat').value, preferred:pref?pref.value:'',
+    captain:document.getElementById('zrl-captain').checked, comments:document.getElementById('zrl-comments').value,
+    name:memberRider.name, zwid:memberRider.id });
+}
+function zrlWithdraw(){ if(confirm('Withdraw from this round?')) zrlPost('/api/zrl/withdraw',{ name:memberRider.name, zwid:memberRider.id }); }
+function zrlStartRound(){
+  const name=document.getElementById('zrl-new-name').value.trim(), start=document.getElementById('zrl-new-start').value, closes=document.getElementById('zrl-new-closes').value;
+  if(!name||!start){ alert('Enter a round name and the date of the first race.'); return; }
+  zrlPost('/api/zrl/round',{ name, start, closes });
+}
+function zrlSetOpen(open){ zrlPost('/api/zrl/status',{ open }); }
+function zrlAddTeam(){
+  const box=document.getElementById('zrl-teams'); if(!box||!zrlData||!zrlData.round) return;
+  const tmp=document.createElement('div'); tmp.innerHTML=zrlStaffPanel({round:{...zrlData.round,teams:[{name:'',region:zrlData.round.regions[0].id,slot:'',captain:''}]}});
+  box.appendChild(tmp.querySelector('#zrl-teams .zt-row'));
+}
+function zrlSaveTeams(){
+  const teams=[...document.querySelectorAll('#zrl-teams .zt-row')].map(row=>({
+    name:row.querySelector('.zt-name').value.trim(), region:row.querySelector('.zt-region').value,
+    slot:row.querySelector('.zt-slot').value.trim(), captain:row.querySelector('.zt-cap').value.trim() })).filter(t=>t.name||t.slot||t.captain);
+  zrlPost('/api/zrl/teams',{ teams });
+}
+async function loadZrl(){
+  const el=document.getElementById('zrl-root'); if(!el) return;
+  try{
+    const res=await fetch('/api/zrl',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    zrlData=d; el.innerHTML=renderZrl(d);
+  }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load ZRL: ${esc(e.message)}</div>`; }
 }
 
 // ── TTT Season page ────────────────────────────────────────
