@@ -70,7 +70,7 @@ test('teams: staff set them; names, time zones and captains are checked; captain
   assert.equal((await setTeams([{ name: 'A', region: 'mars' }])).status, 400);
   assert.equal((await setTeams([{ name: 'A', region: 'eu', captain: 'rick' }])).status, 400);
   assert.equal((await setTeams([{ name: '', region: 'eu' }])).status, 400);
-  assert.equal((await setTeams(Array.from({ length: 26 }, (_, i) => ({ name: `T${i}`, region: 'eu' })))).status, 400);
+  assert.equal((await setTeams(Array.from({ length: 61 }, (_, i) => ({ name: `T${i}`, region: 'eu' })))).status, 400);
   assert.equal((await setTeams(TEAMS)).status, 200);
   const t = (await view()).round.teams;
   assert.deepEqual(t.map(x => [x.name, x.region, x.slot]), [['CRYO Ice', 'eu', 'Tue 19:00 UK'], ['CRYO Frost', 'eu', 'Tue 20:00 UK'], ['CRYO Stateside', 'am', 'Tue 20:00 NY']]);

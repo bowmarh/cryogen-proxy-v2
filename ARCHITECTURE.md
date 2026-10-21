@@ -67,6 +67,7 @@ Logic lives in `lib/zrl.js` (a factory that `api/server.js` wires up; not in `ap
 - `GET /api/zrl` is public: the round, the demand per region (riders, teams, places still to fill) and the sign-up pool. Comments, Zwift IDs and preferred team are staff-only.
 - `POST /api/zrl/signup` and `/withdraw` use `identify`, so a signed-in member can only sign themselves up. At least one time zone is required when racing; category defaults to the rider's profile category.
 - Staff only: `POST /api/zrl/round` (starts a round, archives the previous one, keeps the teams, posts "sign-ups open" to Discord), `/status` (open or closed, published) and `/teams` (replace the team list).
+- `POST /api/zrl/import {tab, apply, regions}` (staff) reads the team board tab of the club Google Sheet: one block of columns per team (zone or colour label, name, "Division n", grade, a Rider header row, one rider per row; blocks differ in width). Without `apply` it returns a preview; with it, teams and rosters (`cg:zrl:assign`) are replaced and riders without a sign-up get one. Missing Zwift IDs are filled from the club roster by exact name. The board's EMEA/AMERICAS labels give a time zone; colours do not, so staff pick those. Teams may carry `division` and `grade`.
 - `runSchedule` (called from `/api/cron/tick` and when the page loads) posts a reminder 24 hours before sign-ups close and closes the round at the deadline. Both are claimed once in `cg:zrl:sent`.
 
 ## System health

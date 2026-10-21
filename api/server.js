@@ -1474,8 +1474,8 @@ function parseGviz(textBody){
 // Google can be slow; without a limit the request would hang until Vercel cuts the function off with no message.
 const sheetTimeoutMs = () => Number(process.env.SHEET_TIMEOUT_MS) || 6000;
 
-async function fetchTab(tab){
-  const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tab)}`;
+async function fetchTab(tab, headerRows = 1){
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=${headerRows}&sheet=${encodeURIComponent(tab)}`;
   let r, body;
   try {
     r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(sheetTimeoutMs()) });
@@ -1487,6 +1487,17 @@ async function fetchTab(tab){
   if (!r.ok) throw new HttpError(502, `Google Sheets returned ${r.status} for tab "${tab}".`);
   if (/^\s*</.test(body)) throw new HttpError(502, 'The Google Sheet is not shared publicly ("Anyone with the link can view").');
   return body;
+}
+
+// Every cell of a tab as plain strings (no header row), for tabs laid out as a board rather than a table.
+async function fetchGrid(tab){
+  const [body, fallback] = await Promise.all([fetchTab(tab, 0), fetchTab(`__no_such_tab_${Date.now()}`, 0)]);
+  const table = b => JSON.parse(b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1)).table || {};
+  const t = table(body);
+  if (JSON.stringify(t.cols || null) === JSON.stringify(table(fallback).cols || null)) {
+    throw new HttpError(404, `The Google Sheet has no tab named "${tab}".`);
+  }
+  return (t.rows || []).map(r => (r.c || []).map(c => (c && c.v !== null && c.v !== undefined ? String(c.v) : (c && c.f) || '').trim()));
 }
 
 async function handleSheet(endpoint, res){
@@ -1525,7 +1536,7 @@ function serveStatic(res, reqPath){
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
 const zrl = require('../lib/zrl')({
   redis, HttpError, text, requireRole, roleFromRequest, identify, discord, discordEscape, fetchRoster,
-  validDate, ukTime, ukLabel, teamId, siteUrl: SITE_URL,
+  validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
 });
 
 async function handleZrl(zrlRoute, req, res){
