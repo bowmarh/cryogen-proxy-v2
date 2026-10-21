@@ -156,7 +156,7 @@ function installFetch(world) {
     if (u.host === 'docs.google.com') return handleSheet(world, u);
     if (u.host === 'discord.test') {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
-      return new Response('', { status: 204 });
+      return new Response(null, { status: 204 }); // Discord answers 204 with no body
     }
     return real(input, opts);
   };

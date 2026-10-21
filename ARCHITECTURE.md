@@ -54,6 +54,10 @@ The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, 
 
 The roster comes from ZwiftRacing.app through the WordPress plugin, which answers 429 when asked too often. Each server instance used to ask on its own. The slimmed rider list is now kept in Redis (`cg:roster:riders`): reused for 10 minutes by every instance, and the last good copy is served if the source fails. Member records are not cached there; they are read each time the 5-minute in-memory cache expires.
 
+## TTT Season page
+
+`GET /api/ttt/season` (public) feeds the **TTT Season** tab. `seasonSummary()` reads up to the latest 60 archived weeks, plus the current week once it has results, and returns totals, per-team stats (weeks, best and average place, podiums, DNFs), a rider leaderboard (weeks ridden, times captain, podiums; top 25) and a week-by-week list. A team counts for a week only if it had riders or a result. It uses only names, line-ups, captains and results, never comments or Zwift IDs. There is no season boundary yet: it covers every archived week (up to 60).
+
 ## System health
 
 `GET /api/health` (admin only) powers the **System health** section of the Admin dialog. It reports status (ok / warn / fail / info) for shared storage, WordPress member records, the club roster copy, the Google Sheet, Discord webhook configuration, the TTT week (including a missing close time), scheduled runs, member sign-in, guest sign-ups, staff passwords and the deployed commit. It only reports whether things are set and reachable, never values. It does not post to Discord or call the rate-limited roster source. The workflow's last run comes from `cg:cron:last`, written by every `/api/cron/tick`.
