@@ -73,9 +73,11 @@ test('a week with no close time is flagged, because it will not close by itself'
 
 test('scheduled runs that stop are noticed', async () => {
   world.db['cg:cron:last'] = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
-  assert.equal((await health()).cron.status, 'warn');
-  world.db['cg:cron:last'] = new Date(Date.now() - 5 * 3600 * 1000).toISOString();
-  assert.equal((await health()).cron.status, 'fail');
+  const slow = await health();
+  assert.equal(slow.cron.status, 'warn', 'hours apart is a warning (GitHub alone is that slow)');
+  assert.match(slow.cron.detail, /QStash/);
+  world.db['cg:cron:last'] = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
+  assert.equal((await health()).cron.status, 'fail', 'a day of silence is a failure');
   world.db['cg:cron:last'] = new Date().toISOString();
   assert.equal((await health()).cron.status, 'ok');
 });

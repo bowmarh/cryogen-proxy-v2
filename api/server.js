@@ -1301,7 +1301,9 @@ async function healthChecks(){
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
       if (!last) return ['warn', 'CRON_SECRET is set but no scheduled run has been recorded yet (the workflow runs every 15 minutes).'];
       const age = Date.now() - Date.parse(last);
-      return [age <= 45 * 60000 ? 'ok' : age <= 3 * 3600000 ? 'warn' : 'fail', `Last scheduled run ${ago(age)}.`];
+      if (age <= 45 * 60000) return ['ok', `Last scheduled run ${ago(age)}.`];
+      // GitHub's own schedule often runs hours apart, so a gap alone is a warning; a day of silence is a failure.
+      return [age <= 26 * 3600000 ? 'warn' : 'fail', `Last scheduled run ${ago(age)}. Expected every 15 minutes: without a QStash schedule (see README) the TTT only runs on time when someone opens the page.`];
     }),
     run('signin', 'Member sign-in (cryogen.team)', async () => process.env.WP_SSO_SECRET
       ? ['ok', 'On. Riders can sign in with their cryogen.team account.']
