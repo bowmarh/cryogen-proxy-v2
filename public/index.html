@@ -1528,6 +1528,8 @@ function zrlStaffPanel(d){
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
       <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' UK (automatic)':''}
         <button onclick="zrlSetOpen(${!round.open})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">${round.open?'Close now':'Reopen'}</button></div>
+      <div style="font-size:13px;margin-bottom:10px">Rosters are <b>${round.published?'published':'not published'}</b> <span style="color:#6b7280">${round.published?'(riders can see their team)':'(only staff and captains see teams)'}</span>
+        <button onclick="zrlPublish(${!round.published})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:${round.published?'rgba(255,255,255,0.05)':'rgba(16,185,129,0.12)'};color:${round.published?'#e5e7eb':'#10B981'};border:1px solid ${round.published?'rgba(255,255,255,0.15)':'rgba(16,185,129,0.3)'};border-radius:6px">${round.published?'🙈 Unpublish':'📣 Publish rosters'}</button></div>
       ${label('Teams (staff)')}<div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:6px"><button onclick="zrlAddTeam()" style="padding:6px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">+ Add team</button><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSaveTeams()">Save teams</button></div>
       <div style="font-size:11px;color:#4b5563;margin-top:8px">Pick each team's time zone and Tuesday race time. The captain is found by Zwift ID.</div></div>${zrlAutoCard(d)}${zrlExportCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlRosters(d)}${start}`;
@@ -1734,6 +1736,11 @@ function zrlStartRound(){
   const name=document.getElementById('zrl-new-name').value.trim(), start=document.getElementById('zrl-new-start').value, closes=document.getElementById('zrl-new-closes').value;
   if(!name||!start){ alert('Enter a round name and the date of the first race.'); return; }
   zrlPost('/api/zrl/round',{ name, start, closes });
+}
+function zrlPublish(on){
+  if(!on){ if(confirm('Hide the rosters from riders again?')) zrlPost('/api/zrl/status',{ published:false }); return; }
+  if(confirm('Publish the rosters and tell the club in Discord?\n\nOK = publish and announce.\nCancel = choose not to announce.')) zrlPost('/api/zrl/status',{ published:true });
+  else if(confirm('Publish the rosters WITHOUT a Discord announcement?')) zrlPost('/api/zrl/status',{ published:true, announce:false });
 }
 function zrlSetOpen(open){ zrlPost('/api/zrl/status',{ open }); }
 function zrlAddTeam(){
