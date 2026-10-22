@@ -19,7 +19,7 @@ function board() {
   put(7, 0, ['Cat Cole', 'M', 1381556]);                          // new sign-up: ID but no stats
   put(8, 0, ['Av WKG / Power / Riders', '', '', 0, 0]);           // summary rows under the riders are not riders
   // Block 2, cols 6-10, no ID column: Rider, Wkg, Power, Type, Cat
-  put(0, 6, ['Indigo']); put(1, 6, ['CRYO Beta']); put(2, 6, ['Division 1']); put(3, 6, ['C']);
+  put(0, 6, ['Teal']); put(1, 6, ['CRYO Beta']); put(2, 6, ['Division 1']); put(3, 6, ['C']);
   put(4, 6, ['Rider', 'Wkg', 'Power', 'Type', 'Cat']);
   put(5, 6, ['Rider 2', 3.86, 282, 'All-Rounder', 'B']);           // found in the club roster by name
   put(6, 6, ['Nobody Known', 3.1, 250, 'Sprinter', 'C']);
@@ -70,7 +70,7 @@ test('preview reads each block: names, divisions, ids, categories, region hints;
   assert.equal(r.status, 200);
   const { teams, warnings } = r.body.preview;
   assert.deepEqual(teams.map(t => t.name), ['CRYO Alpha', 'CRYO Beta', 'CRYO Alpha (Division 3)']);
-  assert.deepEqual(teams.map(t => t.region), ['eu', '', 'am'], 'Red and AMERICAS labels give a region; other colours (Indigo, Lime...) do not');
+  assert.deepEqual(teams.map(t => t.region), ['eu', '', 'am'], 'Red and AMERICAS labels give a region; a colour that is not in the league table does not');
   assert.equal(teams[0].division, 'Division 2'); assert.equal(teams[0].grade, 'Open B');
   assert.deepEqual(teams[0].riders.map(x => [x.name, x.zwid, x.cat]), [['Ann Able', '4378027', 'B'], ['Bob Baker', '2436518', 'D'], ['Cat Cole', '1381556', '']]);
   assert.deepEqual(teams[1].riders.map(x => [x.name, x.zwid, x.idFrom]), [['Rider 2', '1002', 'roster'], ['Nobody Known', '', '']]);
