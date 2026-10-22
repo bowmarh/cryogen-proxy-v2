@@ -1538,7 +1538,7 @@ function zrlImportCard(d){
   if(zrlPreview){
     const regs=d.round.regions, p=zrlPreview, unset=p.teams.filter(t=>!t.region).length;
     body+=`<div style="font-size:12px;color:#9ca3af;margin:10px 0 6px">${p.teams.length} teams, ${p.teams.reduce((n,t)=>n+t.riders.length,0)} riders. Confirming replaces the current teams and rosters (riders keep their own sign-ups).${unset?` <b>${unset}</b> teams need a time zone.`:''}</div>
-      ${unset?`<div style="margin-bottom:8px;font-size:12px">Set all unset teams to <select id="zrl-imp-bulk" class="inp" style="width:auto">${regs.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</select> <button onclick="zrlImportBulk()" style="${btn}">Apply</button></div>`:''}
+      ${zrlLeagueRows(p,regs,btn)}
       <div style="max-height:320px;overflow:auto">${p.teams.map(t=>`<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px">
         <div style="flex:1;min-width:0"><b>${esc(t.name)}</b> <span style="color:#6b7280">${esc([t.division,t.grade].filter(Boolean).join(' · '))}</span></div>
         <span style="color:#9ca3af">${t.riders.length} riders</span>
@@ -1548,6 +1548,15 @@ function zrlImportCard(d){
   }
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#4b5563;margin-top:8px">Reads the team board tab of the club Google Sheet. Nothing changes until you press Import.</div></div>`;
 }
+function zrlLeagueRows(p,regs,btn){
+  const groups=[...new Set(p.teams.map(t=>t.hint||''))];
+  if(groups.length<2&&!groups.some(g=>g)) return '';
+  return `<div style="margin:8px 0;font-size:12px"><div style="color:#9ca3af;margin-bottom:4px">Time zone for each league on the board (sets all its teams at once):</div>${groups.map(g=>{
+    const ts=p.teams.filter(t=>(t.hint||'')===g), rs=[...new Set(ts.map(t=>t.region))], cur=rs.length===1?rs[0]:'';
+    return `<div style="display:flex;gap:8px;align-items:center;padding:2px 0"><span style="flex:1">${esc(g||'(no label)')} <span style="color:#6b7280">· ${ts.length} team${ts.length===1?'':'s'}</span></span>
+      <select class="inp" data-hint="${esc(g)}" onchange="zrlImportLeague(this)" style="width:auto"><option value="">Pick…</option>${regs.map(r=>`<option value="${esc(r.id)}" ${cur===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>`;}).join('')}</div>`;
+}
+function zrlImportLeague(sel){ zrlPickRegions(); zrlPreview.teams.forEach(t=>{ if((t.hint||'')===sel.dataset.hint) t.region=sel.value; }); renderZrl2(); }
 function zrlRosters(d){
   const round=d.round, assign=d.assign||{};
   if(!round||!round.teams.length||!Object.keys(assign).length) return '';
@@ -1562,7 +1571,6 @@ async function zrlImportPreview(){
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
   zrlPreview={...d.preview,sheet}; renderZrl2();
 }
-function zrlImportBulk(){ zrlPickRegions(); const v=document.getElementById('zrl-imp-bulk').value; zrlPreview.teams.forEach(t=>{ if(!t.region)t.region=v; }); renderZrl2(); }
 function zrlPickRegions(){ document.querySelectorAll('.zrl-imp-region').forEach(s=>{ const t=zrlPreview.teams.find(x=>x.id===s.dataset.team); if(t)t.region=s.value; }); }
 function renderZrl2(){ document.getElementById('zrl-root').innerHTML=renderZrl(zrlData); }
 async function zrlImportApply(){
