@@ -1402,6 +1402,7 @@ function renderProfile(){
     </div>
 
     <div id="my-ttt" style="margin-bottom:24px"></div>
+    <div id="my-zrl" style="margin-bottom:24px"></div>
 
     <div class="stat4" style="margin-bottom:24px">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">FTP</div><div style="font-size:22px;font-weight:900;color:#00D4FF">${r.ftp}w</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.wkg} w/kg @ 20min</div></div>
@@ -1443,6 +1444,7 @@ function renderProfile(){
     </div>`:''}`
   ;
   loadMyTtt();
+  loadMyZrl();
 }
 
 // ── ZRL page ───────────────────────────────────────────────
@@ -1886,6 +1888,49 @@ async function loadMyTtt(){
     if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
     el.innerHTML=renderMyTtt(d);
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load your TTT status: ${esc(e.message)}</div>`; }
+}
+
+function renderMyZrl(m){
+  const card=inner=>`<div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:10px">🚀 My ZRL</div>${inner}</div>`;
+  const goBtn=t=>`<button class="btn-cyan" style="width:auto;padding:8px 16px;margin-top:12px" onclick="showTab('zrl',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('ZRL')))">${t}</button>`;
+  if(!m.round) return card('<div style="font-size:13px;color:#9ca3af">No ZRL round is open right now. We\'ll announce the next one in Discord.</div>');
+  const r=m.round, s=m.signup, zone=ids=>(ids||[]).map(id=>({eu:'Europe',am:'Americas',ap:'Asia-Pacific'}[id]||id)).join(', ')||'—';
+  let body=`<div style="font-size:14px;font-weight:700">${esc(r.name)}<span style="font-weight:400;color:#9ca3af;font-size:12px"> · ${r.weeks} races from ${esc(seasonDay(r.start))}</span></div>`;
+  (m.captainOf||[]).forEach(t=>{
+    body+=`<div style="margin-top:10px;padding:10px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:8px;background:rgba(0,212,255,0.06)"><div style="font-weight:700">⭐ You captain ${esc(t.name)}</div>
+      ${myTttLine('Team',esc([t.division,t.grade,t.regionName,t.slot].filter(Boolean).join(' · ')||'—'))}${myTttLine('Riders',t.riders.length+' of '+r.rosterSize)}
+      <div style="font-size:12px;color:#9ca3af;margin-top:6px">Open ZRL to copy your team's details for WTRL registration.</div></div>`;
+  });
+  if(m.team){
+    const t=m.team;
+    body+=`<div style="margin-top:10px;padding:10px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.06)"><div style="font-weight:700">✅ ${esc(t.name)}</div>
+      ${myTttLine('Team',esc([t.division,t.grade,t.regionName].filter(Boolean).join(' · ')||'—'))}${myTttLine('Race time',esc(t.slot||'To be confirmed'))}
+      ${myTttLine('Captain',esc(t.captainName||'Not chosen yet'))}${myTttLine('Teammates',t.riders.length?t.riders.map(x=>esc(x.name)+(x.reserve?' (reserve)':'')).join(', '):'—')}</div>`;
+  } else if(m.placed&&!(m.captainOf||[]).length){
+    body+=`<div style="font-size:13px;color:#10B981;margin-top:10px">✅ You have a place on a team. It will show here when the club publishes the rosters.</div>`;
+  } else if(s&&s.in&&!m.placed){
+    body+=`<div style="font-size:13px;color:#10B981;margin-top:10px">✅ You're signed up. Teams are still being formed, so yours will show here soon.</div>`;
+  }
+  if(!s){
+    body+=`<div style="font-size:13px;color:#FBBF24;margin-top:10px">You haven't signed up for this round.</div>`+(r.open?goBtn('Sign up →'):`<div style="font-size:12px;color:#6b7280;margin-top:6px">Sign-ups are closed.</div>`);
+  } else if(!s.in){
+    body+=`<div style="font-size:13px;color:#9ca3af;margin-top:10px">You've told us you're <b>not racing</b> this round.</div>`+(r.open?goBtn('Change my sign-up →'):'');
+  } else {
+    body+=`<div style="margin-top:10px">${myTttLine('Time zones',esc(zone(s.regions)))}${myTttLine('Category',esc(s.cat||'—'))}${myTttLine('Commitment',s.commit==='reserve'?'Reserve / rotation rider':'Full season')}</div>`;
+    if(r.open) body+=goBtn('Update my sign-up →');
+  }
+  return card(body);
+}
+async function loadMyZrl(){
+  const el=document.getElementById('my-zrl'); if(!el) return;
+  if(!sessionStorage.getItem('sso')){ el.innerHTML=''; return; }   // My TTT already tells guests to sign in
+  el.innerHTML='<div class="card" style="padding:16px;font-size:13px;color:#6b7280">Loading your ZRL status…</div>';
+  try{
+    const res=await fetch('/api/zrl/mine',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    el.innerHTML=renderMyZrl(d);
+  }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load your ZRL status: ${esc(e.message)}</div>`; }
 }
 
 // ── Live Results ──────────────────────────────────────────
