@@ -1585,6 +1585,8 @@ async function handleZrl(zrlRoute, req, res){
   if (req.method === 'GET') await zrl.runSchedule().catch(e => console.error('ZRL schedule:', e.message));
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await zrlRoute(req, body);
+  // Whatever changed (an import, a move, a rider ticking the star), teams with riders and no captain get their first volunteer.
+  if (req.method === 'POST') await zrl.afterChange().catch(e => console.error('ZRL captains:', e.message));
   sendJSON(res, 200, result || zrl.view(await zrl.load(), req));
 }
 
