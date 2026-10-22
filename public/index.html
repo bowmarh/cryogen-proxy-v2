@@ -1706,29 +1706,28 @@ function zrlRosters(d){
   const round=d.round, assign=d.assign||{};
   if(!round||!round.teams.length||!Object.keys(assign).length) return '';
   const by={}; d.signups.forEach(s=>{ const t=assign[s.key]; if(t&&s.in)(by[t]=by[t]||[]).push(s); });
-  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
   const noCap=round.teams.filter(t=>(by[t.id]||[]).length&&!t.captain).length;
+  const needs=round.teams.filter(t=>!t.captain);   // where a spare volunteer could captain instead
+  const spare=t=>(by[t.id]||[]).filter(s=>s.captain&&s.zwid&&s.zwid!==t.captain);
+  const spareAll=round.teams.reduce((n,t)=>n+spare(t).length,0);
   const capOptions=(t,r)=>{
     const cur=r.find(s=>s.zwid&&s.zwid===t.captain);
     const rows=[...r].sort((a,b)=>(b.captain-a.captain)||a.name.localeCompare(b.name));
     return `<option value="">— no captain —</option>${t.captain&&!cur?`<option value="" disabled selected>${esc(t.captainName||t.captain)} (not on this team)</option>`:''}${rows.map(s=>`<option value="${esc(s.key)}" ${cur&&cur.key===s.key?'selected':''} ${s.zwid?'':'disabled'}>${s.captain?'⭐ ':''}${esc(s.name)}${s.zwid?'':' (no Zwift ID)'}</option>`).join('')}`;
   };
+  const spareRow=(t,s)=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;margin-top:6px"><span>⭐ <b>${esc(s.name)}</b> also volunteered to captain.</span>
+    <select class="inp" data-key="${esc(s.key)}" onchange="if(this.value)zrlAssign(this.dataset.key,this.value)" style="width:auto;max-width:240px;font-size:12px"><option value="">Move to a team without a captain…</option>${needs.filter(n=>n.id!==t.id).map(n=>`<option value="${esc(n.id)}">${esc(n.name)} (${esc((round.regions.find(r=>r.id===n.region)||{}).name||n.region)}${(by[n.id]||[]).length?'':', no riders yet'})</option>`).join('')}</select></div>`;
   return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Rosters and captains (staff)</div>
-    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${noCap?`<span style="color:#fbbf24">${noCap} team${noCap===1?' has':'s have'} riders but no captain.</span> `:'Every team with riders has a captain. '}Choose a captain from each team's riders (⭐ = happy to captain), or <button onclick="zrlCaptainsAuto()" style="${btn}">Pick captains from the volunteers</button></div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">A rider with a ⭐ becomes captain of their team automatically (the first to sign up, if there are several).${noCap?` <span style="color:#fbbf24">${noCap} team${noCap===1?' has':'s have'} riders but no captain: choose one below.</span>`:' Every team with riders has a captain.'}${spareAll?` ${spareAll} other volunteer${spareAll===1?'':'s'} can captain another team: open the team to move them.`:''}</div>
     ${round.teams.map(t=>{ const r=by[t.id]||[]; if(!r.length&&!t.captain) return `<div style="margin-bottom:4px;font-size:12px;color:#6b7280"><b style="color:#9ca3af">${esc(t.name)}</b> · no riders yet</div>`;
+      const sp=spare(t);
       return `<details style="margin-bottom:6px"><summary style="font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span><b>${esc(t.name)}</b> <span style="color:#6b7280">${esc([t.division,t.grade].filter(Boolean).join(' · '))}</span> · ${r.length}/${round.rosterSize}${r.length>round.rosterSize?' <span style="color:#fbbf24">over</span>':''}</span>
-        <span style="margin-left:auto;font-size:12px;color:${t.captain?'#9ca3af':'#fbbf24'}">${t.captain?'⭐ '+esc(t.captainName||t.captain):'no captain'}</span></summary>
+        <span style="margin-left:auto;font-size:12px;color:${t.captain?'#9ca3af':'#fbbf24'}">${t.captain?'⭐ '+esc(t.captainName||t.captain):'no captain'}${sp.length?` · <span style="color:#00D4FF">${sp.length} spare ⭐</span>`:''}</span></summary>
       <div style="margin:6px 0 8px 14px"><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">${r.length?r.map(s=>esc(s.name)+(s.cat?' ('+esc(s.cat)+')':'')).join(', '):'No riders yet.'}</div>
-        <label class="lbl">Captain</label><select class="inp" data-team="${esc(t.id)}" onchange="zrlSetCaptain(this.dataset.team,this.value)" style="width:auto;max-width:280px">${capOptions(t,r)}</select></div></details>`; }).join('')}</div>`;
+        <label class="lbl">Captain</label><select class="inp" data-team="${esc(t.id)}" onchange="zrlSetCaptain(this.dataset.team,this.value)" style="width:auto;max-width:280px">${capOptions(t,r)}</select>
+        ${sp.map(s=>spareRow(t,s)).join('')}</div></details>`; }).join('')}</div>`;
 }
 function zrlSetCaptain(team,key){ zrlPost('/api/zrl/captain',{ team, key }); }
-async function zrlCaptainsAuto(){
-  let res,d; try{ res=await fetch('/api/zrl/captains-auto',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
-  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
-  const c=d.captains;
-  alert((c.picked.length?'Captains picked:\n'+c.picked.map(x=>'• '+x.team+': '+x.name).join('\n'):'No captains picked.')+(c.missing.length?'\n\nNo volunteer in these teams, choose one by hand:\n'+c.missing.map(x=>'• '+x).join('\n'):''));
-  loadZrl();
-}
 async function zrlImportPreview(){
   const tab=document.getElementById('zrl-imp-tab').value.trim(), sheet=document.getElementById('zrl-imp-sheet').value.trim(); if(!tab){ alert('Enter the tab name.'); return; }
   let res,d; try{ res=await fetch('/api/zrl/import',{method:'POST',headers:tttHeaders(),body:JSON.stringify({tab,sheet})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
