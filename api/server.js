@@ -126,7 +126,7 @@ function identify(req, body){
     throw new HttpError(401, 'Please sign in with your cryogen.team account.');
   }
   return {
-    name: text(body.name, 'name', 60),
+    name: text(body.name, 'name', 60).replace(/\s+/g, ' '),   // spacing alone never makes a second rider
     zwid: /^\d{1,12}$/.test(String(body.zwid || '')) ? String(body.zwid) : '',
   };
 }
@@ -618,13 +618,20 @@ const TTT_ROUTES = {
     const data = await loadTtt();
     const ids = data.archive.slice(0, MY_TTT_HISTORY);
     const snaps = ids.length ? await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id])) : [];
-    return myTttStatus(data, member.name.toLowerCase(), snaps.map(x => (x ? JSON.parse(x) : null)));
+    const own = data.signups.find(s => s.zwid === member.zwid);   // may be under another spelling of their name
+    return myTttStatus(data, (own ? own.name : member.name).toLowerCase(), snaps.map(x => (x ? JSON.parse(x) : null)));
   },
 
   'POST /api/ttt/signup': async (req, body) => {
     const { week } = await requireWeek();
     if (!week.open) throw new HttpError(409, 'TTT sign-ups are closed for this week.');
-    const { name, zwid } = identify(req, body);
+    const who = identify(req, body);
+    const { zwid } = who;
+    // One rider is one Zwift ID: if this rider already signed up under another spelling of their name, update that
+    // sign-up (keeping its name, and so its team places) instead of creating a second one.
+    const data = await loadTtt();
+    const twin = zwid && data.signups.find(s => s.zwid === zwid);
+    const name = twin ? twin.name : who.name;
     const teamIds = new Set(week.teams.map(t => t.id));
     const preferred = (Array.isArray(body.preferred) ? body.preferred : []).filter(id => teamIds.has(id)).slice(0, 5);
     const entry = {
@@ -640,7 +647,6 @@ const TTT_ROUTES = {
       ts: new Date().toISOString(),
     };
     // Signing up again with the same name updates the entry but keeps their place in the queue.
-    const data = await loadTtt();
     const key = name.toLowerCase();
     const existing = data.signups.find(s => s.name.toLowerCase() === key);
     if (existing) entry.ts = existing.ts;
@@ -666,15 +672,21 @@ const TTT_ROUTES = {
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
-    const key = identify(req, body).name.toLowerCase();
-    const data = await loadTtt();
-    const rider = data.signups.find(s => s.name.toLowerCase() === key);
-    await redis([['HDEL', TTT_KEYS.signups, key]]);
-    // Free their place(s); once line-ups are out, the waitlist moves up automatically.
-    if (data.week && rider){
-      await freePlaces({ ...data, signups: data.signups.filter(s => s.name.toLowerCase() !== key) }, key, rider.name, 'withdrew from');
-    } else {
-      await redis([['HDEL', TTT_KEYS.assign, key]]);
+    const who = identify(req, body);
+    const key = who.name.toLowerCase();
+    // Every sign-up that is this rider's: the name, and any other spelling carrying their Zwift ID.
+    let data = await loadTtt();
+    const keys = [...new Set([key, ...data.signups.filter(s => who.zwid && s.zwid === who.zwid).map(s => s.name.toLowerCase())])];
+    for (const k of keys){
+      const rider = data.signups.find(s => s.name.toLowerCase() === k);
+      await redis([['HDEL', TTT_KEYS.signups, k]]);
+      // Free their place(s); once line-ups are out, the waitlist moves up automatically.
+      if (data.week && rider){
+        await freePlaces({ ...data, signups: data.signups.filter(s => s.name.toLowerCase() !== k) }, k, rider.name, 'withdrew from');
+      } else {
+        await redis([['HDEL', TTT_KEYS.assign, k]]);
+      }
+      data = await loadTtt();
     }
   },
 
@@ -1107,8 +1119,39 @@ async function handleCron(req, res){
   sendJSON(res, 200, { ran });
 }
 
+// Earlier versions keyed sign-ups by name alone, so one rider could end up with two (a guest and a signed-in sign-up, or two
+// spellings). Sign-ups with the same Zwift ID are merged: the earliest keeps its name and place in the queue, the latest answers
+// win, team places are combined (at most 2) and a captaincy follows the merge.
+async function mergeDuplicateSignups(){
+  const data = await loadTtt();
+  const groups = new Map();
+  for (const s of data.signups) if (s.zwid) groups.set(s.zwid, [...(groups.get(s.zwid) || []), s]);
+  const commands = [];
+  let captains = data.week && data.week.captains ? { ...data.week.captains } : null;
+  for (const group of groups.values()){
+    if (group.length < 2) continue;
+    const keep = group[0], latest = group[group.length - 1];   // loadTtt sorts by sign-up time
+    const keepKey = keep.name.toLowerCase();
+    const places = [...new Set(group.flatMap(s => data.assign[s.name.toLowerCase()] || []))].slice(0, 2);
+    commands.push(['HSET', TTT_KEYS.signups, keepKey, JSON.stringify({ ...latest, name: keep.name, ts: keep.ts, captain: latest.captain })]);
+    if (places.length) commands.push(['HSET', TTT_KEYS.assign, keepKey, JSON.stringify(places)]);
+    for (const extra of group.slice(1)){
+      const k = extra.name.toLowerCase();
+      commands.push(['HDEL', TTT_KEYS.signups, k], ['HDEL', TTT_KEYS.assign, k]);
+      if (captains) for (const [id, who] of Object.entries(captains)) if (who === k) captains[id] = keepKey;
+    }
+  }
+  if (!commands.length) return false;
+  if (captains) commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
+  await redis(commands);
+  return true;
+}
+
 async function handleTtt(tttRoute, req, res){
-  if (req.method === 'GET') await runTttSchedule().catch(e => console.error('TTT schedule:', e.message));
+  if (req.method === 'GET'){
+    await runTttSchedule().catch(e => console.error('TTT schedule:', e.message));
+    await mergeDuplicateSignups().catch(e => console.error('TTT merge duplicates:', e.message));
+  }
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await tttRoute(req, body);
   sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
