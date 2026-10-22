@@ -1628,7 +1628,7 @@ function zrlExportCard(d){
   let body=`<button onclick="zrlExportBuild()" style="${btn}">${zrlExport?'Refresh the list':'Build the list'}</button>`;
   if(zrlExport){
     const x=zrlExport, bad=x.teams.filter(t=>t.issues.length);
-    Object.keys(zrlCopies).forEach(k=>delete zrlCopies[k]); zrlCopyId=0;
+    Object.keys(zrlCopies).filter(k=>k[0]==='c').forEach(k=>delete zrlCopies[k]); zrlCopyId=0;
     const reg=text=>{ const id='c'+(++zrlCopyId); zrlCopies[id]=text; return id; };
     const all=reg(x.allText), csvId=reg(x.csv);
     body+=` <button onclick="zrlCopy('${all}',this)" style="${btn}">Copy everything</button> <button onclick="zrlDownloadCsv()" style="${btn}">Download CSV</button>
@@ -1671,6 +1671,34 @@ async function zrlImportApply(){
   const regions=Object.fromEntries(zrlPreview.teams.map(t=>[t.id,t.region]));
   if(await zrlPost('/api/zrl/import',{ tab:zrlPreview.tab, sheet:zrlPreview.sheet, apply:true, regions })) zrlPreview=null;
 }
+let zrlMy=null;
+function zrlMyCard(){
+  const m=zrlMy; if(!m||!m.round) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
+  const lbl=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">${x}</div>`;
+  const sub=t=>esc([t.division,t.grade,t.regionName,t.slot].filter(Boolean).join(' · '));
+  const out=[];
+  m.captainOf.forEach((t,i)=>{
+    const a='mt'+i, b='mi'+i; zrlCopies[a]=t.text; zrlCopies[b]=t.ids;
+    out.push(`<div class="card" style="padding:14px 16px;margin-bottom:12px;border-color:rgba(0,212,255,0.3)">${lbl('⭐ You captain this team')}
+      <div style="font-size:15px;font-weight:800">${esc(t.name)}</div><div style="font-size:12px;color:#6b7280;margin-bottom:8px">${sub(t)}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">${t.riders.map((r,j)=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:5px 6px;color:#6b7280;width:24px">${j+1}</td><td style="padding:5px 6px">${esc(r.name)}${r.isCaptain?' ⭐':''}${r.reserve?' <span style="color:#9ca3af">(reserve)</span>':''}</td><td style="padding:5px 6px;color:#9ca3af">${esc(r.zwid||'no Zwift ID')}</td><td style="padding:5px 6px">${esc(r.cat||'—')}</td></tr>`).join('')}</table>
+      ${t.issues.length?`<div style="font-size:12px;color:#fbbf24;margin-top:8px">To sort out: ${esc(t.issues.join(', '))}. Tell the staff in Discord.</div>`:''}
+      <div style="margin-top:10px"><button onclick="zrlCopy('${a}',this)" style="${btn}">Copy team details</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></div>
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
+  });
+  if(m.team){
+    const t=m.team;
+    out.push(`<div class="card" style="padding:14px 16px;margin-bottom:12px">${lbl('Your team')}
+      <div style="font-size:15px;font-weight:800">${esc(t.name)}</div><div style="font-size:12px;color:#6b7280;margin-bottom:6px">${sub(t)}${t.captainName?' · captain '+esc(t.captainName):''}</div>
+      <div style="font-size:13px;color:#d1d5db">${t.riders.map(r=>esc(r.name)+(r.isCaptain?' ⭐':'')+(r.cat?' ('+esc(r.cat)+')':'')+(r.reserve?' · reserve':'')).join(', ')}</div></div>`);
+  } else if(m.placed&&!m.captainOf.length){
+    out.push(`<div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:13px;color:#9ca3af">${lbl('Your team')}You have a place on a team. It will show here when the club publishes the rosters.</div>`);
+  } else if(m.signup&&m.signup.in){
+    out.push(`<div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:13px;color:#9ca3af">${lbl('Your team')}You're signed up. Your team will show here once the captains and staff have formed the teams.</div>`);
+  }
+  return out.join('');
+}
 function renderZrl(d){
   const staff=role==='admin'||role==='mod';
   if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No ZRL round is open right now. We'll announce it in Discord when the next one starts.</div>${staff?zrlStaffPanel(d):''}`;
@@ -1679,7 +1707,7 @@ function renderZrl(d){
   const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
   return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
-    ${zrlSignupCard(d)}
+    ${zrlMyCard()}${zrlSignupCard(d)}
     ${h3('Where we need riders')}<div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     ${h3('Who is in ('+dem.riders+')')}${zrlPoolTable(d,staff)}
     ${staff?zrlStaffPanel(d):''}`;
@@ -1723,6 +1751,10 @@ async function loadZrl(){
     const res=await fetch('/api/zrl',{headers:tttHeaders()});
     const d=await res.json();
     if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    zrlMy=null;
+    if(role==='member'&&sessionStorage.getItem('token')){
+      try{ const r2=await fetch('/api/zrl/mine',{headers:tttHeaders()}); if(r2.ok) zrlMy=await r2.json(); }catch(e){ /* the page works without it */ }
+    }
     zrlData=d; el.innerHTML=renderZrl(d);
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load ZRL: ${esc(e.message)}</div>`; }
 }

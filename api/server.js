@@ -1533,7 +1533,7 @@ function serveStatic(res, reqPath){
 // ── ZRL (Zwift Racing League) ──────────────────────────────
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
 const zrl = require('../lib/zrl')({
-  redis, HttpError, text, requireRole, roleFromRequest, identify, discord, discordEscape, fetchRoster,
+  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
 });
 
