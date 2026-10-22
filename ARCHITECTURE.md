@@ -73,7 +73,7 @@ Logic lives in `lib/zrl.js` (a factory that `api/server.js` wires up; not in `ap
 
 ## System health
 
-`GET /api/health` (admin only) powers the **System health** section of the Admin dialog. It reports status (ok / warn / fail / info) for shared storage, WordPress member records, the club roster copy, the Google Sheet, Discord webhook configuration, the TTT week (including a missing close time), scheduled runs, member sign-in, guest sign-ups, staff passwords and the deployed commit. It only reports whether things are set and reachable, never values. It does not post to Discord or call the rate-limited roster source. The workflow's last run comes from `cg:cron:last`, written by every `/api/cron/tick`.
+`GET /api/health` (admin only) powers the **System health** section of the Admin dialog. It reports status (ok / warn / fail / info) for shared storage, WordPress member records, the club roster copy, the Google Sheet, Discord webhook configuration, the TTT week (including a missing close time), the ZRL round (`healthRow` in `lib/zrl.js`: sign-ups open or closed, riders per time zone, teams and placements, and warnings for no close date, a close time that has passed, rosters unpublished within a week of the first race, riders without a team, published teams without a captain), scheduled runs, member sign-in, guest sign-ups, staff passwords and the deployed commit. It only reports whether things are set and reachable, never values. It does not post to Discord or call the rate-limited roster source. The workflow's last run comes from `cg:cron:last`, written by every `/api/cron/tick`.
 
 ## Member sign-in
 
