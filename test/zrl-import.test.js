@@ -56,6 +56,14 @@ test('import is staff only and needs a real tab', async () => {
   assert.equal((await imp({ tab: 'Other' })).status, 422, 'a tab that is not a team board');
 });
 
+test('another sheet can be named by link or ID; anything else is refused', async () => {
+  const id = 'abcdefghijklmnopqrstuvwxyz0123456789ABCD';
+  assert.equal((await imp({ sheet: `https://docs.google.com/spreadsheets/d/${id}/edit#gid=0` })).status, 200);
+  assert.equal((await imp({ sheet: id })).status, 200);
+  assert.equal((await imp({ sheet: 'not a sheet' })).status, 400);
+  assert.equal((await imp({ sheet: 'https://example.com/x' })).status, 400);
+});
+
 test('preview reads each block: names, divisions, ids, categories, region hints; ghost team dropped; repeated name made unique', async () => {
   const r = await imp({});
   assert.equal(r.status, 200);

@@ -1534,7 +1534,7 @@ let zrlPreview=null;
 function zrlImportCard(d){
   const lbl='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Import teams and riders from the sheet (staff)</div>';
   const btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
-  let body=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="zrl-imp-tab" class="inp" maxlength="60" placeholder="Tab name, e.g. ZRL" value="${esc(zrlPreview?zrlPreview.tab:'')}" style="flex:1;min-width:160px"/><button onclick="zrlImportPreview()" style="${btn}">Preview</button></div>`;
+  let body=`<input id="zrl-imp-sheet" class="inp" maxlength="300" placeholder="Google Sheet link (leave blank for the club sheet)" value="${esc(zrlPreview?zrlPreview.sheet:'')}" style="width:100%;margin-bottom:8px"/><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="zrl-imp-tab" class="inp" maxlength="60" placeholder="Tab name, e.g. Roster Dashboard" value="${esc(zrlPreview?zrlPreview.tab:'')}" style="flex:1;min-width:160px"/><button onclick="zrlImportPreview()" style="${btn}">Preview</button></div>`;
   if(zrlPreview){
     const regs=d.round.regions, p=zrlPreview, unset=p.teams.filter(t=>!t.region).length;
     body+=`<div style="font-size:12px;color:#9ca3af;margin:10px 0 6px">${p.teams.length} teams, ${p.teams.reduce((n,t)=>n+t.riders.length,0)} riders. Confirming replaces the current teams and rosters (riders keep their own sign-ups).${unset?` <b>${unset}</b> teams need a time zone.`:''}</div>
@@ -1557,10 +1557,10 @@ function zrlRosters(d){
       <div style="font-size:12px;color:#9ca3af;margin:4px 0 8px 14px">${r.length?r.map(s=>esc(s.name)+(s.cat?' ('+esc(s.cat)+')':'')).join(', '):'No riders yet.'}</div></details>`; }).join('')}</div>`;
 }
 async function zrlImportPreview(){
-  const tab=document.getElementById('zrl-imp-tab').value.trim(); if(!tab){ alert('Enter the tab name.'); return; }
-  let res,d; try{ res=await fetch('/api/zrl/import',{method:'POST',headers:tttHeaders(),body:JSON.stringify({tab})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  const tab=document.getElementById('zrl-imp-tab').value.trim(), sheet=document.getElementById('zrl-imp-sheet').value.trim(); if(!tab){ alert('Enter the tab name.'); return; }
+  let res,d; try{ res=await fetch('/api/zrl/import',{method:'POST',headers:tttHeaders(),body:JSON.stringify({tab,sheet})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
-  zrlPreview=d.preview; renderZrl2();
+  zrlPreview={...d.preview,sheet}; renderZrl2();
 }
 function zrlImportBulk(){ zrlPickRegions(); const v=document.getElementById('zrl-imp-bulk').value; zrlPreview.teams.forEach(t=>{ if(!t.region)t.region=v; }); renderZrl2(); }
 function zrlPickRegions(){ document.querySelectorAll('.zrl-imp-region').forEach(s=>{ const t=zrlPreview.teams.find(x=>x.id===s.dataset.team); if(t)t.region=s.value; }); }
@@ -1570,7 +1570,7 @@ async function zrlImportApply(){
   const missing=zrlPreview.teams.filter(t=>!t.region); if(missing.length){ alert('Pick a time zone for every team first ('+missing.length+' left).'); return; }
   if(!confirm('Replace the current teams and rosters with these '+zrlPreview.teams.length+' teams?')) return;
   const regions=Object.fromEntries(zrlPreview.teams.map(t=>[t.id,t.region]));
-  if(await zrlPost('/api/zrl/import',{ tab:zrlPreview.tab, apply:true, regions })) zrlPreview=null;
+  if(await zrlPost('/api/zrl/import',{ tab:zrlPreview.tab, sheet:zrlPreview.sheet, apply:true, regions })) zrlPreview=null;
 }
 function renderZrl(d){
   const staff=role==='admin'||role==='mod';

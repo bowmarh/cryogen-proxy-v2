@@ -1474,8 +1474,8 @@ function parseGviz(textBody){
 // Google can be slow; without a limit the request would hang until Vercel cuts the function off with no message.
 const sheetTimeoutMs = () => Number(process.env.SHEET_TIMEOUT_MS) || 6000;
 
-async function fetchTab(tab, headerRows = 1){
-  const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=${headerRows}&sheet=${encodeURIComponent(tab)}`;
+async function fetchTab(tab, headerRows = 1, sheetId = SHEET_ID){
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=${headerRows}&sheet=${encodeURIComponent(tab)}`;
   let r, body;
   try {
     r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(sheetTimeoutMs()) });
@@ -1490,8 +1490,8 @@ async function fetchTab(tab, headerRows = 1){
 }
 
 // Every cell of a tab as plain strings (no header row), for tabs laid out as a board rather than a table.
-async function fetchGrid(tab){
-  const [body, fallback] = await Promise.all([fetchTab(tab, 0), fetchTab(`__no_such_tab_${Date.now()}`, 0)]);
+async function fetchGrid(tab, sheetId = SHEET_ID){
+  const [body, fallback] = await Promise.all([fetchTab(tab, 0, sheetId), fetchTab(`__no_such_tab_${Date.now()}`, 0, sheetId)]);
   const table = b => JSON.parse(b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1)).table || {};
   const t = table(body);
   if (JSON.stringify(t.cols || null) === JSON.stringify(table(fallback).cols || null)) {
