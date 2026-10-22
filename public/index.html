@@ -1502,8 +1502,8 @@ function zrlPoolTable(d,staff){
     <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Rider</th>
     <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Cat</th>
     <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Time zones</th>
-    ${staff?'<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Comments</th>':''}</tr></thead><tbody>
-    ${ins.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05);${x.key===me?'background:rgba(0,212,255,0.08)':''}"><td style="padding:8px 10px;font-size:13px">${esc(x.name)}${x.captain?' ⭐':''}</td><td style="padding:8px 10px;font-size:13px">${esc(x.cat||'—')}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>${staff?`<td style="padding:8px 10px;font-size:12px;color:#9ca3af">${x.commit==='reserve'?'<b>Reserve</b> · ':''}${esc(x.league||'')}${x.prevTeam&&x.prevTeam!=='stay'?' · was '+esc(x.prevTeam):(x.prevTeam==='stay'?' · stays on previous team':'')}${x.comments?' · '+esc(x.comments):''}</td>`:''}</tr>`).join('')}
+    ${staff?'<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Team</th><th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Comments</th>':''}</tr></thead><tbody>
+    ${ins.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05);${x.key===me?'background:rgba(0,212,255,0.08)':''}"><td style="padding:8px 10px;font-size:13px">${esc(x.name)}${x.captain?' ⭐':''}</td><td style="padding:8px 10px;font-size:13px">${esc(x.cat||'—')}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>${staff?`<td style="padding:6px 10px"><select class="inp" data-key="${esc(x.key)}" onchange="zrlAssign(this.dataset.key,this.value)" style="width:auto;max-width:190px;font-size:12px"><option value="">— no team —</option>${d.round.teams.map(t=>`<option value="${esc(t.id)}" ${(d.assign||{})[x.key]===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></td><td style="padding:8px 10px;font-size:12px;color:#9ca3af">${x.commit==='reserve'?'<b>Reserve</b> · ':''}${esc(x.league||'')}${x.prevTeam&&x.prevTeam!=='stay'?' · was '+esc(x.prevTeam):(x.prevTeam==='stay'?' · stays on previous team':'')}${x.comments?' · '+esc(x.comments):''}</td>`:''}</tr>`).join('')}
     </tbody></table></div><div style="font-size:11px;color:#6b7280">${ins.length} signed up${out?` · ${out} not racing this round`:''} · ⭐ = happy to captain</div>`;
 }
 function zrlStaffPanel(d){
@@ -1528,7 +1528,7 @@ function zrlStaffPanel(d){
         <button onclick="zrlSetOpen(${!round.open})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">${round.open?'Close now':'Reopen'}</button></div>
       ${label('Teams (staff)')}<div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:6px"><button onclick="zrlAddTeam()" style="padding:6px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">+ Add team</button><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSaveTeams()">Save teams</button></div>
-      <div style="font-size:11px;color:#4b5563;margin-top:8px">Pick each team's time zone and Tuesday race time. The captain is found by Zwift ID.</div></div>${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlRosters(d)}${start}`;
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">Pick each team's time zone and Tuesday race time. The captain is found by Zwift ID.</div></div>${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlRosters(d)}${start}`;
 }
 let zrlPreview=null;
 function zrlImportCard(d){
@@ -1586,6 +1586,33 @@ async function zrlSignupApply(){
   if(!confirm('Import '+zrlSuPreview.summary.riders+' sign-ups into this round?')) return;
   if(await zrlPost('/api/zrl/import-signups',{ tab:zrlSuPreview.tab, sheet:zrlSuPreview.sheet, apply:true })) zrlSuPreview=null;
 }
+let zrlPlan=null;
+function zrlAutoCard(d){
+  if(!d.round||!d.round.teams.length) return '';
+  const btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
+  const free=d.signups.filter(x=>x.in&&!(d.assign||{})[x.key]).length;
+  const lbl='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Put riders on teams (staff)</div>';
+  let body=`<div style="font-size:13px;margin-bottom:8px"><b>${free}</b> rider${free===1?'':'s'} racing this round ${free===1?'has':'have'} no team yet.</div><button onclick="zrlAutoPreview()" style="${btn}" ${free?'':'disabled'}>Suggest teams</button>`;
+  if(zrlPlan){
+    const p=zrlPlan, byTeam={}; p.moves.forEach(m=>(byTeam[m.team]=byTeam[m.team]||[]).push(m));
+    body+=`<div style="font-size:12px;color:#9ca3af;margin:10px 0 6px"><b>${p.moves.length}</b> placed${p.unplaced.length?`, <span style="color:#fbbf24"><b>${p.unplaced.length}</b> could not be placed</span>`:''}. Nothing is moved until you press Apply.</div>
+      <div style="max-height:320px;overflow:auto">${p.teams.filter(t=>byTeam[t.id]).map(t=>`<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px"><b>${esc(t.name)}</b> <span style="color:#6b7280">${esc([t.division,t.grade].filter(Boolean).join(' · '))} · ${t.before} → ${t.after}/10</span>
+        <div style="color:#9ca3af;margin-top:2px">${byTeam[t.id].map(m=>esc(m.name)+(m.cat?' ('+esc(m.cat)+')':'')+(m.captain?' ⭐ captain':'')).join(', ')}</div></div>`).join('')}</div>
+      ${p.unplaced.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24">Not placed:<ul style="margin:4px 0 0 18px">${p.unplaced.map(u=>`<li>${esc(u.name)}${u.cat?' ('+esc(u.cat)+')':''}: ${esc(u.reason)}</li>`).join('')}</ul></div>`:''}
+      <div style="margin-top:10px"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlAutoApply()">Apply ${p.moves.length} placements</button></div>`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#4b5563;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
+}
+async function zrlAutoPreview(){
+  let res,d; try{ res=await fetch('/api/zrl/auto-assign',{method:'POST',headers:tttHeaders(),body:JSON.stringify({})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  zrlPlan=d.plan; renderZrl2();
+}
+async function zrlAutoApply(){
+  if(!confirm('Place '+zrlPlan.moves.length+' riders on teams?')) return;
+  if(await zrlPost('/api/zrl/auto-assign',{apply:true})) zrlPlan=null;
+}
+function zrlAssign(key,team){ zrlPlan=null; zrlPost('/api/zrl/assign',{key,team}); }
 function zrlRosters(d){
   const round=d.round, assign=d.assign||{};
   if(!round||!round.teams.length||!Object.keys(assign).length) return '';
