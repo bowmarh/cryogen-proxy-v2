@@ -1515,7 +1515,7 @@ function zrlStaffPanel(d){
       <input class="inp zt-name" maxlength="40" placeholder="Team name" value="${esc(t.name||'')}" style="flex:2;min-width:130px"/>
       <select class="inp zt-region" style="width:auto">${(round?round.regions:[]).map(r=>`<option value="${esc(r.id)}" ${t.region===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
       <input class="inp zt-slot" maxlength="40" placeholder="Race time, e.g. Tue 19:00 UK" value="${esc(t.slot||'')}" style="flex:2;min-width:130px"/>
-      <input class="inp zt-cap" inputmode="numeric" placeholder="Captain Zwift ID" value="${esc(t.captain||'')}" style="width:130px"/>
+      <input class="inp zt-cap" inputmode="numeric" placeholder="Captain ID (or pick below)" value="${esc(t.captain||'')}" style="width:130px"/>
       <button onclick="this.closest('.zt-row').remove()" style="padding:4px 10px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px;font-size:11px">Remove</button></div>`;
   const label=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">${x}</div>`;
   const start=`<div class="card" style="padding:14px 16px;margin-top:16px">${label('Start a new round (staff)')}
@@ -1705,10 +1705,29 @@ async function zrlEditRemove(){
 function zrlRosters(d){
   const round=d.round, assign=d.assign||{};
   if(!round||!round.teams.length||!Object.keys(assign).length) return '';
-  const by={}; d.signups.forEach(s=>{ const t=assign[s.key]; if(t)(by[t]=by[t]||[]).push(s); });
-  return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Rosters (staff)</div>
-    ${round.teams.map(t=>{ const r=by[t.id]||[]; return `<details style="margin-bottom:4px"><summary style="font-size:13px;cursor:pointer"><b>${esc(t.name)}</b> <span style="color:#6b7280">${esc([t.division,t.grade].filter(Boolean).join(' · '))}</span> · ${r.length}/${round.rosterSize}${r.length>round.rosterSize?' <span style="color:#fbbf24">over</span>':''}</summary>
-      <div style="font-size:12px;color:#9ca3af;margin:4px 0 8px 14px">${r.length?r.map(s=>esc(s.name)+(s.cat?' ('+esc(s.cat)+')':'')).join(', '):'No riders yet.'}</div></details>`; }).join('')}</div>`;
+  const by={}; d.signups.forEach(s=>{ const t=assign[s.key]; if(t&&s.in)(by[t]=by[t]||[]).push(s); });
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
+  const noCap=round.teams.filter(t=>(by[t.id]||[]).length&&!t.captain).length;
+  const capOptions=(t,r)=>{
+    const cur=r.find(s=>s.zwid&&s.zwid===t.captain);
+    const rows=[...r].sort((a,b)=>(b.captain-a.captain)||a.name.localeCompare(b.name));
+    return `<option value="">— no captain —</option>${t.captain&&!cur?`<option value="" disabled selected>${esc(t.captainName||t.captain)} (not on this team)</option>`:''}${rows.map(s=>`<option value="${esc(s.key)}" ${cur&&cur.key===s.key?'selected':''} ${s.zwid?'':'disabled'}>${s.captain?'⭐ ':''}${esc(s.name)}${s.zwid?'':' (no Zwift ID)'}</option>`).join('')}`;
+  };
+  return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Rosters and captains (staff)</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${noCap?`<span style="color:#fbbf24">${noCap} team${noCap===1?' has':'s have'} riders but no captain.</span> `:'Every team with riders has a captain. '}Choose a captain from each team's riders (⭐ = happy to captain), or <button onclick="zrlCaptainsAuto()" style="${btn}">Pick captains from the volunteers</button></div>
+    ${round.teams.map(t=>{ const r=by[t.id]||[]; if(!r.length&&!t.captain) return `<div style="margin-bottom:4px;font-size:12px;color:#6b7280"><b style="color:#9ca3af">${esc(t.name)}</b> · no riders yet</div>`;
+      return `<details style="margin-bottom:6px"><summary style="font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span><b>${esc(t.name)}</b> <span style="color:#6b7280">${esc([t.division,t.grade].filter(Boolean).join(' · '))}</span> · ${r.length}/${round.rosterSize}${r.length>round.rosterSize?' <span style="color:#fbbf24">over</span>':''}</span>
+        <span style="margin-left:auto;font-size:12px;color:${t.captain?'#9ca3af':'#fbbf24'}">${t.captain?'⭐ '+esc(t.captainName||t.captain):'no captain'}</span></summary>
+      <div style="margin:6px 0 8px 14px"><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">${r.length?r.map(s=>esc(s.name)+(s.cat?' ('+esc(s.cat)+')':'')).join(', '):'No riders yet.'}</div>
+        <label class="lbl">Captain</label><select class="inp" data-team="${esc(t.id)}" onchange="zrlSetCaptain(this.dataset.team,this.value)" style="width:auto;max-width:280px">${capOptions(t,r)}</select></div></details>`; }).join('')}</div>`;
+}
+function zrlSetCaptain(team,key){ zrlPost('/api/zrl/captain',{ team, key }); }
+async function zrlCaptainsAuto(){
+  let res,d; try{ res=await fetch('/api/zrl/captains-auto',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  const c=d.captains;
+  alert((c.picked.length?'Captains picked:\n'+c.picked.map(x=>'• '+x.team+': '+x.name).join('\n'):'No captains picked.')+(c.missing.length?'\n\nNo volunteer in these teams, choose one by hand:\n'+c.missing.map(x=>'• '+x).join('\n'):''));
+  loadZrl();
 }
 async function zrlImportPreview(){
   const tab=document.getElementById('zrl-imp-tab').value.trim(), sheet=document.getElementById('zrl-imp-sheet').value.trim(); if(!tab){ alert('Enter the tab name.'); return; }
