@@ -1490,14 +1490,12 @@ async function fetchTab(tab, headerRows = 1, sheetId = SHEET_ID){
 }
 
 // Every cell of a tab as plain strings (no header row), for tabs laid out as a board rather than a table.
+// Google answers an unknown tab name with the first tab, so a wrong name cannot be told apart from the first
+// tab here: callers check that what came back is the layout they expect.
 async function fetchGrid(tab, sheetId = SHEET_ID){
-  const [body, fallback] = await Promise.all([fetchTab(tab, 0, sheetId), fetchTab(`__no_such_tab_${Date.now()}`, 0, sheetId)]);
-  const table = b => JSON.parse(b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1)).table || {};
-  const t = table(body);
-  if (JSON.stringify(t.cols || null) === JSON.stringify(table(fallback).cols || null)) {
-    throw new HttpError(404, `The Google Sheet has no tab named "${tab}".`);
-  }
-  return (t.rows || []).map(r => (r.c || []).map(c => (c && c.v !== null && c.v !== undefined ? String(c.v) : (c && c.f) || '').trim()));
+  const body = await fetchTab(tab, 0, sheetId);
+  const table = JSON.parse(body.slice(body.indexOf('{'), body.lastIndexOf('}') + 1)).table || {};
+  return (table.rows || []).map(r => (r.c || []).map(c => (c && c.v !== null && c.v !== undefined ? String(c.v) : (c && c.f) || '').trim()));
 }
 
 async function handleSheet(endpoint, res){

@@ -34,10 +34,22 @@ function board() {
   return rows;
 }
 
+const FORM_HEAD = ['Timestamp', 'Email address', 'Full Name', 'Discord', 'ZwiftPower Profile URL', 'Select your Primary ZRL Racing Zone (Required)', 'If your primary choice is full or needs cover, which backup regions can you race in?', 'What is your commitment level for this season? (Required)', 'For returning CRYO-GEN riders: Sub-team preference', 'Are you interested in being a Team Captain?', 'Any other useful comments or questions?'];
+const FORM = [
+  FORM_HEAD,
+  ['Date(2026,7,18,12,0,0)', 'a@x.test', 'Ann Able', 'ann', 'https://zwiftpower.com/profile.php?z=4378027', '🔴 Red League (EMEA West / Europe & UK)', '🟢 Lime League - 6:00 PM UTC', 'Full-Season Starter (Committed for all weeks)', 'CRYO Alpha', 'Yes', 'None'],
+  ['2026-08-19 10:00:00', 'b@x.test', 'Bob Baker', 'bob', '2436518.0', '🩷 Pink League - 8:30 AM UTC', 'Primary choice only — cannot flex', 'Reserve / Rotation Rider', 'Stay with my previous sub-team (if spot is available)', 'No', 'Happy to ride at odd hours'],
+  ['2026-08-20 10:00:00', 'c@x.test', 'Rider 2', 'r2', '[link removed]', '🟡 Yellow League (Americas)', 'None', 'Full-Season Starter (Committed for all weeks)', 'Open to any team in my selected region', 'None', 'x'.repeat(400)],
+  ['2026-08-21 10:00:00', 'd@x.test', 'Nobody Known', 'nk', 'my profile', '🟠 Orange League - (Time TBD)', 'None', 'Full-Season Starter (Committed for all weeks)', 'Cryo- Gen Alfa', 'None', 'None'],
+  ['2026-08-22 10:00:00', 'e@x.test', 'Ann Able', 'ann', 'https://zwiftpower.com/profile.php?z=4378027', '🟣 Indigo League - 12:30 AM UTC', 'None', 'Full-Season Starter (Committed for all weeks)', 'CRYO Alpha', 'Yes', 'second answer'],
+];
+
 before(async () => {
   const world = h.createWorld();
   world.members = world.members.filter(m => m.status !== 'left');
   world.sheet.tabs.Other = { cols: ['A'], rows: [['x']] };
+  world.sheet.tabs['Form responses'] = { cols: FORM_HEAD.map((_, i) => `C${i}`), rows: FORM };
+  world.sheet.tabs.Unused = { cols: ['A'], rows: [['x']] };
   world.sheet.tabs.ZRL = { cols: Array.from({ length: 20 }, (_, i) => `C${i}`), rows: board() };
   app = await h.startApp(world); admin = await app.login('admin');
 });
@@ -53,7 +65,7 @@ const view = token => app.get('/api/zrl', { token }).then(r => r.body);
 test('import is staff only and needs a real tab', async () => {
   assert.equal((await imp({}, null)).status, 401);
   assert.equal((await imp({}, await app.memberSession('1002'))).status, 401);
-  assert.equal((await imp({ tab: 'No such tab' })).status, 404);
+  assert.equal((await imp({ tab: 'No such tab' })).status, 422, 'Google answers an unknown tab with the first one, which is not a team board');
   assert.equal((await imp({ tab: 'Other' })).status, 422, 'a tab that is not a team board');
 });
 
@@ -109,4 +121,47 @@ test('importing again keeps a rider\'s own sign-up and replaces the rosters; edi
   const edited = v.round.teams.map(t => ({ name: t.name, region: t.region, slot: 'Tue 19:00 UK', captain: t.captain }));
   assert.equal((await app.post('/api/zrl/teams', { teams: edited }, { token: admin })).status, 200);
   assert.equal((await view(admin)).round.teams[0].division, 'Division 2');
+});
+
+const sup = (body, token = admin) => app.post('/api/zrl/import-signups', { tab: 'Form responses', ...body }, { token });
+
+test('sign-up import is staff only; a tab that is not the form responses is refused', async () => {
+  assert.equal((await sup({}, null)).status, 401);
+  assert.equal((await sup({}, await app.memberSession('1002'))).status, 401);
+  assert.equal((await sup({ tab: 'Other' })).status, 422);
+});
+
+test('sign-up preview: ids from the link, a bare number or the roster; latest answer wins; zones from the league labels', async () => {
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Alpha', region: 'eu' }] }, { token: admin });
+  const r = await sup({});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const { summary, warnings, sample } = r.body.preview;
+  assert.equal(summary.riders, 4, 'Ann submitted twice');
+  const by = n => sample.find(x => x.name === n);
+  assert.deepEqual([by('Ann Able').zwid, by('Ann Able').comments], ['4378027', 'second answer'], 'the later answer wins');
+  assert.deepEqual(by('Ann Able').regions, ['am'], 'Indigo 12:30 AM UTC is an American evening');
+  assert.equal(by('Bob Baker').zwid, '2436518', 'a bare number with .0 from the sheet');
+  assert.deepEqual([by('Bob Baker').regions, by('Bob Baker').commit, by('Bob Baker').prevTeam], [['ap'], 'reserve', 'stay'], 'Pink 8:30 AM UTC is an Asia-Pacific evening');
+  assert.deepEqual([by('Rider 2').zwid, by('Rider 2').idFrom, by('Rider 2').regions], ['1002', 'roster', ['am']], 'a removed link falls back to the club roster by name');
+  assert.equal(by('Rider 2').comments.length, 300, 'long comments are cut');
+  assert.equal(by('Nobody Known').zwid, '');
+  assert.equal(by('Nobody Known').preferred, 'cryo-gen-alpha', 'a near-miss team name is matched');
+  assert.ok(warnings.some(w => /Ann Able submitted more than once/.test(w)));
+  assert.ok(warnings.some(w => /Nobody Known has no usable Zwift ID/.test(w)));
+  assert.ok(warnings.some(w => /Nobody Known: no time zone/.test(w)), 'Orange (time TBD) gives no zone');
+  assert.deepEqual(summary.regions, { eu: 0, am: 2, ap: 1 });
+});
+
+test('sign-up import keeps riders\' own sign-ups and refreshes earlier sheet imports', async () => {
+  await app.post('/api/zrl/signup', { regions: ['eu'], cat: 'B', comments: 'my own words' }, { token: await app.memberSession('1002') });
+  const r = await sup({ apply: true });
+  assert.deepEqual(r.body.imported, { signups: 3, keptOwn: 1 });
+  const v = await view(admin);
+  assert.equal(v.signups.find(s => s.zwid === '1002').comments, 'my own words');
+  const bob = v.signups.find(s => s.zwid === '2436518');
+  assert.deepEqual([bob.source, bob.commit, bob.league], ['sheet', 'reserve', 'Pink League - 8:30 AM UTC']);
+  assert.equal(v.signups.find(s => s.name === 'Nobody Known').key, 'nobody known');
+  assert.equal((await view()).signups.find(s => s.zwid === '2436518'), undefined, 'ids stay staff-only');
+  const again = await sup({ apply: true });
+  assert.equal(again.body.imported.signups, 3, 'running it twice changes nothing but the timestamps stay');
 });
