@@ -1528,6 +1528,14 @@ function zrlStaffPanel(d){
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
       <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' UK (automatic)':''}
         <button onclick="zrlSetOpen(${!round.open})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">${round.open?'Close now':'Reopen'}</button></div>
+      <details style="margin-bottom:10px"><summary style="font-size:12px;color:#9ca3af;cursor:pointer">Edit the round's name and dates</summary>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <input id="zrl-ed-name" class="inp" maxlength="60" value="${esc(round.name)}" style="flex:2;min-width:180px"/>
+          <div><label class="lbl">First race</label><input id="zrl-ed-start" type="date" class="inp" value="${esc(round.start)}" style="width:auto"/></div>
+          <div><label class="lbl">Sign-ups close</label><input id="zrl-ed-closes" type="date" class="inp" value="${round.closesAt?esc(new Date(round.closesAt).toLocaleDateString('en-CA',{timeZone:'Europe/London'})):''}" style="width:auto"/></div>
+          <div><label class="lbl">Races</label><input id="zrl-ed-weeks" type="number" min="1" max="12" class="inp" value="${esc(round.weeks)}" style="width:70px"/></div>
+          <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlEditRound()">Save</button></div>
+        <div style="font-size:11px;color:#4b5563;margin-top:6px">Changes the name and dates only. Sign-ups and teams stay, and nothing is posted to Discord.</div></details>
       <div style="font-size:13px;margin-bottom:10px">Rosters are <b>${round.published?'published':'not published'}</b> <span style="color:#6b7280">${round.published?'(riders can see their team)':'(only staff and captains see teams)'}</span>
         <button onclick="zrlPublish(${!round.published})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:${round.published?'rgba(255,255,255,0.05)':'rgba(16,185,129,0.12)'};color:${round.published?'#e5e7eb':'#10B981'};border:1px solid ${round.published?'rgba(255,255,255,0.15)':'rgba(16,185,129,0.3)'};border-radius:6px">${round.published?'🙈 Unpublish':'📣 Publish rosters'}</button></div>
       ${label('Teams (staff)')}<div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
@@ -1736,6 +1744,11 @@ function zrlStartRound(){
   const name=document.getElementById('zrl-new-name').value.trim(), start=document.getElementById('zrl-new-start').value, closes=document.getElementById('zrl-new-closes').value;
   if(!name||!start){ alert('Enter a round name and the date of the first race.'); return; }
   zrlPost('/api/zrl/round',{ name, start, closes });
+}
+function zrlEditRound(){
+  const g=id=>document.getElementById(id).value;
+  if(!g('zrl-ed-name').trim()||!g('zrl-ed-start')){ alert('Enter a round name and the date of the first race.'); return; }
+  zrlPost('/api/zrl/round-edit',{ name:g('zrl-ed-name').trim(), start:g('zrl-ed-start'), closes:g('zrl-ed-closes'), weeks:g('zrl-ed-weeks') });
 }
 function zrlPublish(on){
   if(!on){ if(confirm('Hide the rosters from riders again?')) zrlPost('/api/zrl/status',{ published:false }); return; }
