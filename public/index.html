@@ -2236,6 +2236,11 @@ function zrlZrCard(){
       <input id="zrl-zr-id" class="inp" inputmode="numeric" placeholder="Event, rider or club id" value="${esc((z&&z.id)||'')}" style="width:190px"/>
       <select id="zrl-zr-host" class="inp" style="width:auto"><option value="site" ${z&&z.host==='api'?'':'selected'}>zwiftracing.app</option><option value="api" ${z&&z.host==='api'?'selected':''}>api.zwiftracing.app</option></select><button onclick="zrlZrFetch()" style="${btn}">Fetch</button></div>${out}${zrlProbeHtml()}</div>`;
 }
+async function zrlPostRace(){
+  if(!confirm('Post the results of race '+(zrlResWeek+1)+' to the club channel? Notes are not included.')) return;
+  let res,d; try{ res=await fetch('/api/zrl/post-race',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ week:zrlResWeek })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
 async function zrlPostStandings(){
   if(!confirm('Post the standings to the club channel?')) return;
   let res,d; try{ res=await fetch('/api/zrl/post-standings',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -2263,7 +2268,7 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td><td style="padding:5px 0 5px 4px"><button title="Work out the points" onclick="zrlCalcOpen('${esc(t.id)}')" style="${btn}">🧮</button></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button><button onclick="zrlPostRace()" style="${btn};margin:10px 0 0 8px">📣 Post race ${zrlResWeek+1} to Discord</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
 }
 let zrlCalc=null;
 function zrlCalcOpen(teamId){

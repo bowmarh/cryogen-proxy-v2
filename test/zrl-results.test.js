@@ -106,3 +106,20 @@ test('a long standings post is split below the Discord message limit', async () 
   assert.ok(msgs.every(m => m.length <= 2000), 'every message fits');
   assert.match(msgs[msgs.length - 1], /Full table: /);
 });
+
+test('posting one race: positions and points by division, no notes, once in five minutes, staff only', async () => {
+  const post = (week = 0, token = admin) => app.post('/api/zrl/post-race', { week }, { token });
+  assert.equal((await post(0, null)).status, 401);
+  assert.equal((await post(0)).status, 409, 'nothing saved for that race yet');
+  assert.equal((await post(9)).status, 400);
+  await save(0, [{ team: 'cryo-gen-alpha', pos: 2, pts: 100, note: 'secret staff note' }, { team: 'cryo-gen-beta', pos: 1, pts: 120 }, { team: 'cryo-gen-gamma', pts: 5 }]);
+  app.world.discord.length = 0;
+  assert.equal((await post()).status, 200);
+  const text = app.world.discord.filter(p => p.channel === 'public').map(p => p.body.content).join('\n');
+  assert.match(text, /race 1 results/);
+  assert.match(text, /\*\*Division 1\*\*\n1st Beta · 120 pts\n2nd Alpha · 100 pts/);
+  assert.match(text, /\*\*Division 2\*\*\n— Gamma · 5 pts/);
+  assert.ok(!text.includes('secret staff note'));
+  assert.equal((await post()).status, 429);
+  assert.equal((await post(1)).status, 409, 'race 2 has no results');
+});
