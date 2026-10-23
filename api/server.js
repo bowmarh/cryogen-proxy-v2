@@ -1121,6 +1121,7 @@ async function handleCron(req, res){
   const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
   if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
   const ran = [...await runTttSchedule(), ...await zrl.runSchedule()];
+  await backup.runBackup().catch(e => console.error('Backup:', e.message));   // quiet: not an event anyone needs to be told about
   // The health panel reads this to show whether the scheduled workflow is really running.
   await redis([['SET', CRON_LAST_KEY, new Date().toISOString()]]).catch(() => {});
   sendJSON(res, 200, { ran });
@@ -1461,6 +1462,7 @@ async function healthChecks(){
       return ['ok', `${state}${week.open && sch.closesAt ? ` Closes ${ukWhen(sch.closesAt)}.` : ''} Next week starts ${ukWhen(sch.nextWeekAt)}.`];
     }),
     run('zrl', 'ZRL round', async () => zrl.healthRow(await zrl.load())),
+    run('backup', 'Backups', async () => backup.healthRow()),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
@@ -1603,6 +1605,15 @@ const zrl = require('../lib/zrl')({
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
 });
 
+// Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS });
+async function handleBackup(route, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await route(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname.replace('/api/admin/', '/api/zrl/'), { id: body.id }).catch(e => console.error('ZRL log:', e.message));   // backing up and restoring are worth a line
+  sendJSON(res, 200, result);
+}
+
 async function handleZrl(zrlRoute, req, res){
   if (req.method === 'GET') await zrl.runSchedule().catch(e => console.error('ZRL schedule:', e.message));
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -1650,6 +1661,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const backupRoute = backup.routes[`${req.method} ${pathname}`];
+  if (backupRoute) return handleBackup(backupRoute, req, res);
 
   if (pathname === '/api/proxy'){
     // Only named sheet tabs are allowed, so the proxy can't be used to fetch arbitrary URLs.

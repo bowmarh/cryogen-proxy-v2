@@ -52,3 +52,11 @@ test('only the latest 500 entries are kept', async () => {
   assert.equal(app.world.db['cg:zrl:log'].length, 500);
   assert.equal((await log()).body.entries.length, 100, 'and a page shows the newest 100');
 });
+
+test('taking a backup and restoring one are logged too', async () => {
+  const id = (await app.post('/api/admin/backup-now', {}, { token: admin })).body.id;
+  await app.post('/api/admin/restore', { id, confirm: 'RESTORE' }, { token: admin });
+  const e = (await log()).body.entries;
+  assert.deepEqual(e.slice(0, 2).map(x => x.route), ['zrl/restore', 'zrl/backup-now']);
+  assert.match(e[0].what, /^id=manual:/);
+});
