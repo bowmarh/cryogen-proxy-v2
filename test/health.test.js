@@ -91,3 +91,22 @@ test('a broken connection shows as failed instead of breaking the report', async
     assert.equal(c.members.status, 'ok', 'the other checks still run');
   } finally { process.env.KV_REST_API_TOKEN = token; }
 });
+
+test('a slow Google is a warning after a recent good answer, a failure if there never was one, and a flaky first try recovers', async () => {
+  const saved = world.sheet;
+  try {
+    world.db = world.db || {};
+    for (const k of Object.keys(world.db)) if (k === 'cg:health:sheet-ok') delete world.db[k];
+    world.sheet.hang = true;
+    assert.equal((await health()).sheet.status, 'fail', 'no good answer on record');
+    world.sheet.hang = false;
+    assert.equal((await health()).sheet.status, 'ok');
+    world.sheet.hang = true;
+    const slow = (await health()).sheet;
+    assert.equal(slow.status, 'warn');
+    assert.match(slow.detail, /slow to answer.*last answered/);
+    world.sheet.fail = true;   // not a timeout: unreachable stays a failure
+    world.sheet.hang = false;
+    assert.equal((await health()).sheet.status, 'fail');
+  } finally { world.sheet.hang = false; world.sheet.fail = false; }
+});
