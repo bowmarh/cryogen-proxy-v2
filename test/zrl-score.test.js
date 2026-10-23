@@ -39,3 +39,19 @@ test('bad input is refused, only staff can use it, and it leaves no entry in the
   assert.equal((await score({ starters: 10, riders: [{ pos: 1, fal: -3 }] })).status, 400);
   assert.equal((await score({ starters: 10, riders: [{ pos: 1 }] }, null)).status, 401);
 });
+
+test('team time trial: the team time is the fourth finisher, fewer than four is a DNQ, ZPower is limited to 40%', async () => {
+  const ok = await score({ mode: 'ttt', riders: [{ name: 'A', time: '31:10.2' }, { name: 'B', time: 1871 }, { name: 'C', time: '31:12' }, { name: 'D', time: '31:14.5' }, { name: 'E', time: '35:00' }] });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.dnq, false);
+  assert.equal(ok.body.teamTime, 1874.5);
+  assert.equal(ok.body.teamClock, '31:14.5');
+  assert.deepEqual(ok.body.warnings, []);
+  const bad = await score({ mode: 'ttt', riders: [{ name: 'A', time: '31:10' }, { name: 'B', time: '31:11', zpower: true }, { name: 'C', time: '31:12', zpower: true }, { name: 'D', time: '', zpower: true }, { name: 'E' }] });
+  assert.equal(bad.body.dnq, true);
+  assert.equal(bad.body.teamTime, null);
+  assert.equal(bad.body.finishers, 3);
+  assert.equal(bad.body.zpowerShare, 60);
+  assert.equal(bad.body.warnings.length, 2);
+  assert.equal((await score({ mode: 'ttt', riders: [{ name: 'A', time: 'fast' }] })).status, 400);
+});
