@@ -246,28 +246,28 @@ table{width:100%;border-collapse:collapse}
   <div id="page-rides" class="page">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Social Rides</h2>
-        <p style="font-size:13px;color:#6b7280">RSVP for group rides · <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="color:#00D4FF">View Zwift Club →</a></p>
+        <p style="font-size:13px;color:#6b7280">Ride cover, the club calendar and RSVPs · <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="color:#00D4FF">View Zwift Club →</a></p>
       </div>
-      <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
+      <button id="new-ride-btn" onclick="document.getElementById('newRideModal').style.display='flex'" style="display:none;padding:8px 16px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">+ New Ride</button>
     </div>
-    <div class="card" style="margin-bottom:20px;overflow:hidden">
-      <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#6b7280;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
+    <div id="rides-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div id="rides-sec-cover"><div id="cover-root"></div></div>
+    <div id="rides-sec-cal" style="display:none">
+      <div class="card" style="margin-bottom:20px;overflow:hidden">
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span style="font-size:12px;color:#9ca3af">The club's weekly rides on ZwiftHacks</span>
+          <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#00D4FF;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
         </div>
+        <iframe id="zh-frame" data-src="https://zwifthacks.com/app/events/?key=6a24978d28168" style="width:100%;height:560px;border:none;display:block;background:#0a0e1a" title="CRYO-GEN Zwift Events"></iframe>
       </div>
-      <iframe src="https://zwifthacks.com/app/events/?key=6a24978d28168"
-        style="width:100%;height:420px;border:none;display:block;background:#0a0e1a"
-        title="CRYO-GEN Zwift Events" loading="lazy"></iframe>
     </div>
-    <div id="cover-root"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
-      <button id="rides-export-btn" onclick="ridesExport()" style="display:none;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">⬇ RSVPs (CSV)</button>
+    <div id="rides-sec-rsvp" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:12px;gap:8px">
+        <button id="rides-export-btn" onclick="ridesExport()" style="display:none;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">⬇ RSVPs (CSV)</button>
+      </div>
+      <div id="rides-help"></div>
+      <div id="rides-list"></div>
     </div>
-    <div id="rides-help"></div>
-    <div id="rides-list"></div>
   </div>
 
   <div id="page-members" class="page">
@@ -677,7 +677,7 @@ function showTab(id,btn){
   if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
-  if(id==='rides')loadCover();
+  if(id==='rides'){ renderRidesTabs(); loadCover(); }
   if(id==='ttt')loadTtt();
   if(id==='season')loadSeason();
   if(id==='zrl')loadZrl();
@@ -2831,6 +2831,21 @@ function renderHybridResults(sheet,derived){
   el.innerHTML=rows||'<tr><td colspan="6" style="color:#4b5563;text-align:center;padding:20px">No results yet</td></tr>';
 }
 
+let ridesTab='cover'; try{ ridesTab=sessionStorage.getItem('ridesTab')||'cover'; }catch(e){}
+function ridesTabGo(t){ ridesTab=t; try{ sessionStorage.setItem('ridesTab',t); }catch(e){} renderRidesTabs(); }
+function coverUrgent(){
+  if(!cover) return 0; const week=Date.now()+7*86400000;
+  return cover.series.reduce((n,s)=>n+s.occurrences.filter(o=>!o.cancelled&&o.startMs<week&&o.gaps.some(g=>g==='leader'||g==='sweeper')).length,0);
+}
+function renderRidesTabs(){
+  const el=document.getElementById('rides-tabs'); if(!el) return;
+  const urgent=coverUrgent();
+  const t=(id,l,badge)=>`<button onclick="ridesTabGo('${id}')" style="padding:7px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${ridesTab===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${ridesTab===id?'rgba(0,212,255,0.12)':'rgba(255,255,255,0.04)'};color:${ridesTab===id?'#00D4FF':'#e5e7eb'}">${l}${badge?` <span style="font-size:11px;margin-left:4px;padding:1px 7px;border-radius:99px;background:rgba(251,191,36,0.18);color:#FBBF24">${badge}</span>`:''}</button>`;
+  el.innerHTML=t('cover','🧭 Ride cover',urgent||'')+t('cal','🗓️ Calendar','')+t('rsvp','📋 RSVP rides','');
+  for(const [id,sec] of [['cover','rides-sec-cover'],['cal','rides-sec-cal'],['rsvp','rides-sec-rsvp']]){ const d=document.getElementById(sec); if(d) d.style.display=ridesTab===id?'block':'none'; }
+  const f=document.getElementById('zh-frame'); if(f&&ridesTab==='cal'&&!f.src) f.src=f.dataset.src;   // the calendar loads only when someone opens it
+  const nb=document.getElementById('new-ride-btn'); if(nb) nb.style.display=(ridesTab==='rsvp'&&role!=='member')?'inline-block':'none';
+}
 // ── Ride cover: leaders and sweepers for the weekly rides ───────────────────────────────
 let cover=null, coverErr='', coverMsg='';
 async function loadCover(){
@@ -2868,25 +2883,47 @@ function coverSlot(s,o,roleDef){
     <div style="font-size:13px;font-weight:700;color:${slot?'#e5e7eb':col}">${slot?esc(slot.name)+(slot.standing?' <span style="font-size:10px;font-weight:400;color:#6b7280">(most weeks)</span>':''):(isBackup?'Back-up needed':'Needed')}</div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${act}</div></div>`;
 }
+let coverOpen=new Set(), coverOnlyGaps=false;
+const coverPrimaryGaps=o=>o.gaps.filter(g=>g==='leader'||g==='sweeper');
+function coverChip(o){
+  if(!o) return '<span style="font-size:11px;color:#6b7280">no dates</span>';
+  const d=new Date(o.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+  if(o.cancelled) return `<span style="font-size:11px;color:#6b7280">${esc(d)} · cancelled</span>`;
+  const p=coverPrimaryGaps(o);
+  if(p.length) return `<span style="font-size:11px;font-weight:700;color:#f87171">${esc(d)} · needs ${p.map(x=>x==='leader'?'leader':'sweeper').join(' + ')}</span>`;
+  if(o.gaps.length) return `<span style="font-size:11px;font-weight:700;color:#FBBF24">${esc(d)} · needs back-up</span>`;
+  return `<span style="font-size:11px;font-weight:700;color:#10B981">${esc(d)} · covered ✓</span>`;
+}
 function coverSeriesCard(s){
   const me=cover.me, st=me&&me.standing[s.id]||{};
-  const dow=['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'][s.dow];
+  const dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][s.dow];
+  const next=s.occurrences.find(o=>!o.cancelled)||s.occurrences[0];
   const tog=(k,l)=>me&&me.approved&&me.approved[k]?`<button onclick="coverStanding('${esc(s.id)}',${k==='lead'?!st.lead:!!st.lead},${k==='sweep'?!st.sweep:!!st.sweep})" style="padding:3px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid ${st[k]?'rgba(16,185,129,0.6)':'rgba(255,255,255,0.18)'};background:${st[k]?'rgba(16,185,129,0.12)':'transparent'};color:${st[k]?'#10B981':'#9ca3af'}">${st[k]?'✓ ':''}I can ${l} most weeks</button>`:'';
-  return `<div class="card" style="padding:14px 16px;margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline"><div><div style="font-size:15px;font-weight:800">${esc(s.title)}</div><div style="font-size:12px;color:#6b7280">${dow} ${esc(s.time)} (${esc(s.zone.replace(/_/g,' '))})${s.pace?' · '+esc(s.pace):''}${s.cat?' · cat '+esc(s.cat):''}${s.ownerName?' · owner '+esc(s.ownerName):''}</div></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${tog('lead','lead')}${tog('sweep','sweep')}</div></div>
-    ${s.occurrences.slice(0,4).map(o=>`<div style="margin-top:10px;${o.cancelled?'opacity:.55':''}"><div style="font-size:12px;font-weight:700;margin-bottom:4px">${esc(coverWhen(o))}${o.cancelled?' · <span style="color:#f87171">cancelled</span>':!o.gaps.length?' · <span style="color:#10B981">fully covered</span>':''}${s.canManage?` <button onclick="coverCancel('${esc(s.id)}','${o.date}',${!o.cancelled})" style="margin-left:6px;padding:1px 7px;font-size:10px;border-radius:5px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">${o.cancelled?'Restore':'Cancel ride'}</button>`:''}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${cover.roles.map(r=>coverSlot(s,o,r)).join('')}</div></div>`).join('')}</div>`;
+  const standing=tog('lead','lead')+tog('sweep','sweep');
+  return `<details class="card" ${coverOpen.has(s.id)?'open':''} ontoggle="coverToggle('${esc(s.id)}',this.open)" style="padding:0;margin-bottom:8px">
+    <summary style="cursor:pointer;padding:11px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
+      <span style="font-size:14px;font-weight:800;flex:1;min-width:150px">${esc(s.title)} <span style="font-size:11px;font-weight:400;color:#6b7280">${dow} ${esc(s.time)}${s.ownerName?' · '+esc(s.ownerName):''}</span></span>${coverChip(next)}<span style="color:#6b7280;font-size:11px">▾</span></summary>
+    <div style="padding:0 14px 12px">
+      ${standing?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${standing}</div>`:''}
+      ${s.occurrences.slice(0,4).map(o=>`<div style="margin-top:8px;${o.cancelled?'opacity:.55':''}"><div style="font-size:12px;font-weight:700;margin-bottom:4px">${esc(coverWhen(o))}${o.cancelled?' · <span style="color:#f87171">cancelled</span>':''}${s.canManage?` <button onclick="coverCancel('${esc(s.id)}','${o.date}',${!o.cancelled})" style="margin-left:6px;padding:1px 7px;font-size:10px;border-radius:5px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">${o.cancelled?'Restore':'Cancel ride'}</button>`:''}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px">${cover.roles.map(r=>coverSlot(s,o,r)).join('')}</div></div>`).join('')}</div></details>`;
 }
+function coverToggle(id,open){ if(open) coverOpen.add(id); else coverOpen.delete(id); }
 function renderCover(){
+  renderRidesTabs();
   const el=document.getElementById('cover-root'); if(!el) return;
-  const head='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em;margin-bottom:8px">🧭 Ride cover · leaders and sweepers</div>';
-  if(coverErr==='signin'){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:20px">${head}<div style="font-size:13px;color:#9ca3af">Sign in with your cryogen.team account to see who is leading and sweeping each ride, and to offer if you are an approved leader or sweeper.</div></div>`; return; }
-  if(coverErr){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:20px;color:#FBBF24;font-size:13px">${esc(coverErr)}</div>`; return; }
+  if(coverErr==='signin'){ el.innerHTML='<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">Sign in with your cryogen.team account to see who is leading and sweeping each ride, and to offer if you are an approved leader or sweeper.</div>'; return; }
+  if(coverErr){ el.innerHTML=`<div class="card" style="padding:14px 16px;color:#FBBF24;font-size:13px">${esc(coverErr)}</div>`; return; }
   if(!cover){ el.innerHTML=''; return; }
-  const staff=cover.staff, me=cover.me;
-  const intro=me&&!me.approved&&!staff?'<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Want to lead or sweep? Ask the ride owners in Discord to approve you, then you can offer for any ride below.</div>':'<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Every ride needs a leader and a sweeper, each with a back-up. Approved leaders and sweepers can offer for a date, or tick <b>most weeks</b> once. Gaps are called out automatically.</div>';
-  el.innerHTML=`<div style="margin-bottom:24px">${head}${intro}${cover.series.length?cover.series.map(coverSeriesCard).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No regular rides have been set up yet.'+(staff?' Add them under <b>Manage ride cover</b> below.':'')+'</div>'}${staff?coverStaffPanel():''}</div>`;
+  const staff=cover.staff, me=cover.me, urgent=coverUrgent();
+  const soon=s=>{ const o=s.occurrences.find(x=>!x.cancelled); return o?o.startMs:Infinity; };
+  let list=[...cover.series].sort((a,b)=>soon(a)-soon(b));
+  if(coverOnlyGaps) list=list.filter(s=>{ const o=s.occurrences.find(x=>!x.cancelled); return o&&o.gaps.length; });
+  const note=me&&!me.approved&&!staff?' Want to lead or sweep? Ask the ride owners in Discord to approve you.':'';
+  el.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><div style="flex:1;min-width:200px;font-size:13px;color:${urgent?'#FBBF24':'#10B981'}">${urgent?`⚠️ ${urgent} ride${urgent===1?'':'s'} in the next 7 days still need${urgent===1?'s':''} a leader or sweeper.`:'✅ Every ride in the next 7 days has a leader and sweeper.'}<span style="color:#6b7280">${note}</span></div>
+    <button onclick="coverOnlyGaps=!coverOnlyGaps;renderCover()" style="padding:5px 12px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${coverOnlyGaps?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.15)'};background:${coverOnlyGaps?'rgba(0,212,255,0.12)':'rgba(255,255,255,0.05)'};color:${coverOnlyGaps?'#00D4FF':'#e5e7eb'}">${coverOnlyGaps?'✓ ':''}Only rides that need cover</button></div>
+    ${list.length?list.map(coverSeriesCard).join(''):`<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">${cover.series.length?'Nothing needs cover right now.':'No regular rides have been set up yet.'+(staff?' Add them under <b>Manage ride cover</b> below.':'')}</div>`}
+    ${staff?coverStaffPanel():''}`;
 }
 async function coverVolunteer(series,date,role){ await coverPost('volunteer',{series,date,role}); }
 async function coverWithdraw(series,date,role){ if(confirm('Take this person off the ride?')) await coverPost('withdraw',{series,date,role}); }
