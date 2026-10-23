@@ -123,3 +123,33 @@ test('posting one race: positions and points by division, no notes, once in five
   assert.equal((await post()).status, 429);
   assert.equal((await post(1)).status, 409, 'race 2 has no results');
 });
+
+test('league points follow WTRL: N for first of N teams, one less each place, halved if ineligible, zero for a DNQ', async () => {
+  const entry = async (team, week = 0) => (await standings(admin)).entries[`${week}:${team}`];
+  assert.equal((await save(0, [{ team: 'cryo-gen-alpha', pos: 1, field: 16 }, { team: 'cryo-gen-beta', pos: 16, field: 16 }, { team: 'cryo-gen-gamma', pos: 3, field: 16, flag: 'ineligible' }, { team: 'cryo-gen-quiet', pos: 5, field: 16, pts: 99, flag: 'dnq' }])).status, 200);
+  assert.equal((await entry('cryo-gen-alpha')).pts, 16);
+  assert.equal((await entry('cryo-gen-beta')).pts, 1);
+  assert.equal((await entry('cryo-gen-gamma')).pts, 7, '(16 - 3 + 1) / 2');
+  assert.equal((await entry('cryo-gen-quiet')).pts, 0, 'a DNQ scores nothing whatever was typed');
+  assert.equal((await entry('cryo-gen-alpha')).field, 16);
+  // without the field size the typed points stand
+  await save(1, [{ team: 'cryo-gen-alpha', pos: 2, pts: 40 }]);
+  assert.equal((await entry('cryo-gen-alpha', 1)).pts, 40);
+  assert.equal((await save(0, [{ team: 'cryo-gen-alpha', pos: 9, field: 8 }])).status, 400, 'position beyond the field');
+  assert.equal((await save(0, [{ team: 'cryo-gen-alpha', pos: 1, field: 0.5 }])).status, 400);
+  assert.equal((await save(0, [{ team: 'cryo-gen-alpha', pos: 1, field: 5, fin: -2 }])).status, 400);
+});
+
+test('equal league points are split by FIN, then FAL, then FTS, then the best single rider finish', async () => {
+  const rank = async () => Object.fromEntries((await standings()).groups[0].teams.map(t => [t.name.replace('CRYO-GEN ', ''), t.rank]));
+  await save(0, [{ team: 'cryo-gen-alpha', pts: 10 }, { team: 'cryo-gen-beta', pts: 10 }]);
+  assert.deepEqual(await rank(), { Alpha: 1, Beta: 1 }, 'nothing to split them');
+  await save(0, [{ team: 'cryo-gen-alpha', pts: 10, fin: 100 }, { team: 'cryo-gen-beta', pts: 10, fin: 120 }]);
+  assert.deepEqual(await rank(), { Beta: 1, Alpha: 2 }, 'more FIN points wins');
+  await save(0, [{ team: 'cryo-gen-alpha', pts: 10, fin: 100, fal: 5 }, { team: 'cryo-gen-beta', pts: 10, fin: 100, fal: 3 }]);
+  assert.deepEqual(await rank(), { Alpha: 1, Beta: 2 }, 'then FAL');
+  await save(0, [{ team: 'cryo-gen-alpha', pts: 10, fin: 100, fal: 5, fts: 1 }, { team: 'cryo-gen-beta', pts: 10, fin: 100, fal: 5, fts: 4 }]);
+  assert.deepEqual(await rank(), { Beta: 1, Alpha: 2 }, 'then FTS');
+  await save(0, [{ team: 'cryo-gen-alpha', pts: 10, fin: 1, fal: 1, fts: 1, best: 3 }, { team: 'cryo-gen-beta', pts: 10, fin: 1, fal: 1, fts: 1, best: 2 }]);
+  assert.deepEqual(await rank(), { Beta: 1, Alpha: 2 }, 'then the highest placed rider');
+});
