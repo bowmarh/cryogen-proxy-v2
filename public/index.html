@@ -2196,7 +2196,7 @@ function zrlEvCard(){
   else if(e&&e.error) out=`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(e.error)}</div>`;
   else if(e) out=`<div style="font-size:12px;margin-top:8px;color:#d1d5db"><b>${esc(e.event.title||'Event '+e.event.id)}</b> · ${e.event.finishers} finishers${e.event.subType?' · '+esc(e.event.subType):''}</div>
     <div style="font-size:12px;margin-top:2px;color:${e.outsideRound?'#FBBF24':'#9ca3af'}">${e.outsideRound?`This race was on <b>${esc(e.event.date)}</b>, outside this round, so it belongs to an earlier (or later) round. This round's line-ups do not apply to it, and the teams below are your <b>current</b> teams that these riders belong to now.`:e.week!==null?`This is <b>race ${e.week+1}</b>. <button onclick="zrlResWeek=${e.week};renderZrl2()" style="padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:5px;color:#e5e7eb;cursor:pointer">Show race ${e.week+1} above</button>`:'The race number could not be read from the title (or it is outside this round), so there is no line-up to compare with.'}</div>
-    ${e.teams.length?e.teams.map(t=>`<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px"><div style="font-weight:800;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#6b7280;font-size:11px">${esc([t.division,t.league].filter(Boolean).join(' · '))}</span>${t.named===false&&!e.outsideRound?' <span style="font-weight:400;color:#FBBF24;font-size:11px">· not the league and division named in the title</span>':''}</div>
+    ${e.teams.length?e.teams.map(t=>`<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px"><div style="font-weight:800;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#6b7280;font-size:11px">${esc([t.division,t.league].filter(Boolean).join(' · '))}</span>${t.named===false&&!e.outsideRound?' <span style="font-weight:400;color:#FBBF24;font-size:11px">· not the league and division named in the title</span>':''}${e.week!==null&&!e.outsideRound&&t.raced.length?` <button onclick="zrlCalcFromEvent('${esc(t.id)}')" style="margin-left:6px;padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(0,212,255,0.4);border-radius:5px;color:#00D4FF;cursor:pointer">🧮 Work out points</button>`:''}</div>
       ${t.raced.map(x=>`<div style="font-size:12px;padding:1px 0">🏁 ${esc(x.name)} · <b>${x.position?ord(x.position):'—'}</b>${x.cat?' · cat '+esc(x.cat):''}${e.week!==null?(x.picked?' <span style="color:#10B981">· was picked</span>':' <span style="color:#FBBF24">· was not in the line-up</span>'):''}</div>`).join('')||'<div style="font-size:12px;color:#6b7280">Nobody from the team is in the results.</div>'}
       ${t.missing.length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">Picked but not in the results: ${esc(t.missing.join(', '))}</div>`:''}</div>`).join(''):'<div style="font-size:12px;color:#9ca3af;margin-top:8px">None of our teams are in this event.</div>'}
     <div style="font-size:11px;color:#6b7280;margin-top:6px">Positions are each rider's finish in the whole race. Team positions and points come from WTRL: enter them above.</div>`;
@@ -2274,6 +2274,16 @@ function zrlCalcOpen(teamId){
   zrlCalc={ team:teamId, name:t.name, week:zrlResWeek, starters:(zrlCalc&&zrlCalc.starters)||'', rows, out:null };
   renderZrl2();
 }
+function zrlCalcFromEvent(teamId){
+  const e=zrlEv, t=e&&e.teams.find(x=>x.id===teamId), team=t&&zrlData.round.teams.find(x=>x.id===teamId); if(!t||!team) return;
+  const set=t.lineupSet>0, racers=t.raced.filter(x=>!set||x.picked).slice(0,zrlData.round.racing);
+  const rows=racers.map(x=>({ name:x.name, cat:x.cat||'', pos:x.position||'', fal:'', fts:'', noHr:false, zpower:false }));
+  t.missing.forEach(n=>{ if(rows.length<zrlData.round.racing) rows.push({ name:n, cat:'', pos:'', fal:'', fts:'', noHr:false, zpower:false }); });
+  zrlResWeek=e.week;
+  zrlCalc={ team:teamId, name:team.name, week:e.week, starters:e.event.finishers, rows, out:null, fromRace:true };
+  renderZrl2();
+  const c=document.getElementById('zrl-calc'); if(c) c.scrollIntoView({ behavior:'smooth', block:'center' });
+}
 function zrlCalcSet(i,k,v){ if(i<0) zrlCalc[k]=v; else zrlCalc.rows[i][k]=v; zrlCalc.out=null; }
 async function zrlCalcRun(){
   let res,d; try{ res=await fetch('/api/zrl/score',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ starters:zrlCalc.starters, riders:zrlCalc.rows })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -2282,16 +2292,16 @@ async function zrlCalcRun(){
 }
 function zrlCalcUse(){
   const tr=[...document.querySelectorAll('.zrl-res-row')].find(r=>r.dataset.team===zrlCalc.team); if(tr) tr.querySelector('.rs').value=zrlCalc.out.total;
-  const n=zrlCalc.name; zrlCalc=null; renderZrl2();
+  const n=zrlCalc.name; zrlCalc=null; const c=document.getElementById('zrl-calc'); if(c) c.remove();   // no re-render: it would drop what is typed in the other rows
   alert('Total filled in for '+n+'. Check the position, then press Save race.');
 }
 function zrlCalcCard(){
   const c=zrlCalc; if(!c) return '';
   const inp='class="inp" style="width:64px" type="number" min="0"';
-  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)">
+  return `<div id="zrl-calc" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)">
     <div style="font-size:14px;font-weight:800">🧮 Points for ${esc(c.name)} · race ${c.week+1}</div>
     <div style="font-size:12px;color:#9ca3af;margin:4px 0 10px">Finish points = starters − position + 1. Top 5 get 10/8/6/4/2 more. Add each rider's First Across the Line and Fastest Through Segment points from the results. No heart rate: zero for an A rider, half for B to D. ZPower: half.</div>
-    <label style="font-size:12px;color:#9ca3af">Riders who started the race <input ${inp} value="${esc(c.starters)}" oninput="zrlCalcSet(-1,'starters',this.value)"/></label>
+    ${c.fromRace?'<div style="font-size:12px;color:#10B981;margin-bottom:6px">Positions and starters came from ZwiftRacing.app (starters = riders in the results, so raise it if some did not finish). Riders have been taken from the captain\'s line-up, and categories are their ZwiftRacing category.</div>':''}<label style="font-size:12px;color:#9ca3af">Riders who started the race <input ${inp} value="${esc(c.starters)}" oninput="zrlCalcSet(-1,'starters',this.value)"/></label>
     <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tr style="font-size:10px;color:#6b7280;text-transform:uppercase;text-align:left"><th>Rider</th><th>Pos</th><th>FAL</th><th>FTS</th><th>No HR</th><th>ZPower</th><th>Points</th></tr>
     ${c.rows.map((r,i)=>{ const o=c.out&&c.out.riders[i]; return `<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:4px 8px 4px 0">${esc(r.name)} <span style="font-size:10px;color:#6b7280">${esc(r.cat)}</span></td>
       <td><input ${inp} value="${esc(r.pos)}" oninput="zrlCalcSet(${i},'pos',this.value)"/></td><td><input ${inp} value="${esc(r.fal)}" oninput="zrlCalcSet(${i},'fal',this.value)"/></td><td><input ${inp} value="${esc(r.fts)}" oninput="zrlCalcSet(${i},'fts',this.value)"/></td>
