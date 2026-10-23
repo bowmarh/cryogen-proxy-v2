@@ -1757,6 +1757,28 @@ async function zrlImportRefresh(){
   alert('Updated '+d.refreshed.teams+' teams.'+(d.refreshed.missing.length?'\n\nNot found on the sheet: '+d.refreshed.missing.join(', '):'')); zrlPreview=null; loadZrl();
 }
 function zrlSetCaptain(team,key){ zrlPost('/api/zrl/captain',{ team, key }); }
+function zrlBulkSuggest(){ document.querySelectorAll('.zrl-bulk').forEach(sel=>{ if(!sel.value&&sel.options.length>1) sel.selectedIndex=1; }); }
+function zrlBulkSave(){
+  const picks=[...document.querySelectorAll('.zrl-bulk')].filter(s=>s.value).map(s=>({ team:s.dataset.team, key:s.value }));
+  if(!picks.length){ alert('Choose a captain for at least one team.'); return; }
+  zrlPost('/api/zrl/captains',{ picks });
+}
+function zrlBulkCard(d,st){
+  const r=d.round, size=r.rosterSize;
+  const rows=r.teams.filter(t=>!t.captain&&(st.by[t.id]||[]).length);
+  if(!rows.length) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const line=t=>{
+    const riders=[...(st.by[t.id]||[])].filter(x=>x.zwid).sort((a,b)=>(b.captain-a.captain)||String(a.ts||'').localeCompare(String(b.ts||''))||a.name.localeCompare(b.name));
+    return `<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 8px 6px 0;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#6b7280">${(st.by[t.id]||[]).length}/${size}</span></td>
+      <td style="padding:6px 0"><select class="zrl-bulk inp" data-team="${esc(t.id)}" style="width:auto;max-width:260px;font-size:12px"><option value="">— skip —</option>${riders.map(x=>`<option value="${esc(x.key)}">${x.captain?'⭐ ':''}${esc(x.name)}</option>`).join('')}</select></td></tr>`;
+  };
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(251,191,36,0.3)">
+    <div style="font-size:13px;font-weight:800;margin-bottom:4px">⭐ Teams without a captain (${rows.length})</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Choose a captain for each, or press Suggest to fill them in (volunteers first, then the earliest sign-up), check, then Save.</div>
+    <table style="width:100%;border-collapse:collapse">${rows.map(line).join('')}</table>
+    <div style="display:flex;gap:8px;margin-top:10px"><button onclick="zrlBulkSuggest()" style="${btn}">Suggest</button><button onclick="zrlBulkSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save captains</button></div></div>`;
+}
 async function zrlImportPreview(){
   const tab=document.getElementById('zrl-imp-tab').value.trim(), sheet=document.getElementById('zrl-imp-sheet').value.trim(); if(!tab){ alert('Enter the tab name.'); return; }
   let res,d; try{ res=await fetch('/api/zrl/import',{method:'POST',headers:tttHeaders(),body:JSON.stringify({tab,sheet})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -1827,7 +1849,7 @@ function zrlTeamsTab(d,st){
       <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(t.slot):(n?'no race time':'')}</div></div>`;
   };
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>
-    ${zrlTeamDetail(d,st)}
+    ${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
     ${shown.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${shown.map(tile).join('')}</div>`:`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${r.teams.length?'No teams match this filter.':'No teams yet. Import the team board from the Setup tab.'}</div>`}`;
 }
 function zrlOpenTeam(id){ zrlOpenTeamId=zrlOpenTeamId===id?null:id; renderZrl2(); const el=document.getElementById('zrl-team-detail'); if(el) el.scrollIntoView({block:'nearest',behavior:'smooth'}); }

@@ -101,3 +101,18 @@ test('clearing the captain in the team editor also stops automatic picking', asy
   await join('Ann Able', '4378027', { captain: true }); await put('4378027', 'cryo-gen-alpha');
   assert.equal((await teams())['cryo-gen-alpha'].captain, '');
 });
+
+test('bulk captains: staff only, all or nothing, rider must be on the team with a Zwift ID', async () => {
+  await join('Rider 2', '1002'); await join('Ann Able', '4378027'); await join('No Id Nick', '');
+  await put('1002', 'cryo-gen-alpha'); await put('4378027', 'cryo-gen-beta'); await put('no id nick', 'cryo-gen-beta');
+  const bulk = (picks, token = admin) => app.post('/api/zrl/captains', { picks }, { token });
+  assert.equal((await bulk([{ team: 'cryo-gen-alpha', key: '1002' }], null)).status, 401);
+  assert.equal((await bulk([])).status, 400);
+  assert.equal((await bulk([{ team: 'cryo-gen-alpha', key: '1002' }, { team: 'cryo-gen-beta', key: '1002' }])).status, 400, 'wrong team');
+  assert.equal((await bulk([{ team: 'cryo-gen-alpha', key: '1002' }, { team: 'cryo-gen-beta', key: 'no id nick' }])).status, 400, 'no Zwift ID');
+  const t0 = await teams();
+  assert.equal(t0['cryo-gen-alpha'].captain, '', 'a bad pick changes nothing');
+  assert.equal((await bulk([{ team: 'cryo-gen-alpha', key: '1002' }, { team: 'cryo-gen-beta', key: '4378027' }])).status, 200);
+  const t = await teams();
+  assert.deepEqual([t['cryo-gen-alpha'].captain, t['cryo-gen-beta'].captain], ['1002', '4378027']);
+});
