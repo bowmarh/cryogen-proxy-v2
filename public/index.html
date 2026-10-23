@@ -1882,6 +1882,7 @@ function zrlTeamDetail(d,st){
       <div>${lbl('Race time')}<div style="display:flex;gap:6px"><input id="zrl-td-slot" class="inp" list="zrl-slots" maxlength="40" value="${esc(t.slot||'')}" placeholder="Tue 17:00 UTC" style="width:170px"/><button onclick="zrlTeamSlot('${esc(t.id)}')" style="${btn}">Save</button></div>
         <datalist id="zrl-slots">${[...new Set(r.teams.map(x=>x.slot).filter(Boolean))].map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist></div>
       <div>${lbl('Captain')}<select class="inp" data-team="${esc(t.id)}" onchange="zrlSetCaptain(this.dataset.team,this.value)" style="width:auto;max-width:240px"><option value="">— no captain —</option>${t.captain&&!has?`<option value="" disabled selected>${esc(t.captainName||t.captain)} (not on this team)</option>`:''}${riders.map(x=>`<option value="${esc(x.key)}" ${x.zwid&&x.zwid===t.captain?'selected':''} ${x.zwid?'':'disabled'}>${x.captain?'⭐ ':''}${esc(x.name)}${x.zwid?'':' (no Zwift ID)'}</option>`).join('')}</select></div></div>
+    ${zrlStaffLineups(d,t,riders)}
     <div style="margin-top:12px">${lbl('Riders ('+riders.length+'/'+r.rosterSize+')')}
       ${riders.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${riders.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 6px 6px 0">${esc(x.name)}${x.zwid===t.captain&&x.zwid?' <span title="Captain">👑</span>':''}${x.captain?' ⭐':''}${x.commit==='reserve'?' <span style="font-size:11px;color:#9ca3af">(reserve)</span>':''}
         ${spare(x)&&needs.length?`<div style="margin-top:4px"><select class="inp" data-key="${esc(x.key)}" onchange="if(this.value)zrlAssign(this.dataset.key,this.value)" style="width:auto;max-width:260px;font-size:11px"><option value="">⭐ Also volunteered: move to a team without a captain…</option>${needs.map(n=>`<option value="${esc(n.id)}">${esc(n.name)} (${esc(zoneName(n.region))})</option>`).join('')}</select></div>`:''}</td>
@@ -1939,6 +1940,13 @@ function zrlWtrlCard(d){
   return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">WTRL registration (staff)</div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Captains register their team on WTRL by hand, then tick <b>Registered on WTRL</b> in their ZRL page. <b style="color:${done===playing.length&&playing.length?'#10B981':'#FBBF24'}">${done} of ${playing.length} teams registered.</b>${r.wtrlDeadline?` Deadline ${esc(zrlDeadlineText(r.wtrlDeadline))}: the admin channel is told three days before, and the health panel counts the rest.`:' Set the deadline and the health panel and Discord start chasing.'}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="zrl-wtrl-date" class="inp" type="date" value="${esc(cur)}" style="width:170px"/><button onclick="zrlWtrlDeadlineSave()" style="${btn}">Save deadline</button></div></div>`;
+}
+function zrlStaffLineups(d,t,riders){
+  const w=d.weekly||{avail:{},lineup:{}}, r=d.round, withId=riders.filter(x=>x.zwid);
+  if(!withId.length) return '';
+  const weeks=Array.from({length:r.weeks},(_,i)=>({ i, date:new Date(Date.parse(r.start+'T00:00:00Z')+7*i*864e5).toISOString().slice(0,10),
+    lineup:w.lineup[i+':'+t.id]||[], riders:withId.map(x=>({ zwid:x.zwid, name:x.name, status:w.avail[i+':'+x.zwid]||'' })) }));
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">${zrlLineupHtml({ id:t.id, weeks },r.racing)}</div>`;
 }
 function zrlLineupSave(team,week){
   const zwids=[...document.querySelectorAll(`.zl-${CSS.escape(team)}-${week}:checked`)].map(x=>x.value);

@@ -85,3 +85,13 @@ test('starting the next round archives the weekly answers and starts clean', asy
   const archived = JSON.parse(app.world.db['cg:zrl:archive']['2026-11-17']);
   assert.equal(archived.weekly.avail['0:4378027'], 'yes');
 });
+
+test('staff get the weekly answers and line-ups with the page data; nobody else does', async () => {
+  await avail({ week: 0, status: 'yes' }, ann);
+  await lineup({ week: 0, team: 'cryo-gen-alpha', zwids: ['1002'] }, cap);
+  const staff = (await app.get('/api/zrl', { token: admin })).body;
+  assert.equal(staff.weekly.avail['0:4378027'], 'yes');
+  assert.deepEqual(staff.weekly.lineup['0:cryo-gen-alpha'], ['1002']);
+  assert.equal((await app.get('/api/zrl', { token: ann })).body.weekly, undefined);
+  assert.equal((await app.get('/api/zrl')).body.weekly, undefined);
+});
