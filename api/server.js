@@ -1429,9 +1429,22 @@ async function healthChecks(){
       const age = Date.now() - saved.at;
       return [age > 24 * 3600 * 1000 ? 'warn' : 'ok', `${saved.riders.length} riders; shared copy refreshed ${ago(age)}.`];
     }),
+    // Google's sheet endpoint is sometimes slow for a few seconds. The check gets two short tries inside its own time limit, and a slow
+    // answer after a recent good one is a warning (it passes again by itself), not a failure.
     run('sheet', 'Google Sheet (TEAM LIST)', async () => {
-      const { rows } = parseGviz(await fetchTab(SHEET_TABS['ttt-sheet']));
-      return ['ok', `Reachable; ${rows.length} rows.`];
+      const tab = SHEET_TABS['ttt-sheet'], half = Math.min(sheetTimeoutMs(), 3500);
+      let body, last;
+      for (let i = 0; i < 2 && body === undefined; i++) {
+        try { body = await fetchTab(tab, 1, SHEET_ID, half); } catch (e) { last = e; }
+      }
+      if (body === undefined) {
+        const [saved] = await redis([['GET', 'cg:health:sheet-ok']]).catch(() => [null]);
+        const age = saved ? Date.now() - Number(saved) : Infinity;
+        if (last && last.status === 504 && age < 24 * 3600 * 1000) return ['warn', `Google Sheets is slow to answer right now. It last answered ${ago(age)}; this clears by itself.`];
+        throw last;
+      }
+      await redis([['SET', 'cg:health:sheet-ok', String(Date.now())]]).catch(() => {});
+      return ['ok', `Reachable; ${parseGviz(body).rows.length} rows.`];
     }),
     run('discord', 'Discord webhooks', async () => {
       const pub = Boolean(process.env.DISCORD_WEBHOOK_PUBLIC), adm = Boolean(process.env.DISCORD_WEBHOOK_ADMIN);
@@ -1527,11 +1540,11 @@ function parseGviz(textBody){
 // Google can be slow; without a limit the request would hang until Vercel cuts the function off with no message.
 const sheetTimeoutMs = () => Number(process.env.SHEET_TIMEOUT_MS) || 6000;
 
-async function fetchTab(tab, headerRows = 1, sheetId = SHEET_ID){
+async function fetchTab(tab, headerRows = 1, sheetId = SHEET_ID, timeoutMs = sheetTimeoutMs()){
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=${headerRows}&sheet=${encodeURIComponent(tab)}`;
   let r, body;
   try {
-    r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(sheetTimeoutMs()) });
+    r = await fetch(sheetUrl, { headers: { 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(timeoutMs) });
     body = await r.text();
   } catch (e) {
     if (e && e.name === 'TimeoutError') throw new HttpError(504, 'Google Sheets did not answer in time. Try again in a moment.');
