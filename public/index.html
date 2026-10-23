@@ -375,6 +375,23 @@ const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}
 
 // ── State ──────────────────────────────────────────────────
 let role=sessionStorage.getItem('role');
+// Staff logins last 12 hours. When one has run out the server answers "Please log in again"; say so and go back to the login
+// screen, instead of leaving admin buttons on screen that no longer work.
+(function(){
+  const realFetch=window.fetch.bind(window);
+  window.fetch=async function(...args){
+    const res=await realFetch(...args);
+    if(res.status===401&&(role==='admin'||role==='mod')&&!window.__staffExpiring){
+      let msg=''; try{ msg=(await res.clone().json()).error||''; }catch(e){ /* not JSON */ }
+      if(/log in again/i.test(msg)){
+        window.__staffExpiring=true;
+        try{ sessionStorage.clear(); sessionStorage.setItem('expired','1'); }catch(e){ /* storage unavailable */ }
+        location.reload();
+      }
+    }
+    return res;
+  };
+})();
 let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
 let allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
@@ -2284,9 +2301,11 @@ function renderSheetPanel(d){
 // Coming back from cryogen.team the server puts the result in the URL fragment (never sent to servers or logs).
 const ssoParams=new URLSearchParams(location.hash.slice(1));
 const ssoToken=ssoParams.get('sso'), ssoError=ssoParams.get('sso_error');
+const sessionExpired=sessionStorage.getItem('expired')==='1';
+if(sessionExpired) sessionStorage.removeItem('expired');
 if(ssoToken||ssoError) history.replaceState(null,'',location.pathname+location.search);
 if(ssoToken) ssoLogin(ssoToken);
-else if(!role) loginScreenSetup(ssoError);
+else if(!role) loginScreenSetup(ssoError||(sessionExpired?'Your session has expired. Please log in again.':''));
 if(!role && !ssoToken) loadLive();
 if(role && !ssoToken){
   document.getElementById('login-screen').style.display='none';
