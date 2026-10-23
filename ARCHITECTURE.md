@@ -50,6 +50,10 @@ A plain Node.js request handler:
 
 The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, and `npm start` runs it as a local server.
 
+## Social rides extras (taken from the ZRL)
+
+*Reminder.* `runRidesSchedule` (run by the cron tick, which reports it as `ride-reminder`) announces each club-created ride that is today or tomorrow (UTC date) once in the club channel: when, route, distance and pace, how many are riding, how many places are left, the Zwift link and where to RSVP. The mark is `<ride id>:reminder` in `cg:rides:sent`. Rides copied in from the club sheet have no RSVPs in the dashboard and are not announced. *Export:* `GET /api/rides/export[?id=<ride id>]` (staff) returns `{filename, csv}` with the RSVPs of every ride from today on, or of one ride (ride, date, time, rider, when they RSVP'd), formula-looking names neutralised. *In the page:* past rides move into a collapsed **Past rides** list with how many RSVP'd; staff get an **⬇ RSVPs (CSV)** button; the profile page has **My rides** (the rides the signed-in rider has RSVP'd to, from today on, plus how many earlier ones). RSVPs are stored under the name in the member's sign-in (the WordPress name), which can differ from their roster name, so My rides matches either (`memberName` is kept in the session when they sign in).
+
 ## Club roster cache
 
 The roster comes from ZwiftRacing.app through the WordPress plugin, which answers 429 when asked too often. Each server instance used to ask on its own. The slimmed rider list is now kept in Redis (`cg:roster:riders`): reused for 10 minutes by every instance, and the last good copy is served if the source fails. Member records are not cached there; they are read each time the 5-minute in-memory cache expires.
