@@ -2201,6 +2201,7 @@ function zrlEvCard(){
   else if(e&&e.error) out=`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(e.error)}</div>`;
   else if(e) out=`<div style="font-size:12px;margin-top:8px;color:#d1d5db"><b>${esc(e.event.title||'Event '+e.event.id)}</b> · ${e.event.finishers} finishers${e.event.subType?' · '+esc(e.event.subType):''}</div>
     <div style="font-size:12px;margin-top:2px;color:${e.outsideRound?'#FBBF24':'#9ca3af'}">${e.outsideRound?`This race was on <b>${esc(e.event.date)}</b>, outside this round, so it belongs to an earlier (or later) round. This round's line-ups do not apply to it, and the teams below are your <b>current</b> teams that these riders belong to now.`:e.week!==null?`This is <b>race ${e.week+1}</b>. <button onclick="zrlResWeek=${e.week};renderZrl2()" style="padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:5px;color:#e5e7eb;cursor:pointer">Show race ${e.week+1} above</button>`:'The race number could not be read from the title (or it is outside this round), so there is no line-up to compare with.'}</div>
+    ${e.teams.some(t=>t.raced.length)&&e.week!==null&&!e.outsideRound?`<div style="margin-top:8px"><button onclick="zrlScoreAll()" style="${btn}">🧮 Score all teams from this race</button></div>`:''}
     ${e.teams.length?e.teams.map(t=>`<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px"><div style="font-weight:800;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#6b7280;font-size:11px">${esc([t.division,t.league].filter(Boolean).join(' · '))}</span>${t.named===false&&!e.outsideRound?' <span style="font-weight:400;color:#FBBF24;font-size:11px">· not the league and division named in the title</span>':''}${e.week!==null&&!e.outsideRound&&t.raced.length?` <button onclick="zrlCalcFromEvent('${esc(t.id)}')" style="margin-left:6px;padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(0,212,255,0.4);border-radius:5px;color:#00D4FF;cursor:pointer">🧮 Work out points</button>`:''}</div>
       ${t.raced.map(x=>`<div style="font-size:12px;padding:1px 0">🏁 ${esc(x.name)} · <b>${x.position?ord(x.position):'—'}</b>${x.cat?' · cat '+esc(x.cat):''}${e.week!==null?(x.picked?' <span style="color:#10B981">· was picked</span>':' <span style="color:#FBBF24">· was not in the line-up</span>'):''}</div>`).join('')||'<div style="font-size:12px;color:#6b7280">Nobody from the team is in the results.</div>'}
       ${t.missing.length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">Picked but not in the results: ${esc(t.missing.join(', '))}</div>`:''}</div>`).join(''):'<div style="font-size:12px;color:#9ca3af;margin-top:8px">None of our teams are in this event.</div>'}
@@ -2261,13 +2262,23 @@ function zrlShareBar(){
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px"><button onclick="zrlPostStandings()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📣 Post standings to Discord</button><button onclick="zrlResultsExport('standings')" style="${btn}">⬇ Standings (CSV)</button><button onclick="zrlResultsExport('results')" style="${btn}">⬇ Results race by race (CSV)</button></div>`;
 }
+function zrlRunbookCard(){
+  const li=x=>`<li style="margin:3px 0">${x}</li>`;
+  return `<details class="card" style="padding:12px 16px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📋 Race-day runbook (staff)</summary>
+    <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">Before the race</div>
+    <ol style="font-size:13px;margin:0 0 8px 18px;padding:0">${li('Check the readiness card at the top of the ZRL tab: every item green.')}${li('The admin channel gets the race-day digest by itself. Chase any team it lists without a line-up.')}${li('Remind riders to have a heart rate monitor, a power meter and (if the trainer estimates cadence) a cadence sensor.')}</ol>
+    <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">After the race</div>
+    <ol style="font-size:13px;margin:0 0 8px 18px;padding:0">${li('Results tab, pick the race, paste the Zwift event id into <b>Check a race</b>.')}${li('Press <b>Score all teams from this race</b>. Finish and podium points (or team times) are filled in for every team, and riders too strong for their class are marked Ineligible.')}${li('Per team, press 🧮 to add the riders\' FAL and FTS points (and tick No HR or ZPower), then <b>Keep these rider points</b>.')}${li('Type each team\'s <b>position</b> from WTRL and <b>teams started</b>. League points fill in. Set Status for any ineligible rider or DNQ.')}${li('<b>Save race</b>, then <b>Post race to Discord</b>. Post the standings when the round is done.')}</ol>
+    <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">If something is wrong</div>
+    <ul style="font-size:13px;margin:0 0 4px 18px;padding:0">${li('Open the health dot at the top: it names what is failing. A failed scheduled job is also posted to the ZRL admin channel.')}${li('Setup → Recent changes shows who changed what. Admin → Backups can restore a copy (type RESTORE).')}${li('ZwiftRacing allows one results lookup a minute: wait and press again if it says so.')}</ul></details>`;
+}
 function zrlResultsTab(d,st){
   const r=d.round, s=zrlStand;
   if(!s){ zrlStandLoad(); return `<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Loading…</div>`; }
   const teams=r.teams.filter(t=>(st.by[t.id]||[]).length), entry=t=>(s.entries||{})[zrlResWeek+':'+t.id]||{};
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
   const wk=i=>`<button onclick="zrlResWeek=${i};renderZrl2()" style="${btn};${zrlResWeek===i?'border-color:rgba(0,212,255,0.6);color:#00D4FF;background:rgba(0,212,255,0.12)':''}">Race ${i+1} · ${esc(seasonDay(s.dates[i]))}</button>`;
-  return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${s.dates.map((_,i)=>wk(i)).join('')}</div>
+  return `${zrlRunbookCard()}<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${s.dates.map((_,i)=>wk(i)).join('')}</div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Enter each team's position in its division (from WTRL) and how many teams started there: the league points are worked out for you (first of N teams gets N, one less each place, halved if an ineligible rider raced, zero for a DNQ). Without those two, type the points yourself. Leave a row blank for no result. Riders see the standings on the ZRL page.</div>
     <table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:10px;color:#6b7280;text-transform:uppercase;text-align:left"><th>Team</th><th>Position</th><th>Teams started</th><th>Status</th><th>League pts</th><th>Note</th><th></th></tr></thead><tbody>${teams.map(t=>{ const en=entry(t); return `<tr class="zrl-res-row" data-team="${esc(t.id)}" data-score="${esc(en.score??'')}" data-fin="${esc(en.fin??'')}" data-fal="${esc(en.fal??'')}" data-fts="${esc(en.fts??'')}" data-best="${esc(en.best??'')}" style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px 5px 0;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}<div style="font-size:10px;color:#6b7280;font-weight:400">${esc([t.division,t.league].filter(Boolean).join(' · '))}</div><div class="rinfo" style="font-size:10px;color:#10B981;font-weight:400">${zrlRiderInfo(en)}</div></td>
       <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(en.pos||'')}" oninput="zrlResAuto(this)" style="width:64px"/></td>
@@ -2285,6 +2296,25 @@ function zrlCalcOpen(teamId){
   const rows=(lu.length?lu:(zrlTeamStats(zrlData).by[teamId]||[]).filter(x=>x.zwid).slice(0,zrlData.round.racing).map(x=>x.zwid)).map(z=>({ name:sg(z).name||String(z), cat:sg(z).cat||'', pos:'', fal:'', fts:'', time:'', noHr:false, zpower:false }));
   zrlCalc={ team:teamId, name:t.name, week:zrlResWeek, starters:(zrlCalc&&zrlCalc.starters)||'', rows, out:null, mode:'points' };
   renderZrl2();
+}
+async function zrlScoreAll(){
+  const e=zrlEv; if(!e||e.week===null||e.outsideRound) return;
+  const ttt=/time trial/i.test(e.event.subType||'');
+  const teams=e.teams.filter(t=>t.raced.length).map(t=>{ const set=t.lineupSet>0, racers=t.raced.filter(x=>!set||x.picked).slice(0,zrlData.round.racing);
+    return { team:t.id, riders:racers.map(x=>({ name:x.name, cat:x.cat||'', pos:x.position||'', time:x.time||'' })) }; });
+  let res,d; try{ res=await fetch('/api/zrl/score-all',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ mode:ttt?'ttt':'points', starters:e.event.finishers, teams })}); d=await res.json(); }catch(x){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  zrlResWeek=e.week; zrlCalc=null; renderZrl2();   // show this race's rows first; what is filled in below is not saved until Save race
+  const lines=[], rowOf=id=>[...document.querySelectorAll('.zrl-res-row')].find(r=>r.dataset.team===id);
+  for(const x of d.results){
+    const tr=rowOf(x.team), nm=(x.name||x.team).replace(/^CRYO-GEN\s+/,'');
+    if(x.error){ lines.push('⚠️ '+nm+': '+x.error); continue; }
+    if(!tr) continue;
+    if(ttt){ const r=x.result; tr.querySelector('.rn').value=r.dnq?'TTT: DNQ':'TTT team time '+r.teamClock; if(r.dnq){ tr.querySelector('.rx').value='dnq'; tr.querySelector('.rs').value=0; } lines.push((r.dnq?'❌ ':'✅ ')+nm+': '+(r.dnq?'DNQ ('+r.finishers+' finished)':r.teamClock)+(r.warnings.length&&!r.dnq?' · '+r.warnings[0]:'')); }
+    else { const r=x.result; Object.assign(tr.dataset,{ score:r.total, fin:r.totals.fin, fal:r.totals.fal, fts:r.totals.fts, best:r.bestRider??'' }); tr.querySelector('.rinfo').textContent=zrlRiderInfo({ score:r.total, ...r.totals }); lines.push('✅ '+nm+': '+r.total+' rider points'); }
+    if(x.belowClass.length){ if(!tr.querySelector('.rx').value) tr.querySelector('.rx').value='ineligible'; lines.push('   ⚠️ too strong for this class: '+x.belowClass.join(', ')+' (marked Ineligible: change it if that is wrong)'); }
+  }
+  alert('Race '+(e.week+1)+' scored for '+d.results.length+' team'+(d.results.length===1?'':'s')+'. Nothing is saved yet.\n\n'+lines.join('\n')+'\n\nNext: add each team\'s FAL and FTS points with its 🧮 button (they are not in the results), then type the position and teams started from WTRL, and press Save race.');
 }
 function zrlCalcFromEvent(teamId){
   const e=zrlEv, t=e&&e.teams.find(x=>x.id===teamId), team=t&&zrlData.round.teams.find(x=>x.id===teamId); if(!t||!team) return;

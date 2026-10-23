@@ -1199,17 +1199,28 @@ async function runTttSchedule(now = Date.now()){
 }
 
 const CRON_LAST_KEY = 'cg:cron:last';
+const CRON_FAILED_KEY = 'cg:cron:failed', CRON_ALERT_KEY = 'cg:cron:alerts';
 
 async function handleCron(req, res){
   const secret = process.env.CRON_SECRET;
   if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
   const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
   if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-  const ran = [...await runTttSchedule(), ...await zrl.runSchedule(), ...await runRidesSchedule()];
-  await backup.runBackup().catch(e => console.error('Backup:', e.message));   // quiet: not an event anyone needs to be told about
-  // The health panel reads this to show whether the scheduled workflow is really running.
-  await redis([['SET', CRON_LAST_KEY, new Date().toISOString()]]).catch(() => {});
-  sendJSON(res, 200, { ran });
+  // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
+  // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
+  const ran = [], failed = [];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  for (const [name, job] of jobs){
+    try { ran.push(...await job()); }
+    catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
+  }
+  for (const f of failed){
+    const [claimed] = await redis([['HSETNX', CRON_ALERT_KEY, `${f.job}:${Math.floor(Date.now() / 21600000)}`, new Date().toISOString()]]).catch(() => [0]);
+    if (claimed) await discord('zrl-admin', { content: `⚠️ **The scheduled ${f.job} job failed:** ${discordEscape(f.error)}\nIts reminders, posts or backups did not run this time. Check the health panel at ${SITE_URL}.` });
+  }
+  // The health panel reads these to show whether the scheduled workflow is really running, and whether a job is failing.
+  await redis([['SET', CRON_LAST_KEY, new Date().toISOString()], failed.length ? ['SET', CRON_FAILED_KEY, JSON.stringify({ at: new Date().toISOString(), failed })] : ['DEL', CRON_FAILED_KEY]]).catch(() => {});
+  sendJSON(res, 200, failed.length ? { ran, failed } : { ran });
 }
 
 // Earlier versions keyed sign-ups by name alone, so one rider could end up with two (a guest and a signed-in sign-up, or two
@@ -1574,6 +1585,8 @@ async function healthChecks(){
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
       if (!last) return ['warn', 'CRON_SECRET is set but no scheduled run has been recorded yet (the workflow runs every 15 minutes).'];
       const age = Date.now() - Date.parse(last);
+      const [bad] = await redis([['GET', CRON_FAILED_KEY]]);
+      if (bad) { const b = JSON.parse(bad); return ['fail', `Last scheduled run ${ago(age)}, but ${b.failed.map(f => `the ${f.job} job failed (${f.error})`).join('; ')}.`]; }
       if (age <= 45 * 60000) return ['ok', `Last scheduled run ${ago(age)}.`];
       // GitHub's own schedule often runs hours apart, so a gap alone is a warning; a day of silence is a failure.
       return [age <= 26 * 3600000 ? 'warn' : 'fail', `Last scheduled run ${ago(age)}. Expected every 15 minutes: without a QStash schedule (see README) the TTT only runs on time when someone opens the page.`];

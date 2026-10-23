@@ -57,3 +57,24 @@ test('team time trial: the team time is the fourth finisher, fewer than four is 
   assert.equal(bad.body.warnings.length, 2);
   assert.equal((await score({ mode: 'ttt', riders: [{ name: 'A', time: 'fast' }] })).status, 400);
 });
+
+test('score all: every team from one race in one call, with riders too strong for their class flagged and a bad team reported alone', async () => {
+  await app.post('/api/zrl/round', { name: 'Round 2', start: '2026-11-17', closes: h.ymd(10), weeks: 2 }, { token: admin });
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Ventoux', region: 'eu', grade: 'Open C' }, { name: 'CRYO-GEN Mint', region: 'eu', grade: 'Open B' }] }, { token: admin });
+  const all = (body, token = admin) => app.post('/api/zrl/score-all', body, { token });
+  assert.equal((await all({ teams: [] })).status, 400);
+  assert.equal((await all({ teams: [{ team: 'x' }] }, null)).status, 401);
+  const r = await all({ starters: 20, teams: [
+    { team: 'cryo-gen-ventoux', riders: [{ name: 'A', cat: 'C', pos: 1 }, { name: 'B', cat: 'B', pos: 4 }] },
+    { team: 'cryo-gen-mint', riders: [{ name: 'C', cat: 'C', pos: 30 }, { name: 'D', cat: 'B', pos: 2 }] },
+    { team: 'nope', riders: [] }] });
+  assert.equal(r.status, 200);
+  const [v, m, n] = r.body.results;
+  assert.equal(v.result.total, 20 + 10 + 17 + 4, 'finish plus podium points for both riders');
+  assert.deepEqual(v.belowClass, ['B'], 'a B rider is too strong for a C team');
+  assert.match(m.error, /more than the 20 starters/);
+  assert.deepEqual(m.belowClass, [], 'a C rider may ride a B team');
+  assert.match(n.error, /does not exist/);
+  const t = await all({ mode: 'ttt', teams: [{ team: 'cryo-gen-ventoux', riders: [{ name: 'A', time: 1800 }, { name: 'B', time: 1801 }, { name: 'C', time: 1802 }, { name: 'D', time: 1810 }] }] });
+  assert.equal(t.body.results[0].result.teamTime, 1810);
+});
