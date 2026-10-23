@@ -1927,7 +1927,7 @@ function renderZrlStaff(d){
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${tab('teams','🏷️ Teams',r.teams.length+(attention?' · '+attention+' to check':''),attention)}${tab('riders','👥 Riders',st.unplaced.length?st.unplaced.length+' unplaced':String(dem.riders),st.unplaced.length)}${tab('setup','⚙️ Setup','')}${tab('export','📋 WTRL list','')}${tab('weeks','📅 Weeks','')}${tab('results','🏆 Results','')}</div>
-    ${zrlHelpCard('staff')}${zrlEditorCard(d)}${body}`;
+    ${zrlReadyCard()}${zrlHelpCard('staff')}${zrlEditorCard(d)}${body}`;
 }
 async function zrlRecruit(region,name){
   if(!confirm('Post a "riders wanted" message for '+name+' to the club channel?')) return;
@@ -2296,6 +2296,24 @@ async function zrlRoundDelete(){
   if(c===null) return;
   if(await zrlPastPost('/api/zrl/round-delete',{ confirm:c.trim() })){ zrlPast=null; zrlPastOpen=null; loadZrl(); }
 }
+let zrlReady=null;
+async function zrlReadyLoad(){
+  zrlReady={ loading:true };
+  try{ const r=await fetch('/api/zrl/readiness',{headers:tttHeaders()}); zrlReady=r.ok?await r.json():{ error:'Could not work out readiness.' }; }catch(e){ zrlReady={ error:'Could not reach the server.' }; }
+  renderZrl2();
+}
+function zrlReadyCard(){
+  if(!zrlReady){ zrlReadyLoad(); return ''; }
+  const c=zrlReady; if(c.loading) return `<div class="card" style="padding:14px 16px;margin-bottom:14px;font-size:13px;color:#9ca3af">Checking the round…</div>`;
+  if(c.error) return `<div class="card" style="padding:14px 16px;margin-bottom:14px;font-size:13px;color:#FBBF24">${esc(c.error)}</div>`;
+  const col=c.ready?'#10B981':'#FBBF24', pct=Math.round(c.done/c.total*100);
+  const when=c.daysToFirstRace>0?`First race ${esc(c.firstRace)}, in ${c.daysToFirstRace} day${c.daysToFirstRace===1?'':'s'}.`:`First race ${esc(c.firstRace)}.`;
+  return `<details class="card" ${c.ready?'':'open'} style="padding:14px 16px;margin-bottom:14px;border-color:${c.ready?'rgba(16,185,129,0.3)':'rgba(251,191,36,0.3)'}">
+    <summary style="cursor:pointer;font-size:14px;font-weight:800">${c.ready?'✅':'🏁'} ${esc(c.round)} readiness <span style="color:${col}">${c.done} of ${c.total}</span> <span style="font-size:12px;font-weight:400;color:#9ca3af">${when}</span></summary>
+    <div style="height:6px;border-radius:99px;background:rgba(255,255,255,0.08);margin:10px 0"><div style="height:6px;border-radius:99px;width:${pct}%;background:${col}"></div></div>
+    ${c.items.map(i=>`<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><span>${i.state==='ok'?'✅':'⬜'}</span><div style="flex:1"><b>${esc(i.title)}</b><div style="font-size:12px;color:${i.state==='ok'?'#6b7280':'#FBBF24'}">${esc(i.detail)}</div></div>${i.state==='ok'?'':`<button onclick="zrlStaffGo('${i.go}')" style="padding:3px 10px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Fix</button>`}</div>`).join('')}
+    <button onclick="zrlReady=null;renderZrl2()" style="margin-top:8px;padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></details>`;
+}
 let zrlLog=null;
 async function zrlLogLoad(){
   try{ const r=await fetch('/api/zrl/log',{headers:tttHeaders()}); if(r.ok) zrlLog=(await r.json()).entries; else zrlLog=[]; }catch(e){ zrlLog=[]; }
@@ -2388,7 +2406,7 @@ async function zrlPost(path,body){
   try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); d=await res.json(); }
   catch(e){ alert('Could not reach the server. Please try again.'); return false; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
-  loadZrl(); return true;
+  zrlReady=null; loadZrl(); return true;
 }
 function zrlSubmit(inFlag){
   const regions=[...document.querySelectorAll('.zrl-region:checked')].map(x=>x.value);
