@@ -18,6 +18,8 @@ const BASE_ENV = {
   CRON_SECRET: 'cron-secret',
   DISCORD_WEBHOOK_PUBLIC: 'http://discord.test/public',
   DISCORD_WEBHOOK_ADMIN: 'http://discord.test/admin',
+  RATE_LIMIT_WRITES_PER_MIN: '100000',   // ordinary tests post far more than a person would; the limit has its own test
+  LOGIN_MAX_FAILS: '1000',
 };
 
 // Must run before the server module is loaded: some settings are read at load time.
@@ -95,6 +97,8 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'GET': return db[key] ?? null;
     case 'SET': if (a.includes('NX') && key in db) return null; db[key] = a[0]; return 'OK';
     case 'DEL': { let n = 0; for (const k of [key, ...a]) if (k in db) { delete db[k]; n++; } return n; }
+    case 'INCR': db[key] = (Number(db[key]) || 0) + 1; return db[key];
+    case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
     case 'HKEYS': return Object.keys(db[key] || {});
