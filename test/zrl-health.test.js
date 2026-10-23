@@ -10,7 +10,7 @@ const { healthRow } = require('../lib/zrl')({ HttpError, teamId: n => n, text: x
 
 const NOW = Date.parse('2026-11-01T12:00:00Z');
 const day = n => NOW + n * 86400000;
-const team = (id, captain = '1') => ({ id, name: id, region: 'eu', captain });
+const team = (id, captain = '1', slot = 'Tue 17:00 UTC') => ({ id, name: id, region: 'eu', captain, slot });
 const rider = (key, regions = ['eu']) => ({ key, name: key, in: true, regions });
 const round = (o = {}) => ({ id: 'r', name: 'Round 2', open: false, published: true, start: '2026-11-17', closesAt: new Date(day(-3)).toISOString(), teams: [team('a')], ...o });
 const row = (r, signups = [rider('x')], assign = { x: 'a' }, now = NOW) => healthRow({ round: r, signups, assign }, now);
@@ -37,6 +37,15 @@ test('rosters not published close to the first race, riders without a team, and 
   assert.equal(unplaced[0], 'warn'); assert.match(unplaced[1], /1 rider has no team/);
   const bare = row(round({ teams: [team('a', '')] }));
   assert.equal(bare[0], 'warn'); assert.match(bare[1], /1 team has no captain/);
+});
+
+test('teams with riders but no race time are flagged once sign-ups are over; empty teams are not', () => {
+  const noTime = row(round({ teams: [team('a', '1', '')] }));
+  assert.equal(noTime[0], 'warn'); assert.match(noTime[1], /1 team has riders but no race time/);
+  const both = row(round({ teams: [team('a', '', ''), team('b', '1', '')] }), [rider('x'), rider('y')], { x: 'a', y: 'b' });
+  assert.match(both[1], /1 team has no captain\. 2 teams have riders but no race time/, 'several problems are listed together');
+  assert.equal(row(round({ teams: [team('a'), team('empty', '', '')] }))[0], 'ok', 'a team with nobody in it needs neither');
+  assert.equal(row(round({ open: true, published: false, start: '2027-01-12', closesAt: new Date(day(5)).toISOString(), teams: [team('a', '', '')] }))[0], 'ok', 'while sign-ups are open and nothing is published it is too early to nag');
 });
 
 test('a healthy round reports its numbers', () => {
