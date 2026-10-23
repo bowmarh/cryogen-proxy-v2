@@ -1460,7 +1460,7 @@ async function healthChecks(){
       if (week.open && !sch.closesAt) return ['warn', `${state} No close time is set, so it won't close by itself.`];
       return ['ok', `${state}${week.open && sch.closesAt ? ` Closes ${ukWhen(sch.closesAt)}.` : ''} Next week starts ${ukWhen(sch.nextWeekAt)}.`];
     }),
-    run('zrl', 'ZRL round', async () => zrl.healthRow({ ...await zrl.load(), weekly: await zrl.loadWeekly() })),
+    run('zrl', 'ZRL round', async () => zrl.healthRow(await zrl.load())),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);

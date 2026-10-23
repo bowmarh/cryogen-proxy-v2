@@ -83,3 +83,15 @@ test('a race within three days warns about teams without a full line-up, and not
   assert.match(data(none, dayOf + 5 * 86400000)[1], /race 2 \(2026-11-24\)/, 'then it looks at race 2');
   assert.equal(healthRow({ round: r, signups: [rider('x')], assign: { x: 'a' } }, dayOf - 86400000)[0], 'ok', 'no weekly data, no warning');
 });
+
+test('with a WTRL deadline set, the teams not registered are counted; without one it stays quiet', () => {
+  const r = round({ teams: [team('a'), team('b')], wtrlDeadline: new Date(day(4)).toISOString() });
+  const run = (weekly, rr = r) => healthRow({ round: rr, signups: [rider('x'), rider('y')], assign: { x: 'a', y: 'b' }, weekly }, NOW);
+  const none = { avail: {}, lineup: {}, reg: {} };
+  const open = run(none);
+  assert.equal(open[0], 'warn'); assert.match(open[1], /2 teams are not registered on WTRL; 4 days to the deadline/);
+  assert.match(run({ ...none, reg: { a: 'x' } })[1], /1 team is not registered on WTRL/);
+  assert.equal(run({ ...none, reg: { a: 'x', b: 'x' } })[0], 'ok');
+  assert.match(run(none, { ...r, wtrlDeadline: new Date(day(-1)).toISOString() })[1], /the deadline has passed/);
+  assert.equal(run(none, { ...r, wtrlDeadline: undefined })[0], 'ok', 'no deadline, no warning');
+});

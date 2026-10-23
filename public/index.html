@@ -1829,7 +1829,7 @@ function renderZrlStaff(d){
   else if(zrlStaffTab==='riders') body=zrlRidersTab(d,st);
   else if(zrlStaffTab==='weeks') body=zrlWeeksTab();
   else if(zrlStaffTab==='export') body=zrlExportCard(d)||`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Put riders on teams first, then the registration list appears here.</div>`;
-  else body=`${zrlStaffPanel(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}`;
+  else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}`;
   return `<div style="margin-bottom:12px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
@@ -1854,7 +1854,8 @@ function zrlTeamsTab(d,st){
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#9ca3af">${esc(zone)}</span><span style="font-weight:700;color:${n>size?'#FBBF24':'#e5e7eb'}">${n}/${size}</span></div>
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:8px"><div style="height:5px;width:${pct}%;background:${barColor};border-radius:3px"></div></div>
       <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#4b5563')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
-      <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(t.slot):(n?'no race time':'')}</div></div>`;
+      <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(t.slot):(n?'no race time':'')}</div>
+      ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}</div>`;
   };
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>
     ${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
@@ -1875,7 +1876,7 @@ function zrlTeamDetail(d,st){
   return `<div id="zrl-team-detail" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.4)">
     <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:16px;font-weight:800">${esc(t.name)}</div>
       <div style="font-size:12px;color:#6b7280">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'')}</div></div>
-      <button onclick="zrlOpenTeam('${esc(t.id)}')" style="${btn}">✕ Close</button></div>
+      <button onclick="zrlWtrlMark('${esc(t.id)}',${!t.wtrlRegistered})" style="${btn}">${t.wtrlRegistered?'✅ On WTRL (undo)':'☐ Mark registered on WTRL'}</button> <button onclick="zrlOpenTeam('${esc(t.id)}')" style="${btn}">✕ Close</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
       <div>${lbl('Time zone')}<select class="inp" onchange="zrlTeamZone('${esc(t.id)}',this.value)" style="width:auto">${r.regions.map(z=>`<option value="${esc(z.id)}" ${t.region===z.id?'selected':''}>${esc(z.name)}</option>`).join('')}</select></div>
       <div>${lbl('Race time')}<div style="display:flex;gap:6px"><input id="zrl-td-slot" class="inp" list="zrl-slots" maxlength="40" value="${esc(t.slot||'')}" placeholder="Tue 17:00 UTC" style="width:170px"/><button onclick="zrlTeamSlot('${esc(t.id)}')" style="${btn}">Save</button></div>
@@ -1928,6 +1929,17 @@ function zrlAvailHtml(m){
       <div style="display:flex;gap:4px">${ZRL_AVAIL.map(([v,l])=>btn(w,v,l)).join('')}</div>
       <div style="font-size:12px;color:${w.picked?'#10B981':'#6b7280'}">${w.picked?'🏁 You are in the line-up':w.lineupSet?'Line-up: '+esc(w.lineup.join(', ')):'Line-up not picked yet'}</div></div>`).join('')}</div>`;
 }
+function zrlWtrlMark(team,registered){ zrlPost('/api/zrl/wtrl-registered',{ team, registered }); }
+function zrlWtrlDeadlineSave(){ zrlPost('/api/zrl/wtrl-deadline',{ date:document.getElementById('zrl-wtrl-date').value }); }
+const zrlDeadlineText=iso=>iso?new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/London'}):'';
+function zrlWtrlCard(d){
+  const r=d.round, playing=r.teams.filter(t=>(zrlTeamStats(d).by[t.id]||[]).length), done=playing.filter(t=>t.wtrlRegistered).length;
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const cur=r.wtrlDeadline?new Date(r.wtrlDeadline).toLocaleDateString('en-CA',{timeZone:'Europe/London'}):'';
+  return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">WTRL registration (staff)</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Captains register their team on WTRL by hand, then tick <b>Registered on WTRL</b> in their ZRL page. <b style="color:${done===playing.length&&playing.length?'#10B981':'#FBBF24'}">${done} of ${playing.length} teams registered.</b>${r.wtrlDeadline?` Deadline ${esc(zrlDeadlineText(r.wtrlDeadline))}: the admin channel is told three days before, and the health panel counts the rest.`:' Set the deadline and the health panel and Discord start chasing.'}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="zrl-wtrl-date" class="inp" type="date" value="${esc(cur)}" style="width:170px"/><button onclick="zrlWtrlDeadlineSave()" style="${btn}">Save deadline</button></div></div>`;
+}
 function zrlLineupSave(team,week){
   const zwids=[...document.querySelectorAll(`.zl-${CSS.escape(team)}-${week}:checked`)].map(x=>x.value);
   zrlPost('/api/zrl/lineup',{ team, week, zwids });
@@ -1970,6 +1982,7 @@ function zrlMyCard(){
       ${zrlLineupHtml(t,m.round.racing)}
       ${t.issues.length?`<div style="font-size:12px;color:#fbbf24;margin-top:8px">To sort out: ${esc(t.issues.join(', '))}. Tell the staff in Discord.</div>`:''}
       <div style="margin-top:10px"><button onclick="zrlCopy('${a}',this)" style="${btn}">Copy team details</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></div>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button onclick="zrlWtrlMark('${esc(t.id)}',${!t.registered})" style="${btn};${t.registered?'border-color:rgba(16,185,129,0.5);color:#10B981':''}">${t.registered?'✅ Registered on WTRL (tap to undo)':'☐ I have registered on WTRL'}</button>${m.round.wtrlDeadline&&!t.registered?`<span style="font-size:12px;color:#FBBF24">Deadline ${esc(zrlDeadlineText(m.round.wtrlDeadline))}</span>`:''}</div>
       <div style="font-size:11px;color:#4b5563;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
   });
   if(m.team){
