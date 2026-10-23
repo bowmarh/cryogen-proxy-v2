@@ -1305,6 +1305,8 @@ function tttStaffPanel(d){
       <button onclick="if(confirm('Remove every rider from every team? You can then auto-assign again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear assignments</button>
       <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" class="tab" style="${w.published?'':'color:#10B981;border-color:rgba(16,185,129,0.3)'}">${w.published?'🙈 Unpublish line-ups':'📣 Publish line-ups'}</button>
       <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
+      ${w.open?`<button onclick="tttRecruit()" class="tab">📣 Ask for riders</button>`:''}
+      <button onclick="tttExport('lineups')" class="tab">⬇ Line-ups (CSV)</button>
       <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
     </div>
     ${tttSummaryBox()}
@@ -1339,6 +1341,16 @@ function tttTeamsEditor(w){
 function tttSaveTeams(){
   const teams=document.getElementById('ttt-teams').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const [name,level,zone,max]=l.split('|').map(x=>(x||'').trim());return{name,level,zone,max};});
   tttWrite('/api/ttt/teams',{teams}).then(ok=>{if(ok){tttEditingTeams=false;renderTtt();}});
+}
+async function tttRecruit(){
+  if(!confirm('Post a message to the club channel asking for more riders?')) return;
+  let res,d; try{ res=await fetch('/api/ttt/recruit',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
+async function tttExport(kind,season){
+  let res,d; try{ res=await fetch('/api/ttt/export?kind='+kind+(season?'&season='+encodeURIComponent(season):''),{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
 }
 function tttNewWeek(){
   const next=new Date(); next.setDate(next.getDate()+((3-next.getDay()+7)%7||7)); // next Wednesday
@@ -2415,7 +2427,7 @@ function renderSeason(d){
   const defined=d.seasons.filter(x=>x.id!=='all'&&x.id!=='before');
   const weekDate=(typeof tttData!=='undefined'&&tttData&&tttData.week&&tttData.week.date)||new Date().toISOString().slice(0,10);
   const manage=staff?`<div class="card" style="padding:14px 16px;margin-top:20px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">Seasons (staff)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Seasons (staff)</div><button onclick="tttExport('results',seasonId||'')" class="tab" style="font-size:12px">⬇ This season's results (CSV)</button></div>
       ${defined.length?defined.map(x=>`<div style="display:flex;align-items:center;gap:10px;font-size:13px;padding:4px 0"><span style="flex:1"><b>${esc(x.name)}</b> <span style="color:#6b7280">from ${esc(seasonDay(x.start))}</span></span><button data-id="${esc(x.id)}" data-name="${esc(x.name)}" onclick="removeSeasonUi(this.dataset.id,this.dataset.name)" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px">Remove</button></div>`).join(''):'<div style="font-size:12px;color:#6b7280;margin-bottom:6px">No seasons yet, so this page covers every week.</div>'}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <input id="season-name" class="inp" maxlength="40" placeholder="e.g. Season ${defined.length+(d.seasons.some(x=>x.id==='before')?2:1)}" style="flex:1;min-width:150px"/>
