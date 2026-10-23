@@ -267,6 +267,7 @@ table{width:100%;border-collapse:collapse}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
       <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
+      <button id="rides-export-btn" onclick="ridesExport()" style="display:none;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">⬇ RSVPs (CSV)</button>
     </div>
     <div id="rides-list"></div>
   </div>
@@ -627,6 +628,7 @@ async function ssoLogin(token){
   const rider=riders.find(x=>String(x.id)===me.zwid);
   if(!rider){ sessionStorage.removeItem('token'); showSsoError('Your Zwift ID ('+me.zwid+') is not on the club roster yet. Ask a moderator.'); return; }
   sessionStorage.setItem('memberRider',JSON.stringify(rider));
+  sessionStorage.setItem('memberName',me.name||'');   // RSVPs are stored under this name, which can differ from the roster's
   sessionStorage.setItem('sso','1');
   memberRider=rider;
   launchApp('member');
@@ -1377,7 +1379,11 @@ function renderTtt(){
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
-  const allRides = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const everyRide = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const todayStr = new Date().toISOString().slice(0,10);
+  const allRides = everyRide.filter(r=>String(r.date)>=todayStr), pastRides = everyRide.filter(r=>String(r.date)<todayStr).reverse();
+  const xb=document.getElementById('rides-export-btn'); if(xb) xb.style.display=(role==='admin'||role==='mod')?'inline-block':'none';
+  renderMyRides();
   document.getElementById('rides-list').innerHTML=(sharedError?`<div class="card" style="padding:12px 16px;margin-bottom:16px;border-color:rgba(251,191,36,0.3);color:#FBBF24;font-size:13px">⚠️ ${esc(sharedError)}</div>`:'')+allRides.map(ride=>{
     const att=rsvps[ride.id]||[];const max=parseInt(ride.max)||25;const left=max-att.length;const rid=esc(ride.id);const pct=Math.min(att.length/max*100,100);
     return`<div class="card" style="padding:20px;margin-bottom:16px">
@@ -1414,7 +1420,22 @@ function renderRides(){
           ? `<a href="${safeUrl(ride.link)}" target="_blank" rel="noopener" style="display:block;width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);text-align:center;text-decoration:none">View on Zwift →</a>`
           : `<button data-ride="${rid}" onclick="rsvpId=this.dataset.ride;renderRides()" style="width:100%;padding:9px;border-radius:8px;font-weight:700;font-size:13px;background:${left<=0?'rgba(255,255,255,0.04)':'rgba(0,212,255,0.1)'};color:${left<=0?'#6b7280':'#00D4FF'};border:1px solid ${left<=0?'rgba(255,255,255,0.06)':'rgba(0,212,255,0.2)'}">${left<=0?'Join Waitlist':'RSVP →'}</button>`}
     </div>`;
-  }).join('');
+  }).join('')+(pastRides.length?`<details class="card" style="padding:10px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-size:13px;font-weight:700">Past rides (${pastRides.length})</summary>${pastRides.slice(0,30).map(r=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)"><span>${esc(r.title)}</span><span style="color:#9ca3af;white-space:nowrap">${esc(new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))} · 👥 ${(rsvps[r.id]||[]).length}</span></div>`).join('')}</details>`:'');
+}
+async function ridesExport(){
+  let res,d; try{ res=await fetch('/api/rides/export',{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
+}
+function renderMyRides(){
+  const el=document.getElementById('my-rides'); if(!el) return;
+  const names=[(memberRider&&memberRider.name)||'', (function(){ try{ return sessionStorage.getItem('memberName')||''; }catch(e){ return ''; } })()].map(x=>x.toLowerCase()).filter(Boolean); if(!names.length){ el.innerHTML=''; return; }
+  const today=new Date().toISOString().slice(0,10);
+  const mine=rides.filter(r=>(rsvps[r.id]||[]).some(x=>names.includes(x.name.toLowerCase()))).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const next=mine.filter(r=>r.date>=today), past=mine.length-next.length;
+  el.innerHTML=`<div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:10px">🚴 My rides</div>
+    ${next.length?next.map(r=>`<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1"><b>${esc(r.title)}</b> <span style="color:#9ca3af">· ${esc(new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}))}${r.time?' · '+esc(r.time):''}</span></div>${safeUrl(r.link)?`<a href="${safeUrl(r.link)}" target="_blank" rel="noopener" style="font-size:11px;color:#00D4FF">Zwift event →</a>`:''}</div>`).join(''):'<div style="font-size:13px;color:#9ca3af">You have no rides coming up. <a href="#" onclick="showTab(\'rides\',[...document.querySelectorAll(\'#main-nav .navbtn\')].find(b=>/Social Rides/.test(b.textContent)));return false" style="color:#00D4FF">Find a ride →</a></div>'}
+    ${past?`<div style="font-size:11px;color:#6b7280;margin-top:8px">${past} earlier ride${past===1?'':'s'} you RSVP'd to.</div>`:''}</div>`;
 }
 function confirmRsvp(id){
   const name=(document.getElementById('rsvp-'+id)||{value:''}).value.trim();
@@ -1472,6 +1493,7 @@ function renderProfile(){
 
     <div id="my-ttt" style="margin-bottom:24px"></div>
     <div id="my-zrl" style="margin-bottom:24px"></div>
+    <div id="my-rides" style="margin-bottom:24px"></div>
 
     <div class="stat4" style="margin-bottom:24px">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">FTP</div><div style="font-size:22px;font-weight:900;color:#00D4FF">${r.ftp}w</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${r.wkg} w/kg @ 20min</div></div>
@@ -1514,6 +1536,7 @@ function renderProfile(){
   ;
   loadMyTtt();
   loadMyZrl();
+  renderMyRides();
 }
 
 // ── ZRL page ───────────────────────────────────────────────

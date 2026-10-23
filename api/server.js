@@ -24,6 +24,7 @@ const KEYS = {
   locks: 'cg:locks',     // field "<series>" -> "1"
   rides: 'cg:rides',     // field "<ride id>" -> ride JSON
   rsvps: 'cg:rsvps',     // field "<ride id>|<lowercase name>"
+  rideSent: 'cg:rides:sent', // field "<ride id>:reminder" -> ISO time, so a ride is announced once
 };
 
 const ROLE_PASSWORD_ENV = { admin: 'ADMIN_PASSWORD', mod: 'MOD_PASSWORD' };
@@ -276,6 +277,21 @@ const DATA_ROUTES = {
       cat: text(body.cat, 'category', 20, false) || 'All',
     };
     await redis([['HSET', KEYS.rides, ride.id, JSON.stringify(ride)]]);
+  },
+
+  // Staff: who has RSVP'd, as a spreadsheet (CSV): every ride from today on, or one ride (?id=). Formula-looking names are neutralised.
+  'GET /api/rides/export': async (req) => {
+    requireRole(req, ['admin', 'mod']);
+    const id = String(parseRequestUrl(req).query.id || '');
+    const state = await loadState();
+    const today = new Date().toISOString().slice(0, 10);
+    const cell = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const rides = state.rides.filter(r => (id ? r.id === id : r.date >= today)).sort((a, b) => a.date.localeCompare(b.date));
+    if (id && !rides.length) throw new HttpError(404, 'That ride was not found.');
+    const rows = [['Ride', 'Date', 'Time', 'Rider', 'RSVP made']];
+    for (const r of rides) for (const x of state.rsvps[r.id] || []) rows.push([r.title, r.date, r.time || '', x.name, x.ts || '']);
+    if (rows.length === 1) throw new HttpError(409, 'Nobody has RSVP\'d yet.');
+    return { filename: `rsvps-${id ? 'ride' : 'upcoming'}-${today}.csv`, csv: rows.map(r => r.map(cell).join(',')).join('\n') };
   },
 
   'POST /api/rides/remove': async (req, body) => {
@@ -1120,7 +1136,7 @@ async function handleCron(req, res){
   if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
   const given = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '';
   if (!passwordMatches(given, secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-  const ran = [...await runTttSchedule(), ...await zrl.runSchedule()];
+  const ran = [...await runTttSchedule(), ...await zrl.runSchedule(), ...await runRidesSchedule()];
   await backup.runBackup().catch(e => console.error('Backup:', e.message));   // quiet: not an event anyone needs to be told about
   // The health panel reads this to show whether the scheduled workflow is really running.
   await redis([['SET', CRON_LAST_KEY, new Date().toISOString()]]).catch(() => {});
@@ -1163,6 +1179,25 @@ async function handleTtt(tttRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await tttRoute(req, body);
   sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
+}
+
+// A club-created ride that is today or tomorrow (UTC date) is announced once in the club channel: when, where, how many are riding and how many
+// places are left. Rides copied in from the club sheet have no RSVPs here, so they are not announced.
+async function runRidesSchedule(now = Date.now()){
+  const state = await loadState();
+  const today = new Date(now).toISOString().slice(0, 10), tomorrow = new Date(now + DAY_MS).toISOString().slice(0, 10);
+  const done = [];
+  for (const ride of state.rides){
+    if (ride.date !== today && ride.date !== tomorrow) continue;
+    const [claimed] = await redis([['HSETNX', KEYS.rideSent, `${ride.id}:reminder`, new Date(now).toISOString()]]);
+    if (!claimed) continue;
+    const going = (state.rsvps[ride.id] || []).length, max = parseInt(ride.max, 10) || 25;
+    const details = [ride.route && `📍 ${ride.route}`, ride.dist && `📏 ${ride.dist}`, ride.pace && `⚡ ${ride.pace}`].filter(Boolean).map(discordEscape).join(' · ');
+    const link = ride.link && !/[<>\s]/.test(ride.link) ? `\nZwift event: <${ride.link}>` : '';
+    await discord('public', { content: `🚴 **${discordEscape(ride.title)}** is ${ride.date === today ? 'today' : 'tomorrow'}${ride.time ? ` at ${discordEscape(ride.time)}` : ''}.${details ? `\n${details}` : ''}\n${going} riding, ${Math.max(0, max - going)} place${max - going === 1 ? '' : 's'} left. RSVP: ${SITE_URL} → 🚴 Social Rides${link}` });
+    done.push('ride-reminder');
+  }
+  return done;
 }
 
 async function handleData(dataRoute, req, res){
