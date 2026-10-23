@@ -50,3 +50,21 @@ test('a web page instead of data is called out, and only the start of it is retu
   const r = await look('?id=5'); assert.equal(r.status, 200);
   assert.equal(r.body.isPage, true); assert.equal(r.body.shape, 'a web page, not data'); assert.ok(r.body.body.length <= 600);
 });
+
+test('probe: every endpoint on both addresses at once, summarised, with no key in the answer', async () => {
+  const probe = (q, token = admin) => app.get(`/api/zrl/zr-probe${q}`, { token });
+  assert.equal((await probe('?rider=1&event=2', null)).status, 401);
+  assert.equal((await probe('?rider=1&event=2', mod)).status, 403);
+  assert.equal((await probe('?rider=x&event=2')).status, 400);
+  assert.equal((await probe('?rider=1')).status, 400);
+  world.zr = { status: 200, body: { riders: [{ id: 1 }], total: 1 }, seen: [] };
+  const r = await probe('?rider=77&event=88');
+  assert.equal(r.status, 200); assert.equal(r.body.probes.length, 6);
+  assert.deepEqual(world.zr.seen.map(x => x.path).sort(), ['/api/public/results/88', '/api/public/results/88', '/api/public/riders/77', '/api/public/riders/77', '/api/v2/public/categories', '/api/v2/public/categories']);
+  assert.ok(world.zr.seen.every(x => x.auth === 'zr-secret-key'));
+  assert.deepEqual(r.body.probes[0], { name: 'categories', host: 'site', url: 'https://zwiftracing.app/api/v2/public/categories', status: 200, ms: r.body.probes[0].ms, kind: 'json', sample: 'keys: riders, total' });
+  assert.ok(!JSON.stringify(r.body).includes('zr-secret-key'));
+  world.zr = { status: 200, body: '<!DOCTYPE html><html><body>nope</body></html>', seen: [] };
+  const pages = (await probe('?rider=77&event=88')).body.probes;
+  assert.ok(pages.every(x => x.kind === 'page' && /website/.test(x.sample)));
+});
