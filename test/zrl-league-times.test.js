@@ -9,7 +9,7 @@ let app, admin;
 before(async () => { app = await h.startApp(h.createWorld()); admin = await app.login('admin'); });
 after(() => app.close());
 
-const LEAGUES = ['Pink', 'Mint', 'Lavender', 'Royal', 'Yellow league', 'Ruby', 'Crimson', 'Saffron', 'Nonsense'];
+const LEAGUES = ['Pink', 'Mint', 'Lavender', 'Royal', 'Yellow league', 'Ruby', 'Crimson', 'Orange', 'Saffron', 'Nonsense'];
 const setup = async start => {
   app.world.db = {};
   await app.post('/api/zrl/round', { name: 'R', start, closes: h.ymd(10) }, { token: admin });
@@ -28,15 +28,16 @@ test('the times match the WTRL table on race 1 of the season (22 Sep 2026)', asy
 test('after the clocks change the UTC times follow each city (17 Nov 2026)', async () => {
   await setup('2026-11-17');
   const s = await slots();
-  assert.deepEqual([s.Pink, s.Mint, s.Lavender, s.Royal, s['Yellow league'], s.Ruby, s.Crimson, s.Saffron],
-    ['Tue 08:30 UTC', 'Tue 18:15 UTC', 'Tue 01:30 UTC', 'Tue 19:45 UTC', 'Tue 09:30 UTC', 'Tue 11:00 UTC', 'Tue 06:30 UTC', 'Tue 12:00 UTC']);
+  assert.deepEqual([s.Pink, s.Mint, s.Lavender, s.Royal, s['Yellow league'], s.Ruby, s.Crimson, s.Orange],
+    ['Tue 08:30 UTC', 'Tue 18:15 UTC', 'Tue 01:30 UTC', 'Tue 19:45 UTC', 'Tue 09:30 UTC', 'Tue 11:00 UTC', 'Tue 06:30 UTC', 'Tue 11:00 UTC']);
+  // Calgary-anchored leagues (Saffron, Lilac) are left out on purpose: they follow the runtime's tz database, which can differ between machines.
 });
 
 test('applying is staff only, sets recognised leagues and leaves the rest alone', async () => {
   await setup('2026-11-17');
   assert.equal((await app.post('/api/zrl/league-times', {}, {})).status, 401);
   const r = await app.post('/api/zrl/league-times', {}, { token: admin });
-  assert.deepEqual([r.body.changed, r.body.skipped], [8, 1]);
+  assert.deepEqual([r.body.changed, r.body.skipped], [9, 1]);
   const t = Object.fromEntries((await app.get('/api/zrl', { token: admin })).body.round.teams.map(x => [x.league, x.slot]));
   assert.equal(t.Pink, 'Tue 08:30 UTC'); assert.equal(t.Nonsense, 'old');
   assert.equal((await app.post('/api/zrl/league-times', {}, { token: admin })).body.changed, 0, 'second run changes nothing');
