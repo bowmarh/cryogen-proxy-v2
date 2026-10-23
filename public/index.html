@@ -160,7 +160,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
-      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex';loadHealth();loadBackups()">⚙️ Admin</button>
+      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex';loadHealth();loadBackups()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
     </div>
   </aside>
 
@@ -545,6 +545,21 @@ function launchApp(r){
 }
 function doLogout(){sessionStorage.clear();location.reload();}
 
+// A small red / amber / green dot on the Admin button, refreshed every few minutes, so problems show without opening the panel.
+let healthDotTimer=null;
+function healthDotSet(checks){
+  const el=document.getElementById('health-dot'); if(!el) return;
+  const fail=checks.filter(c=>c.status==='fail').length, warn=checks.filter(c=>c.status==='warn').length;
+  el.style.display='inline-block'; el.style.background=fail?'#ef4444':warn?'#FBBF24':'#10B981';
+  el.title=fail?fail+' failing'+(warn?', '+warn+' to look at':''):warn?warn+' to look at':'All checks are fine';
+}
+async function healthDotRefresh(){
+  try{ const res=await fetch('/api/health',{headers:tttHeaders()}); if(!res.ok) return; healthDotSet((await res.json()).checks||[]); }catch(e){ /* the dot just stays as it was */ }
+}
+function healthDotStart(){
+  healthDotRefresh();
+  if(!healthDotTimer) healthDotTimer=setInterval(()=>{ if(document.visibilityState==='visible'&&role==='admin') healthDotRefresh(); },300000);
+}
 // ── Backups (admin) ────────────────────────────────────────
 async function backupCall(path,body){
   const res=await fetch(path,body===undefined?{headers:tttHeaders()}:{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)});
@@ -583,6 +598,7 @@ async function loadHealth(){
     const d=await res.json();
     if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
     const icon={ok:'✅',warn:'⚠️',fail:'❌',info:'ℹ️'};
+    healthDotSet(d.checks);
     const count=k=>d.checks.filter(c=>c.status===k).length;
     el.innerHTML=`<div style="margin-bottom:8px;color:#9ca3af">${count('fail')?`<b style="color:#f87171">${count('fail')} failing</b> · `:''}${count('warn')?`<b style="color:#FBBF24">${count('warn')} to look at</b> · `:''}${count('ok')} OK · checked ${esc(new Date(d.checked).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</div>`+
       d.checks.map(c=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[c.status]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(c.label)}</div><div style="color:${c.status==='fail'?'#f87171':c.status==='warn'?'#FBBF24':'#9ca3af'}">${esc(c.detail)}</div></div></div>`).join('');
@@ -622,7 +638,7 @@ function setupRole(){
   const b=badges[role];
   const rb=document.getElementById('role-badge');
   rb.textContent=b.text; rb.style.background=b.bg; rb.style.color=b.color;
-  if(role==='admin'){document.getElementById('nav-admin-btn').style.display='flex';}
+  if(role==='admin'){document.getElementById('nav-admin-btn').style.display='flex'; healthDotStart();}
   if(role==='member'){
     document.getElementById('nav-profile').style.display='flex';
     document.getElementById('new-ride-btn').style.display='none';
@@ -1872,7 +1888,7 @@ function renderZrlStaff(d){
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${tab('teams','🏷️ Teams',r.teams.length+(attention?' · '+attention+' to check':''),attention)}${tab('riders','👥 Riders',st.unplaced.length?st.unplaced.length+' unplaced':String(dem.riders),st.unplaced.length)}${tab('setup','⚙️ Setup','')}${tab('export','📋 WTRL list','')}${tab('weeks','📅 Weeks','')}${tab('results','🏆 Results','')}</div>
-    ${zrlEditorCard(d)}${body}`;
+    ${zrlHelpCard('staff')}${zrlEditorCard(d)}${body}`;
 }
 async function zrlRecruit(region,name){
   if(!confirm('Post a "riders wanted" message for '+name+' to the club channel?')) return;
@@ -2034,6 +2050,16 @@ async function zrlWeeklyLoad(){
   if(zrlStaffTab==='weeks') renderZrl2();
 }
 let zrlStand=null, zrlResWeek=0;
+function zrlHelpCard(kind){
+  const steps={
+    rider:['<b>Sign up</b> below: tick the time zones you can race and your category. You can change it until sign-ups close.','<b>Wait for the rosters.</b> When the club publishes them, your team, race time and captain appear under <i>Your team</i>.','<b>Tell your captain each week</b> whether you can race: tap Yes, Maybe or No for each race.','<b>Check the line-up.</b> It shows under <i>Your team</i> once the captain has picked the five.'],
+    captain:['<b>Register your team on WTRL</b> (wtrl.racing/zrl): open <i>You captain this team</i>, press Copy team details, paste it into WTRL, then tick <b>I have registered on WTRL</b>.','<b>Each race, pick your five</b> from the riders who can race, then Save line-up. Riders who said No cannot be picked.','<b>Short of riders?</b> Press 🔎 Find subs: it shows your bench and riders with no team. Ask the staff to add someone to your roster.','Tell the staff in Discord if something is wrong with your team (the to-do list on your card).'],
+    staff:['<b>Start the round</b> and open sign-ups (Setup). Import the team board and sign-ups, then <b>Suggest teams</b> and apply.','<b>Captains and race times:</b> bulk captain picker on the Teams tab; <b>Use WTRL times</b> in Setup sets each league\'s time.','<b>Publish the rosters</b>, set the <b>WTRL deadline</b> and tell captains to register and tick it.','<b>Each race week:</b> riders answer, captains pick five (📅 Weeks shows the gaps; reminders go out by themselves). Enter results in 🏆 Results.','<b>Between rounds:</b> start the next round with <i>Carry over the riders</i>; the old one is kept under Past rounds.']
+  }[kind];
+  const title={rider:'How the ZRL works for riders',captain:'Captain: what to do',staff:'Staff checklist for a round'}[kind];
+  return `<details class="card" style="padding:10px 16px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:700">❓ ${title}</summary>
+    <ol style="margin:8px 0 2px 18px;padding:0;font-size:13px;color:#d1d5db;line-height:1.55">${steps.map(x=>`<li style="margin-bottom:4px">${x}</li>`).join('')}</ol></details>`;
+}
 async function zrlStandLoad(){
   try{ const r=await fetch('/api/zrl/standings',{headers:tttHeaders()}); if(r.ok) zrlStand=await r.json(); }catch(e){}
   const el=document.getElementById('zrl-standings'); if(el) el.innerHTML=zrlStandingsHtml();
@@ -2165,7 +2191,7 @@ function renderZrl(d){
   const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
   return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
-    ${zrlMyCard()}<div id="zrl-standings">${zrlStandingsHtml()}</div>${zrlSignupCard(d)}
+    ${zrlHelpCard(zrlMy&&zrlMy.captainOf&&zrlMy.captainOf.length?'captain':'rider')}${zrlMyCard()}<div id="zrl-standings">${zrlStandingsHtml()}</div>${zrlSignupCard(d)}
     ${h3('Where we need riders')}<div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     ${h3('Who is in ('+dem.riders+')'+(staff?' <button onclick="zrlEditStart(\'new\')" style="margin-left:8px;padding:2px 10px;font-size:11px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;cursor:pointer;text-transform:none">+ Add a rider</button>':''))}${staff?zrlEditorCard(d):''}${zrlPoolTable(d,staff)}
     ${staff?zrlStaffPanel(d):''}`;
