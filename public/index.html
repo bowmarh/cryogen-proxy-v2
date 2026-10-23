@@ -2080,10 +2080,10 @@ async function zrlResultsSave(){
 }
 let zrlZr=null;
 async function zrlZrFetch(){
-  const id=document.getElementById('zrl-zr-id').value.trim(), src=document.getElementById('zrl-zr-src').value;
-  zrlZr={ loading:true }; renderZrl2();
-  let r,d; try{ r=await fetch('/api/zrl/zr-event?id='+encodeURIComponent(id)+'&source='+src,{headers:tttHeaders()}); d=await r.json(); }catch(e){ zrlZr={ error:'Could not reach the server.' }; renderZrl2(); return; }
-  zrlZr=r.ok?{ ...d, id, src }:{ error:d.error||('Request failed ('+r.status+')'), id, src }; renderZrl2();
+  const id=document.getElementById('zrl-zr-id').value.trim(), kind=document.getElementById('zrl-zr-kind').value, host=document.getElementById('zrl-zr-host').value;
+  zrlZr={ loading:true, id, kind, host }; renderZrl2();
+  let r,d; try{ r=await fetch('/api/zrl/zr-event?id='+encodeURIComponent(id)+'&kind='+kind+'&host='+host,{headers:tttHeaders()}); d=await r.json(); }catch(e){ zrlZr={ error:'Could not reach the server.', id, kind, host }; renderZrl2(); return; }
+  zrlZr=r.ok?{ ...d, id, kind, host }:{ error:d.error||('Request failed ('+r.status+')'), id, kind, host }; renderZrl2();
 }
 function zrlZrCopy(btn){ const t=document.getElementById('zrl-zr-body'); if(!t) return; t.select(); try{ document.execCommand('copy'); btn.textContent='Copied'; }catch(e){ btn.textContent='Press Ctrl+C'; } }
 function zrlZrCard(){
@@ -2092,12 +2092,15 @@ function zrlZrCard(){
   let out='';
   if(z&&z.loading) out='<div style="font-size:12px;color:#9ca3af;margin-top:8px">Asking ZwiftRacing.app…</div>';
   else if(z&&z.error) out=`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(z.error)}</div>`;
-  else if(z) out=`<div style="font-size:12px;margin-top:8px;color:${z.status===200?'#10B981':'#FBBF24'}">ZwiftRacing.app answered ${z.status} in ${z.ms} ms${z.truncated?' (cut at 150 KB)':''}.</div>
+  else if(z) out=`<div style="font-size:12px;margin-top:8px;color:${z.status===200&&!z.isPage?'#10B981':'#FBBF24'}">Asked ${esc(z.url)}: answered ${z.status} in ${z.ms} ms${z.truncated?' (cut at 150 KB)':''}.</div>
+    ${z.isPage?'<div style="font-size:12px;margin-top:4px;color:#FBBF24">That is the ZwiftRacing.app <b>website</b> (a web page), not the API. Try the other address, or check the endpoint with them.</div>':''}
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:8px 0 4px">Shape</div><pre style="margin:0;max-height:200px;overflow:auto;font-size:11px;color:#d1d5db;background:rgba(255,255,255,0.04);padding:8px;border-radius:6px">${esc(JSON.stringify(z.shape,null,1))}</pre>
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:8px 0 4px">Answer <button onclick="zrlZrCopy(this)" style="${btn};margin-left:6px;padding:1px 8px">Copy</button></div><textarea id="zrl-zr-body" readonly style="width:100%;height:120px;font-size:11px;background:rgba(255,255,255,0.04);color:#d1d5db;border:1px solid rgba(255,255,255,0.1);border-radius:6px">${esc(z.body)}</textarea>`;
   return `<div class="card" style="padding:14px 16px;margin-top:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 6px">ZwiftRacing.app lookup (admin)</div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Look up one event's results to see what ZwiftRacing.app returns. The key stays on the server. It allows one results request a minute.</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="zrl-zr-id" class="inp" inputmode="numeric" placeholder="Zwift event id" value="${esc((z&&z.id)||'')}" style="width:170px"/><select id="zrl-zr-src" class="inp" style="width:auto"><option value="zr" ${z&&z.src==='zp'?'':'selected'}>ZwiftRacing results</option><option value="zp" ${z&&z.src==='zp'?'selected':''}>ZwiftPower view</option></select><button onclick="zrlZrFetch()" style="${btn}">Fetch</button></div>${out}</div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="zrl-zr-kind" class="inp" style="width:auto">${[['results','Event results (ZwiftRacing)'],['zp','Event results (ZwiftPower view)'],['rider','A rider'],['club','A club'],['categories','Categories (no id)']].map(([v,l])=>`<option value="${v}" ${(z&&z.kind||'results')===v?'selected':''}>${l}</option>`).join('')}</select>
+      <input id="zrl-zr-id" class="inp" inputmode="numeric" placeholder="Event, rider or club id" value="${esc((z&&z.id)||'')}" style="width:190px"/>
+      <select id="zrl-zr-host" class="inp" style="width:auto"><option value="site" ${z&&z.host==='api'?'':'selected'}>zwiftracing.app</option><option value="api" ${z&&z.host==='api'?'selected':''}>api.zwiftracing.app</option></select><button onclick="zrlZrFetch()" style="${btn}">Fetch</button></div>${out}</div>`;
 }
 function zrlResultsTab(d,st){
   const r=d.round, s=zrlStand;
