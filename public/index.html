@@ -254,20 +254,16 @@ table{width:100%;border-collapse:collapse}
       <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">🗓️ CRYO-GEN Club Calendar — ZwiftHacks</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button id="zh-sync-btn" onclick="loadZwiftEvents()" style="padding:5px 12px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:6px;color:#00D4FF;font-size:11px;font-weight:700">↻ Sync Events</button>
           <a href="https://zwifthacks.com/app/events/?key=6a24978d28168" target="_blank" style="font-size:11px;color:#6b7280;font-weight:600;text-decoration:none">Open ZwiftHacks →</a>
         </div>
       </div>
       <iframe src="https://zwifthacks.com/app/events/?key=6a24978d28168"
         style="width:100%;height:420px;border:none;display:block;background:#0a0e1a"
         title="CRYO-GEN Zwift Events" loading="lazy"></iframe>
-      <div style="padding:8px 16px;background:rgba(0,0,0,0.3)">
-        <span id="zh-status" style="font-size:11px;display:none"></span>
-      </div>
     </div>
+    <div id="cover-root"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em">📋 RSVP Rides</span>
-      <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
       <button id="rides-export-btn" onclick="ridesExport()" style="display:none;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">⬇ RSVPs (CSV)</button>
     </div>
     <div id="rides-help"></div>
@@ -681,7 +677,7 @@ function showTab(id,btn){
   if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
-  if(id==='rides')loadZwiftEvents();
+  if(id==='rides')loadCover();
   if(id==='ttt')loadTtt();
   if(id==='season')loadSeason();
   if(id==='zrl')loadZrl();
@@ -2166,8 +2162,8 @@ function tttHelpCard(){
 }
 function ridesHelpCard(){
   const staff=role==='admin'||role==='mod';
-  return staff?plainHelp('Staff checklist for social rides',['<b>Create a ride</b> with the + button: title, date and time, route, pace and the Zwift event link. Rides from the club sheet appear here too.','<b>Watch the RSVPs</b> on each ride: tap a name to remove someone. A ride shows <i>Almost full</i> and <i>Full</i> by itself.','<b>Remove a ride</b> that is cancelled.']):
-    plainHelp('How social rides work',['<b>Find a ride</b> that suits you: date, pace and distance are on each card.','<b>Tap RSVP</b> and confirm your name so the leader knows you are coming. Tap your name again to cancel.','<b>On the day</b> use the Zwift Event link to join the ride.']);
+  return staff?plainHelp('Staff checklist for social rides',['<b>Create a ride</b> with the + button: title, date and time, route, pace and the Zwift event link. ','<b>Ride cover</b>: set up each weekly ride under <i>Manage ride cover</i>, approve your leaders and sweepers, and the system calls out any gaps by itself (every Monday, a week before, three days before, and a confirmation the day before).','<b>Watch the RSVPs</b> on each ride: tap a name to remove someone. A ride shows <i>Almost full</i> and <i>Full</i> by itself.','<b>Remove a ride</b> that is cancelled.']):
+    plainHelp('How social rides work',['<b>Find a ride</b> that suits you: date, pace and distance are on each card.','<b>Tap RSVP</b> and confirm your name so the leader knows you are coming. Tap your name again to cancel.','<b>On the day</b> use the Zwift Event link to join the ride.','<b>Lead or sweep?</b> Once the ride owners approve you, offer on a date in <i>Ride cover</i>, or tick <i>most weeks</i> so you are pencilled in automatically.']);
 }
 function zrlHelpCard(kind){
   const steps={
@@ -2835,53 +2831,134 @@ function renderHybridResults(sheet,derived){
   el.innerHTML=rows||'<tr><td colspan="6" style="color:#4b5563;text-align:center;padding:20px">No results yet</td></tr>';
 }
 
-function catColor(c){
-  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#6b7280',F:'#ec4899'}[c]||'#6b7280';
+// ── Ride cover: leaders and sweepers for the weekly rides ───────────────────────────────
+let cover=null, coverErr='', coverMsg='';
+async function loadCover(){
+  try{
+    const r=await fetch('/api/cover',{headers:tttHeaders()});
+    if(r.status===401){ cover=null; coverErr='signin'; }
+    else if(!r.ok){ cover=null; coverErr='Could not load ride cover.'; }
+    else { cover=await r.json(); coverErr=''; }
+  }catch(e){ cover=null; coverErr='Could not reach the server.'; }
+  renderCover();
+}
+async function coverPost(path,body){
+  let res,d; try{ res=await fetch('/api/cover/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  if(d.series) cover=d; else await loadCover();
+  if(d.series) renderCover();
+  return d;
+}
+const coverWhen=(o)=>new Date(o.startMs).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+function coverSlot(s,o,roleDef){
+  const slot=o.cover[roleDef.id], me=cover.me, base=roleDef.id.replace('2',''), isBackup=roleDef.id!==base;
+  const open=!slot, col=slot?'#10B981':isBackup?'#FBBF24':'#f87171';
+  const mine=slot&&me&&slot.zwid===me.zwid;
+  let act='';
+  const approved=me&&me.approved&&me.approved[roleDef.kind];
+  const btn='padding:2px 8px;font-size:11px;border-radius:5px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)';
+  const held=Object.values(o.cover).some(c=>c&&me&&c.zwid===me.zwid);
+  if(open&&approved&&!held&&!o.cancelled&&(!isBackup||o.cover[base])) act=`<button onclick="coverVolunteer('${esc(s.id)}','${o.date}','${base}')" style="${btn};border-color:rgba(0,212,255,0.5);color:#00D4FF">${isBackup?'Back up':'I\'ll '+(roleDef.kind==='lead'?'lead':'sweep')}</button>`;
+  if(slot&&(mine||s.canManage)) act+=`<button onclick="coverWithdraw('${esc(s.id)}','${o.date}','${roleDef.id}')" style="${btn}" title="${mine?'Take me off':'Remove'}">${mine?'Withdraw':'✕'}</button>`;
+  if(open&&s.canManage&&!o.cancelled){
+    const opts=(cover.approved||[]).filter(a=>a[roleDef.kind]);
+    if(opts.length) act+=`<select onchange="if(this.value)coverAssign('${esc(s.id)}','${o.date}','${roleDef.id}',this.value);this.value=''" style="font-size:11px;background:#0f1623;color:#e5e7eb;border:1px solid rgba(255,255,255,0.18);border-radius:5px;max-width:110px"><option value="">Assign…</option>${opts.map(a=>`<option value="${esc(a.zwid)}|${esc(a.name)}">${esc(a.name)}</option>`).join('')}</select>`;
+  }
+  return `<div style="min-width:130px;flex:1;padding:6px 8px;border:1px solid ${col}55;border-radius:8px;background:${col}0f"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">${esc(roleDef.label)}</div>
+    <div style="font-size:13px;font-weight:700;color:${slot?'#e5e7eb':col}">${slot?esc(slot.name)+(slot.standing?' <span style="font-size:10px;font-weight:400;color:#6b7280">(most weeks)</span>':''):(isBackup?'Back-up needed':'Needed')}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${act}</div></div>`;
+}
+function coverSeriesCard(s){
+  const me=cover.me, st=me&&me.standing[s.id]||{};
+  const dow=['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'][s.dow];
+  const tog=(k,l)=>me&&me.approved&&me.approved[k]?`<button onclick="coverStanding('${esc(s.id)}',${k==='lead'?!st.lead:!!st.lead},${k==='sweep'?!st.sweep:!!st.sweep})" style="padding:3px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid ${st[k]?'rgba(16,185,129,0.6)':'rgba(255,255,255,0.18)'};background:${st[k]?'rgba(16,185,129,0.12)':'transparent'};color:${st[k]?'#10B981':'#9ca3af'}">${st[k]?'✓ ':''}I can ${l} most weeks</button>`:'';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline"><div><div style="font-size:15px;font-weight:800">${esc(s.title)}</div><div style="font-size:12px;color:#6b7280">${dow} ${esc(s.time)} (${esc(s.zone.replace(/_/g,' '))})${s.pace?' · '+esc(s.pace):''}${s.cat?' · cat '+esc(s.cat):''}${s.ownerName?' · owner '+esc(s.ownerName):''}</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${tog('lead','lead')}${tog('sweep','sweep')}</div></div>
+    ${s.occurrences.slice(0,4).map(o=>`<div style="margin-top:10px;${o.cancelled?'opacity:.55':''}"><div style="font-size:12px;font-weight:700;margin-bottom:4px">${esc(coverWhen(o))}${o.cancelled?' · <span style="color:#f87171">cancelled</span>':!o.gaps.length?' · <span style="color:#10B981">fully covered</span>':''}${s.canManage?` <button onclick="coverCancel('${esc(s.id)}','${o.date}',${!o.cancelled})" style="margin-left:6px;padding:1px 7px;font-size:10px;border-radius:5px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">${o.cancelled?'Restore':'Cancel ride'}</button>`:''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${cover.roles.map(r=>coverSlot(s,o,r)).join('')}</div></div>`).join('')}</div>`;
+}
+function renderCover(){
+  const el=document.getElementById('cover-root'); if(!el) return;
+  const head='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em;margin-bottom:8px">🧭 Ride cover · leaders and sweepers</div>';
+  if(coverErr==='signin'){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:20px">${head}<div style="font-size:13px;color:#9ca3af">Sign in with your cryogen.team account to see who is leading and sweeping each ride, and to offer if you are an approved leader or sweeper.</div></div>`; return; }
+  if(coverErr){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:20px;color:#FBBF24;font-size:13px">${esc(coverErr)}</div>`; return; }
+  if(!cover){ el.innerHTML=''; return; }
+  const staff=cover.staff, me=cover.me;
+  const intro=me&&!me.approved&&!staff?'<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Want to lead or sweep? Ask the ride owners in Discord to approve you, then you can offer for any ride below.</div>':'<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Every ride needs a leader and a sweeper, each with a back-up. Approved leaders and sweepers can offer for a date, or tick <b>most weeks</b> once. Gaps are called out automatically.</div>';
+  el.innerHTML=`<div style="margin-bottom:24px">${head}${intro}${cover.series.length?cover.series.map(coverSeriesCard).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No regular rides have been set up yet.'+(staff?' Add them under <b>Manage ride cover</b> below.':'')+'</div>'}${staff?coverStaffPanel():''}</div>`;
+}
+async function coverVolunteer(series,date,role){ await coverPost('volunteer',{series,date,role}); }
+async function coverWithdraw(series,date,role){ if(confirm('Take this person off the ride?')) await coverPost('withdraw',{series,date,role}); }
+async function coverAssign(series,date,role,v){ const [zwid,...n]=v.split('|'); await coverPost('assign',{series,date,role,zwid,name:n.join('|')}); }
+async function coverCancel(series,date,cancelled){ if(!cancelled||confirm('Cancel this ride? Nobody will be chased for cover.')) await coverPost('cancel-date',{series,date,cancelled}); }
+async function coverStanding(series,lead,sweep){ await coverPost('standing',{series,lead,sweep}); }
+
+let coverEdit=null, coverPreview=null;
+function coverStaffPanel(){
+  const admin=role==='admin', inp='class="inp" style="padding:6px 8px;font-size:12px"', btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const e=coverEdit||{ dow:2, time:'19:00', zone:'Europe/London' };
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const lbl=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">${x}</div>`;
+  return `<details class="card" style="padding:12px 16px;margin-top:6px"><summary style="cursor:pointer;font-size:13px;font-weight:800">⚙️ Manage ride cover (staff)</summary>
+    <div style="font-size:12px;color:#9ca3af;margin-top:6px">${cover.webhook?'✅ Call-outs go to your WhatsApp webhook, and to Discord if it does not answer.':'Call-outs go to Discord. To send them to WhatsApp, set <b>RIDE_COVER_WEBHOOK_URL</b> in Vercel (a Zapier or Make catch-hook that posts to WhatsApp), or use the buttons below to send by hand.'}</div>
+    ${lbl('Weekly rides')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <input id="cv-title" ${inp} placeholder="Ride name" maxlength="80" value="${esc(e.title||'')}" style="width:170px"/>
+      <select id="cv-dow" ${inp}>${days.map((d,i)=>`<option value="${i}" ${i==e.dow?'selected':''}>${d}</option>`).join('')}</select>
+      <input id="cv-time" ${inp} placeholder="19:00" maxlength="5" value="${esc(e.time)}" style="width:70px"/>
+      <input id="cv-zone" ${inp} placeholder="Europe/London" value="${esc(e.zone)}" style="width:130px"/>
+      <input id="cv-pace" ${inp} placeholder="Pace" maxlength="40" value="${esc(e.pace||'')}" style="width:110px"/>
+      <input id="cv-owner" ${inp} list="cv-people" placeholder="Owner" maxlength="60" value="${esc(e.ownerName||'')}" oninput="coverOwnerPick(this)" style="width:130px"/>
+      <input id="cv-ownerid" ${inp} placeholder="Owner Zwift ID" value="${esc(e.ownerZwid||'')}" style="width:120px"/>
+      <button onclick="coverSaveSeries()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">${e.id?'Save ride':'Add ride'}</button>${e.id?`<button onclick="coverEdit=null;renderCover()" style="${btn}">Cancel</button>`:''}
+    </div>
+    <datalist id="cv-people">${(riders||[]).slice(0,600).map(r=>`<option value="${esc(r.name)}"></option>`).join('')}</datalist>
+    ${cover.series.map(s=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="flex:1">${esc(s.title)} · ${days[s.dow]} ${esc(s.time)}${s.ownerName?' · '+esc(s.ownerName):''}${s.source==='ical'?' <span style="color:#6b7280">(calendar)</span>':''}</span><button onclick="coverEditSeries('${esc(s.id)}')" style="${btn}">Edit</button><button onclick="coverRemoveSeries('${esc(s.id)}')" style="${btn}">Remove</button></div>`).join('')}
+    ${lbl('Approved leaders and sweepers')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <input id="cv-aname" ${inp} list="cv-people" placeholder="Name" maxlength="60" oninput="coverApprovePick(this)" style="width:160px"/><input id="cv-azwid" ${inp} placeholder="Zwift ID" style="width:110px"/>
+      <label style="font-size:12px"><input type="checkbox" id="cv-alead" checked/> Lead</label><label style="font-size:12px"><input type="checkbox" id="cv-asweep" checked/> Sweep</label>
+      <button onclick="coverApprove()" style="${btn}">Approve</button></div>
+    ${cover.approved.map(a=>`<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="flex:1">${esc(a.name)} <span style="color:#6b7280">${esc(a.zwid)}</span></span><label><input type="checkbox" ${a.lead?'checked':''} onchange="coverApproveSet('${esc(a.zwid)}','${esc(a.name).replace(/'/g,'&#39;')}',this.checked,${!!a.sweep},this)"/> Lead</label><label><input type="checkbox" ${a.sweep?'checked':''} onchange="coverApproveSet('${esc(a.zwid)}','${esc(a.name).replace(/'/g,'&#39;')}',${!!a.lead},this.checked,this)"/> Sweep</label><button onclick="coverApproveSet('${esc(a.zwid)}','',false,false)" style="${btn}">Remove</button></div>`).join('')||'<div style="font-size:12px;color:#6b7280;margin-top:6px">Nobody is approved yet.</div>'}
+    ${lbl('Call-outs')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="coverSend()" style="${btn}">📣 Send call-out now</button><button onclick="coverCopy()" style="${btn}">📋 Copy for WhatsApp</button><button onclick="coverWhatsApp()" style="${btn}">💬 Open WhatsApp</button></div>
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">Automatic: a call-out every Monday for the next two weeks, a chase when a ride is a week away, an alert to the owner at three days, and the cover confirmed the day before. Only gaps are posted.</div>
+    ${admin?`${lbl('Import from a calendar (admin)')}<div style="display:flex;gap:6px;flex-wrap:wrap"><input id="cv-ical" ${inp} placeholder="Calendar link (iCal / .ics / webcal://)" style="flex:1;min-width:220px"/><button onclick="coverIcal(false)" style="${btn}">Preview</button></div>${coverPreview?`<div style="font-size:12px;margin-top:6px">${coverPreview.map(p=>`<div>${esc(p.title)} · ${days[p.dow]} ${esc(p.time)} <span style="color:#6b7280">(${p.count} in the calendar)</span></div>`).join('')}<button onclick="coverIcal(true)" style="${btn};margin-top:6px">Add these ${coverPreview.length} ride${coverPreview.length===1?'':'s'}</button></div>`:''}`:''}
+  </details>`;
+}
+function coverOwnerPick(el){ const r=(riders||[]).find(x=>x.name===el.value); if(r) document.getElementById('cv-ownerid').value=r.id; }
+function coverApprovePick(el){ const r=(riders||[]).find(x=>x.name===el.value); if(r) document.getElementById('cv-azwid').value=r.id; }
+async function coverSaveSeries(){
+  const g=id=>document.getElementById(id).value.trim();
+  if(await coverPost('series',{ id:coverEdit&&coverEdit.id, title:g('cv-title'), dow:Number(g('cv-dow')), time:g('cv-time'), zone:g('cv-zone'), pace:g('cv-pace'), ownerName:g('cv-owner'), ownerZwid:g('cv-ownerid') })){ coverEdit=null; renderCover(); }
+}
+function coverEditSeries(id){ coverEdit=cover.series.find(s=>s.id===id)||null; renderCover(); const t=document.getElementById('cv-title'); if(t) t.scrollIntoView({block:'center'}); }
+async function coverRemoveSeries(id){ if(confirm('Remove this ride and everyone signed up to cover it?')) await coverPost('series-remove',{ id }); }
+async function coverApprove(){
+  const g=id=>document.getElementById(id);
+  if(await coverPost('approve',{ name:g('cv-aname').value.trim(), zwid:g('cv-azwid').value.trim(), lead:g('cv-alead').checked, sweep:g('cv-asweep').checked })) renderCover();
+}
+async function coverApproveSet(zwid,name,lead,sweep){ await coverPost('approve',{ zwid, name:name||'x', lead, sweep }); }
+async function coverText(){
+  const r=await fetch('/api/cover/callout',{headers:tttHeaders()}); const d=await r.json();
+  if(!r.ok){ alert(d.error||'Request failed'); return null; }
+  if(!d.text){ alert('Every ride in the next two weeks is fully covered: nothing to call out.'); return null; }
+  return d.text;
+}
+async function coverSend(){ if(!confirm('Send the call-out to the club now?')) return; const r=await coverPost('send',{}); if(r) alert('Sent via '+(r.sent||'?')+'.'); }
+async function coverCopy(){ const t=await coverText(); if(!t) return; try{ await navigator.clipboard.writeText(t); alert('Copied. Paste it into your WhatsApp group.'); }catch(e){ prompt('Copy this message:',t); } }
+async function coverWhatsApp(){ const t=await coverText(); if(t) window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank','noopener'); }
+async function coverIcal(apply){
+  const url=document.getElementById('cv-ical').value.trim();
+  let res,d; try{ res=await fetch('/api/cover/import-ical',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ url, apply })}); d=await res.json(); }catch(e){ alert('Could not reach the server.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  if(apply){ coverPreview=null; cover=d; alert('Added '+d.added+' ride'+(d.added===1?'':'s')+'. Set an owner on each.'); } else coverPreview=d.preview;
+  renderCover();
 }
 
-async function loadZwiftEvents(){
-  const btn = document.getElementById('zh-sync-btn');
-  if(btn) { btn.textContent='↻ Syncing…'; btn.disabled=true; }
-  try{
-    const r = await fetch('/api/proxy?endpoint=rides');
-    const d = await r.json();
-    if(d.error){
-      showZhStatus('⚠️ '+d.error, '#FBBF24');
-      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
-      return;
-    }
-    if(d.rides && d.rides.length > 0){
-      // Stable ID from date + title, so RSVPs stay attached if sheet rows are reordered.
-      const rideKey=row=>{const k=(row['Date']||row['date']||'')+'|'+(row['Title']||row['title']||'');let h=5381;for(const ch of k)h=((h*33)^ch.codePointAt(0))>>>0;return 'gs_'+h.toString(36);};
-      zwiftEventRides = d.rides.map((row,i)=>({
-        id: rideKey(row),
-        title:  row['Title']       || row['title']       || 'Club Ride',
-        date:   row['Date']        || row['date']        || '',
-        time:   row['Time']        || row['time']        || '',
-        route:  row['Route']       || row['route']       || '',
-        dist:   row['Distance']    || row['distance']    || '',
-        pace:   row['Pace']        || row['pace']        || '',
-        max:    parseInt(row['Max'] || row['max'] || row['MaxRiders'] || '30'),
-        desc:   row['Description'] || row['description'] || '',
-        cat:    row['Category']    || row['category']    || 'All',
-        link:   row['ZwiftLink']   || row['zwiftlink']   || row['Link'] || '',
-        source: 'sheet',
-      }));
-      showZhStatus(`✓ ${zwiftEventRides.length} rides loaded from Google Sheet · ${new Date(d.updated).toLocaleTimeString()}`, '#10B981');
-      if(btn){ btn.textContent=`✓ ${zwiftEventRides.length} rides synced`; btn.disabled=false; }
-      renderRides();
-    } else {
-      showZhStatus('Sheet tab "Social Rides" is empty — add rides to your Google Sheet', '#FBBF24');
-      if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
-    }
-  } catch(e){
-    showZhStatus('Sync failed: '+e.message, '#EF4444');
-    if(btn){ btn.textContent='↻ Sync Rides'; btn.disabled=false; }
-  }
-}
-function showZhStatus(msg,color){
-  const el=document.getElementById('zh-status');
-  if(el){ el.textContent=msg; el.style.color=color||'#9ca3af'; el.style.display='block'; }
+function catColor(c){
+  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#6b7280',F:'#ec4899'}[c]||'#6b7280';
 }
 
 async function syncSheet(){

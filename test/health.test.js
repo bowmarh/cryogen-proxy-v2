@@ -19,7 +19,7 @@ const health = async () => {
 test('every area is reported, and nothing secret or noisy happens while checking', async () => {
   const clubCalls = world.clubCalls;
   const r = await app.get('/api/health', { token: admin });
-  assert.deepEqual(r.body.checks.map(c => c.id), ['storage', 'members', 'roster', 'sheet', 'discord', 'week', 'zrl', 'backup', 'cron', 'signin', 'guests', 'staff', 'deploy']);
+  assert.deepEqual(r.body.checks.map(c => c.id), ['storage', 'members', 'roster', 'sheet', 'discord', 'week', 'zrl', 'backup', 'cover', 'cron', 'signin', 'guests', 'staff', 'deploy']);
   const text = JSON.stringify(r.body);
   for (const secret of ['redis-token', 'wppass', 'wpuser', 'admin-pw', 'mod-pw', 'sso-secret-for-tests', 'cron-secret', 'discord.test']) {
     assert.ok(!text.includes(secret), `the health report leaked "${secret}"`);
