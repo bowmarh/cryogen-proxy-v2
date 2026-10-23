@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>CRYO-GEN Club</title>
+<link rel="manifest" href="/manifest.json"/><meta name="theme-color" content="#060a14"/><link rel="apple-touch-icon" href="/apple-touch-icon.png"/><meta name="mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-title" content="CRYO-GEN"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#060a14;color:white;font-family:system-ui,sans-serif;min-height:100vh}
@@ -544,6 +545,28 @@ function launchApp(r){
   loadLive();
   loadShared();
   loadTttSummary();
+  installBarMaybe();
+}
+// Phone install: Android and desktop Chrome offer a real Install button; iPhones get the Share > Add to Home Screen steps. Shown once, after sign-in.
+let installEvent=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvent=e; });
+if('serviceWorker' in navigator) window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); });
+function installBarMaybe(){
+  const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  let seen=false; try{ seen=localStorage.getItem('installBarSeen')==='1'; }catch(e){}
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent), phone=window.matchMedia('(max-width: 800px)').matches;
+  if(standalone||seen||!phone) return;
+  setTimeout(()=>{
+    if(document.getElementById('install-bar')) return;
+    if(!installEvent&&!ios) return;
+    const bar=document.createElement('div'); bar.id='install-bar';
+    bar.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:60;background:#0f1623;border:1px solid rgba(0,212,255,0.4);border-radius:12px;padding:12px 14px;font-size:13px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,0.5)';
+    bar.innerHTML=`<img src="/icon-192.png" width="36" height="36" style="border-radius:8px" alt=""/><div style="flex:1"><b>Put CRYO-GEN on your home screen</b><div style="font-size:12px;color:#9ca3af">${installEvent?'One tap to your race-day page.':'Tap <b>Share</b>, then <b>Add to Home Screen</b>.'}</div></div>${installEvent?'<button id="install-go" style="padding:7px 12px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid rgba(0,212,255,0.5);background:rgba(0,212,255,0.15);color:#00D4FF">Install</button>':''}<button id="install-x" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:18px">✕</button>`;
+    document.body.appendChild(bar);
+    const done=()=>{ try{ localStorage.setItem('installBarSeen','1'); }catch(e){} bar.remove(); };
+    document.getElementById('install-x').onclick=done;
+    const go=document.getElementById('install-go'); if(go) go.onclick=async()=>{ installEvent.prompt(); try{ await installEvent.userChoice; }catch(e){} done(); };
+  },2500);
 }
 function doLogout(){sessionStorage.clear();location.reload();}
 
@@ -2461,6 +2484,29 @@ function zrlWeeksTab(){
     <tbody>${teams.map((t,k)=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 8px;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>${w.weeks.map(x=>cell(x.teams[k])).join('')}</tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
     <button onclick="zrlWeekly=null;renderZrl2()" style="margin-top:10px;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></div>`;
 }
+const ZRL_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+// The team's race start as a real moment: the race date plus the league's fixed "Tue 18:00 UTC" time, shown in the rider's own time zone.
+function zrlRaceMoment(date,slot){
+  const m=/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d\d):(\d\d)\s+UTC/i.exec(slot||''); if(!m) return null;
+  let t=Date.parse(date+'T'+m[2]+':'+m[3]+':00Z'); if(Number.isNaN(t)) return null;
+  let diff=ZRL_DOW.indexOf(m[1][0].toUpperCase()+m[1].slice(1).toLowerCase())-new Date(t).getUTCDay(); if(diff>3) diff-=7; if(diff<-3) diff+=7;
+  return t+diff*86400000;
+}
+function zrlNextRaceCard(m){
+  const t=m.team, weeks=m.weeks||[]; if(!t||!weeks.length) return '';
+  const today=new Date().toISOString().slice(0,10), w=weeks.find(x=>x.date>=today); if(!w) return '';
+  const at=zrlRaceMoment(w.date,t.slot), now=Date.now();
+  const when=at?new Date(at).toLocaleString(undefined,{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}):seasonDay(w.date);
+  const left=at?at-now:null;
+  const eta=left===null?'':left<0?(left>-5400000?'under way':'today'):left<3600000*20?'in '+Math.max(1,Math.round(left/3600000))+' hour'+(Math.round(left/3600000)===1?'':'s'):'in '+Math.ceil(left/86400000)+' day'+(Math.ceil(left/86400000)===1?'':'s');
+  const btn=(v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}')" style="padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${w.mine===v?'rgba(0,212,255,0.18)':'transparent'};color:${w.mine===v?'#00D4FF':'#d1d5db'}">${l}</button>`;
+  const status=w.picked?'<span style="color:#10B981">🏁 You are in the line-up</span>':w.lineupSet?'<span style="color:#FBBF24">Line-up picked: you are not in it (yet)</span>':'<span style="color:#9ca3af">Your captain has not picked the line-up yet</span>';
+  return `<div class="card" style="padding:16px;margin-bottom:12px;border-color:rgba(0,212,255,0.35)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 6px">Your next race · race ${w.i+1}</div>
+    <div style="font-size:18px;font-weight:800">${esc(when)}</div><div style="font-size:12px;color:#9ca3af;margin:2px 0 8px">${esc(t.name)}${eta?' · '+esc(eta):''}${at?'':' · race time not set yet'}</div>
+    <div style="font-size:13px;margin-bottom:10px">${status}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${ZRL_AVAIL.map(([v,l])=>btn(v,l)).join('')}</div>
+    <div style="font-size:11px;color:#6b7280;margin-top:8px">${w.mine?'Your answer is saved. Tap it again to clear.':'Tell your captain if you can race.'}</div></div>`;
+}
 function zrlMyCard(){
   const m=zrlMy; if(!m||!m.round) return '';
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
@@ -2480,6 +2526,7 @@ function zrlMyCard(){
   });
   if(m.team){
     const t=m.team;
+    out.push(zrlNextRaceCard(m));
     out.push(`<div class="card" style="padding:14px 16px;margin-bottom:12px">${lbl('Your team')}
       <div style="font-size:15px;font-weight:800">${esc(t.name)}</div><div style="font-size:12px;color:#6b7280;margin-bottom:6px">${sub(t)}${t.captainName?' · captain '+esc(t.captainName):''}</div>
       <div style="font-size:13px;color:#d1d5db">${t.riders.map(r=>esc(r.name)+(r.isCaptain?' ⭐':'')+(r.cat?' ('+esc(r.cat)+')':'')+(r.reserve?' · reserve':'')).join(', ')}</div>${zrlAvailHtml(m)}</div>`);
