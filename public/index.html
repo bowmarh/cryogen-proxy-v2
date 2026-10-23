@@ -1548,7 +1548,8 @@ function zrlStaffPanel(d){
         <div><label class="lbl">First race</label><input id="zrl-new-start" type="date" class="inp" style="width:auto"/></div>
         <div><label class="lbl">Sign-ups close</label><input id="zrl-new-closes" type="date" class="inp" style="width:auto"/></div>
         <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlStartRound()">Start round</button></div>
-      <div style="font-size:11px;color:#4b5563;margin-top:8px">The club channel is told sign-ups are open. Your teams carry over; riders sign up afresh and the old round is kept.</div></div>`;
+      ${round?`<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="zrl-new-carry" checked style="margin-top:3px"/><span><b>Carry over the riders</b> who are in and on a team (${(d.signups||[]).filter(x=>x.in&&(d.assign||{})[x.key]).length} of them), each staying on their team, and captains who are still on their team. Riders can still change their sign-up.</span></label>`:''}
+      <div style="font-size:11px;color:#4b5563;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
   if(!round) return start;
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
       <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' UK (automatic)':''}
@@ -2038,7 +2039,10 @@ function zrlWithdraw(){ if(confirm('Withdraw from this round?')) zrlPost('/api/z
 function zrlStartRound(){
   const name=document.getElementById('zrl-new-name').value.trim(), start=document.getElementById('zrl-new-start').value, closes=document.getElementById('zrl-new-closes').value;
   if(!name||!start){ alert('Enter a round name and the date of the first race.'); return; }
-  zrlPost('/api/zrl/round',{ name, start, closes });
+  const carry=!!(document.getElementById('zrl-new-carry')||{}).checked;
+  const n=zrlData.round?(zrlData.signups||[]).filter(x=>x.in&&(zrlData.assign||{})[x.key]).length:0;
+  if(zrlData.round&&!confirm('Archive "'+zrlData.round.name+'" and start "'+name+'"?\n\n'+(carry?n+' riders stay on their teams.':'Riders start afresh; teams carry over empty.')+'\nThe club channel is told sign-ups are open.')) return;
+  zrlPost('/api/zrl/round',{ name, start, closes, carryRiders:carry });
 }
 function zrlEditRound(){
   const g=id=>document.getElementById(id).value;
