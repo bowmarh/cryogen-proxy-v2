@@ -2021,11 +2021,16 @@ function zrlAvail(week,status,zwid){ zrlPost('/api/zrl/availability',{ week, sta
 function zrlAvailHtml(m){
   const weeks=m.weeks||[]; if(!weeks.length) return '';
   const today=new Date().toISOString().slice(0,10);
+  const ord=n=>n+(n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th'));
   const btn=(w,v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${w.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${w.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`;
-  return `<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">Can you race? Tell your captain for each week</div>
-    ${weeks.map(w=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05);${w.date<today?'opacity:.5':''}"><div style="min-width:120px;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#6b7280">${esc(seasonDay(w.date))}</span></div>
+  const past=weeks.filter(w=>w.date<=today), picked=past.filter(w=>w.picked).length, yes=weeks.filter(w=>w.mine==='yes').length, scored=weeks.filter(w=>w.result&&w.result.pts!==null);
+  const total=scored.reduce((n,w)=>n+w.result.pts,0);
+  return `<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">Your season · can you race? Tell your captain for each week</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:6px">${past.length?`Picked for <b style="color:#e5e7eb">${picked} of ${past.length}</b> race${past.length===1?'':'s'} so far`:'No races yet'} · said yes ${yes} time${yes===1?'':'s'}${scored.length?` · team has <b style="color:#e5e7eb">${total} pts</b> from ${scored.length} race${scored.length===1?'':'s'}`:''}</div>
+    ${weeks.map(w=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05);${w.date<today?'opacity:.7':''}"><div style="min-width:120px;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#6b7280">${esc(seasonDay(w.date))}</span></div>
       <div style="display:flex;gap:4px">${ZRL_AVAIL.map(([v,l])=>btn(w,v,l)).join('')}</div>
-      <div style="font-size:12px;color:${w.picked?'#10B981':'#6b7280'}">${w.picked?'🏁 You are in the line-up':w.lineupSet?'Line-up: '+esc(w.lineup.join(', ')):'Line-up not picked yet'}</div></div>`).join('')}</div>`;
+      <div style="font-size:12px;color:${w.picked?'#10B981':'#6b7280'}">${w.picked?'🏁 You are in the line-up':w.lineupSet?'Line-up: '+esc(w.lineup.join(', ')):'Line-up not picked yet'}</div>
+      ${w.result?`<div style="font-size:12px;color:#00D4FF;margin-left:auto">Team ${w.result.pos?ord(w.result.pos):''}${w.result.pos&&w.result.pts!==null?' · ':''}${w.result.pts!==null?w.result.pts+' pts':''}</div>`:''}</div>`).join('')}</div>`;
 }
 function zrlWtrlMark(team,registered){ zrlPost('/api/zrl/wtrl-registered',{ team, registered }); }
 function zrlWtrlDeadlineSave(){ zrlPost('/api/zrl/wtrl-deadline',{ date:document.getElementById('zrl-wtrl-date').value }); }

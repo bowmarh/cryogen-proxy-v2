@@ -117,3 +117,14 @@ test('subs finder: the bench and riders with no team, for a captain or staff onl
   await avail({ week: 0, status: 'no' }, ann);
   assert.deepEqual((await subs('cryo-gen-alpha', 0, cap)).body.bench, [], 'someone who said no is not a sub');
 });
+
+test('a rider\'s season: their answers, whether they were picked, and the team result for each race', async () => {
+  await avail({ week: 0, status: 'yes' }, ann);
+  await avail({ week: 1, status: 'no' }, ann);
+  await lineup({ week: 0, team: 'cryo-gen-alpha', zwids: ['1002', '4378027'] }, cap);
+  await app.post('/api/zrl/results', { week: 0, rows: [{ team: 'cryo-gen-alpha', pos: 3, pts: 90 }] }, { token: admin });
+  const m = await mine(ann);
+  assert.deepEqual(m.weeks.map(w => [w.i, w.mine, w.picked, w.result]), [[0, 'yes', true, { pos: 3, pts: 90 }], [1, 'no', false, null], [2, '', false, null]]);
+  const other = await mine(await app.memberSession('2436518'));
+  assert.deepEqual(other.weeks.map(w => w.result), [null, null, null], 'a team with no result yet shows none, and never another team\'s');
+});
