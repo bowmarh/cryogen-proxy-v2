@@ -2086,6 +2086,28 @@ async function zrlZrFetch(){
   zrlZr=r.ok?{ ...d, id, kind, host }:{ error:d.error||('Request failed ('+r.status+')'), id, kind, host }; renderZrl2();
 }
 function zrlZrCopy(btn){ const t=document.getElementById('zrl-zr-body'); if(!t) return; t.select(); try{ document.execCommand('copy'); btn.textContent='Copied'; }catch(e){ btn.textContent='Press Ctrl+C'; } }
+let zrlEv=null;
+async function zrlEvCheck(){
+  const id=document.getElementById('zrl-ev-id').value.trim(); zrlEv={ loading:true, id }; renderZrl2();
+  let r,d; try{ r=await fetch('/api/zrl/event-check?id='+encodeURIComponent(id),{headers:tttHeaders()}); d=await r.json(); }catch(e){ zrlEv={ error:'Could not reach the server.', id }; renderZrl2(); return; }
+  zrlEv=r.ok?{ ...d, id }:{ error:d.error||('Request failed ('+r.status+')'), id }; renderZrl2();
+}
+function zrlEvCard(){
+  const e=zrlEv, btn='padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer';
+  const ord=n=>n+(n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th'));
+  let out='';
+  if(e&&e.loading) out='<div style="font-size:12px;color:#9ca3af;margin-top:8px">Asking ZwiftRacing.app…</div>';
+  else if(e&&e.error) out=`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(e.error)}</div>`;
+  else if(e) out=`<div style="font-size:12px;margin-top:8px;color:#d1d5db"><b>${esc(e.event.title||'Event '+e.event.id)}</b> · ${e.event.finishers} finishers${e.event.subType?' · '+esc(e.event.subType):''}</div>
+    <div style="font-size:12px;margin-top:2px;color:#9ca3af">${e.week!==null?`This is <b>race ${e.week+1}</b>. <button onclick="zrlResWeek=${e.week};renderZrl2()" style="padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:5px;color:#e5e7eb;cursor:pointer">Show race ${e.week+1} above</button>`:'The race number could not be read from the title (or it is outside this round), so there is no line-up to compare with.'}</div>
+    ${e.teams.length?e.teams.map(t=>`<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px"><div style="font-weight:800;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#6b7280;font-size:11px">${esc([t.division,t.league].filter(Boolean).join(' · '))}</span></div>
+      ${t.raced.map(x=>`<div style="font-size:12px;padding:1px 0">🏁 ${esc(x.name)} · <b>${x.position?ord(x.position):'—'}</b>${x.cat?' · cat '+esc(x.cat):''}${e.week!==null?(x.picked?' <span style="color:#10B981">· was picked</span>':' <span style="color:#FBBF24">· was not in the line-up</span>'):''}</div>`).join('')||'<div style="font-size:12px;color:#6b7280">Nobody from the team is in the results.</div>'}
+      ${t.missing.length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">Picked but not in the results: ${esc(t.missing.join(', '))}</div>`:''}</div>`).join(''):'<div style="font-size:12px;color:#9ca3af;margin-top:8px">None of our teams are in this event.</div>'}
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">Positions are each rider's finish in the whole race. Team positions and points come from WTRL: enter them above.</div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 6px">Check a race (ZwiftRacing.app)</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Paste a ZRL race's Zwift event id (the number at the end of the event link). It shows who of ours raced, how they finished, and whether the captain had picked them. One request a minute.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="zrl-ev-id" class="inp" inputmode="numeric" placeholder="Zwift event id" value="${esc((e&&e.id)||'')}" style="width:190px"/><button onclick="zrlEvCheck()" style="${btn}">Check race</button></div>${out}</div>`;
+}
 let zrlProbe=null;
 async function zrlZrProbe(){
   const rider=document.getElementById('zrl-zr-rider').value.trim(), event=document.getElementById('zrl-zr-event').value.trim();
@@ -2130,7 +2152,7 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}${zrlZrCard()}`;
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}${zrlEvCard()}${zrlZrCard()}`;
 }
 let zrlPast=null, zrlPastOpen=null, zrlPastWeek=0;
 async function zrlPastLoad(id){
