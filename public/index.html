@@ -1859,7 +1859,7 @@ async function zrlImportApply(){
 let zrlStaffTab=(()=>{ try{ return sessionStorage.getItem('zrlTab')||'teams'; }catch(e){ return 'teams'; } })();
 let zrlOpenTeamId=null, zrlTeamFilter='all', zrlRiderFilter='unplaced', zrlRiderLimit=40;
 const zrlZoneShort={eu:'EU',am:'AM',ap:'AP'};
-function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; if(tab==='setup') zrlPast=null; try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
+function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; if(tab==='setup'){ zrlPast=null; zrlLog=null; } try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
 function zrlTeamStats(d){
   const by={}; d.signups.forEach(x=>{ const t=(d.assign||{})[x.key]; if(t&&x.in)(by[t]=by[t]||[]).push(x); });
   const unplaced=d.signups.filter(x=>x.in&&!(d.assign||{})[x.key]);
@@ -1883,7 +1883,7 @@ function renderZrlStaff(d){
   else if(zrlStaffTab==='weeks') body=zrlWeeksTab();
   else if(zrlStaffTab==='results') body=zrlResultsTab(d,st);
   else if(zrlStaffTab==='export') body=zrlExportCard(d)||`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Put riders on teams first, then the registration list appears here.</div>`;
-  else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlPastCard(d)}`;
+  else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlPastCard(d)}${zrlLogCard()}`;
   return `<div style="margin-bottom:12px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
@@ -2122,6 +2122,20 @@ async function zrlRoundDelete(){
   const c=prompt('This deletes the CURRENT round "'+r.name+'" with all its sign-ups, teams, line-ups and results. Type its first race date ('+r.id+') to confirm:');
   if(c===null) return;
   if(await zrlPastPost('/api/zrl/round-delete',{ confirm:c.trim() })){ zrlPast=null; zrlPastOpen=null; loadZrl(); }
+}
+let zrlLog=null;
+async function zrlLogLoad(){
+  try{ const r=await fetch('/api/zrl/log',{headers:tttHeaders()}); if(r.ok) zrlLog=(await r.json()).entries; else zrlLog=[]; }catch(e){ zrlLog=[]; }
+  if(zrlStaffTab==='setup') renderZrl2();
+}
+function zrlLogCard(){
+  if(!zrlLog){ zrlLogLoad(); return `<div class="card" style="padding:14px 16px;margin-top:16px;font-size:13px;color:#9ca3af">Loading recent changes…</div>`; }
+  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:'Europe/London',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const who=e=>e.role==='admin'?'Admin':e.role==='mod'?'Moderator':e.role==='member'?esc(e.who||'Member'):'Guest';
+  return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Recent changes (staff) · ${zrlLog.length}</summary>
+    <div style="font-size:11px;color:#6b7280;margin:6px 0">The latest 100 changes made in the dashboard: who, when and what (names and IDs only, never passwords). UK time.</div>
+    <div style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">${zrlLog.map(e=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 8px 4px 0;white-space:nowrap;color:#9ca3af">${esc(when(e.ts))}</td><td style="padding:4px 8px 4px 0;white-space:nowrap">${who(e)}</td><td style="padding:4px 8px 4px 0;white-space:nowrap;font-weight:700">${esc(e.route.replace(/^zrl\//,''))}</td><td style="padding:4px 0;color:#9ca3af;word-break:break-word">${esc(e.what)}</td></tr>`).join('')||'<tr><td style="padding:8px;color:#6b7280">Nothing yet.</td></tr>'}</table></div>
+    <button onclick="zrlLog=null;renderZrl2()" style="margin-top:8px;padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></details>`;
 }
 function zrlPastCard(d){
   if(!zrlPast){ zrlPastLoad(); return `<div class="card" style="padding:14px 16px;margin-top:16px;font-size:13px;color:#9ca3af">Loading past rounds…</div>`; }
