@@ -30,6 +30,11 @@ test('it calls the results endpoint with the raw key, and shows the shape withou
   assert.ok(!JSON.stringify(r.body).includes('zr-secret-key'), 'the key never leaves the server');
   await look('?id=5&source=zp');
   assert.equal(world.zr.seen[1].path, '/api/public/zp/5/results', 'the ZwiftPower view too');
+  const rider = await look('?id=9&kind=rider&host=api');
+  assert.equal(world.zr.seen[2].path, '/api/public/riders/9');
+  assert.equal(rider.body.url, 'https://api.zwiftracing.app/api/public/riders/9', 'the address asked is shown, without the key');
+  await look('?kind=categories'); assert.equal(world.zr.seen[3].path, '/api/v2/public/categories', 'no id needed');
+  assert.equal((await look('?id=9&kind=ladder')).status, 400, 'only the listed endpoints');
 });
 
 test('their errors are shown as they are (a rate limit, a bad key)', async () => {
@@ -38,4 +43,10 @@ test('their errors are shown as they are (a rate limit, a bad key)', async () =>
   assert.equal(JSON.parse(r.body.body).retryAfter, 41);
   world.zr = { status: 401, body: { message: 'Unauthorized' }, seen: [] };
   r = await look('?id=5'); assert.equal(r.body.status, 401);
+});
+
+test('a web page instead of data is called out, and only the start of it is returned', async () => {
+  world.zr = { status: 200, body: '<!DOCTYPE html><html><head><title>Page not found</title></head><body>' + 'x'.repeat(5000) + '</body></html>', seen: [] };
+  const r = await look('?id=5'); assert.equal(r.status, 200);
+  assert.equal(r.body.isPage, true); assert.equal(r.body.shape, 'a web page, not data'); assert.ok(r.body.body.length <= 600);
 });

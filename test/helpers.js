@@ -162,8 +162,9 @@ function installFetch(world) {
     }
     if (u.host === 'wp.test') return handleWp(world, u, opts);
     if (u.host === 'docs.google.com') return handleSheet(world, u, opts);
-    if (u.host === 'zwiftracing.app') {   // the ZwiftRacing.app organizer API: world.zr = { status, body, seen: [] }
+    if (u.host === 'zwiftracing.app' || u.host === 'api.zwiftracing.app') {   // the ZwiftRacing.app organizer API: world.zr = { status, body, seen: [] }
       (world.zr.seen = world.zr.seen || []).push({ path: u.pathname, auth: (opts.headers || {}).Authorization });
+      if (typeof world.zr.body === 'string') return new Response(world.zr.body, { status: world.zr.status || 200, headers: { 'Content-Type': 'text/html' } });
       return json(world.zr.body ?? {}, world.zr.status || 200);
     }
     if (u.host === 'discord.test') {
