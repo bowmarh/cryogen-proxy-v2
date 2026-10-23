@@ -69,3 +69,17 @@ test('the admin panel shows the ZRL row, and members cannot see the panel', asyn
   assert.match(c.detail, /Round 2: sign-ups open, 0 riders in/);
   assert.equal((await app.get('/api/health')).status, 401);
 });
+
+test('a race within three days warns about teams without a full line-up, and not before or without weekly data', () => {
+  const r = round({ weeks: 3, racing: 5 });   // races 17 Nov, 24 Nov, 1 Dec
+  const data = (weekly, now) => healthRow({ round: r, signups: [rider('x')], assign: { x: 'a' }, weekly }, now);
+  const none = { avail: {}, lineup: {} };
+  const dayOf = Date.parse('2026-11-17T00:00:00Z');
+  const soon = data(none, dayOf - 2 * 86400000);
+  assert.equal(soon[0], 'warn'); assert.match(soon[1], /1 team has not picked a full line-up for race 1 \(2026-11-17\)/);
+  assert.equal(data(none, dayOf - 5 * 86400000)[0], 'ok', 'a week out is too early');
+  assert.equal(data({ avail: {}, lineup: { '0:a': ['1', '2', '3', '4', '5'] } }, dayOf - 86400000)[0], 'ok', 'a full line-up clears it');
+  assert.equal(data(none, dayOf + 86400000)[0], 'ok', 'race 1 is over and race 2 is a week away');
+  assert.match(data(none, dayOf + 5 * 86400000)[1], /race 2 \(2026-11-24\)/, 'then it looks at race 2');
+  assert.equal(healthRow({ round: r, signups: [rider('x')], assign: { x: 'a' } }, dayOf - 86400000)[0], 'ok', 'no weekly data, no warning');
+});
