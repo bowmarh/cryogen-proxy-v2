@@ -70,3 +70,39 @@ test('level on points, the better best finish ranks higher; more points always w
   await save(1, [{ team: 'cryo-gen-alpha', pts: 5 }]);
   assert.deepEqual((await standings()).groups[0].teams.map(t => [t.name, t.rank]), [['CRYO-GEN Alpha', 1], ['CRYO-GEN Beta', 2]], 'points count even with no position');
 });
+
+test('posting the standings to Discord and exporting them as a spreadsheet', async () => {
+  const post = (token = admin) => app.post('/api/zrl/post-standings', {}, { token });
+  const exp = (kind, token = admin) => app.get(`/api/zrl/results-export${kind ? `?kind=${kind}` : ''}`, { token });
+  assert.equal((await post(null)).status, 401);
+  assert.equal((await exp('', null)).status, 401);
+  assert.equal((await post()).status, 409, 'nothing to post yet');
+  assert.equal((await exp()).status, 409);
+  await save(0, [{ team: 'cryo-gen-alpha', pos: 2, pts: 100, note: '=HYPERLINK("x")' }, { team: 'cryo-gen-beta', pos: 1, pts: 120 }, { team: 'cryo-gen-gamma', pos: 11, pts: 5 }]);
+  app.world.discord.length = 0;
+  assert.equal((await post()).status, 200);
+  const text = app.world.discord.filter(p => p.channel === 'public').map(p => p.body.content).join('\n');
+  assert.match(text, /standings after race 1/);
+  assert.match(text, /\*\*Division 1\*\*\n1\. Beta · 120 pts \(best 1st\)\n2\. Alpha · 100 pts \(best 2nd\)/);
+  assert.match(text, /\*\*Division 2\*\*\n1\. Gamma · 5 pts \(best 11th\)/);
+  assert.equal((await post()).status, 429, 'not twice in five minutes');
+  const standings = (await exp()).body;
+  assert.equal(standings.filename, 'round-2-standings.csv');
+  assert.match(standings.csv, /^Division,Rank,Team,Points,Races,Best finish,Race 1 \(/);
+  assert.match(standings.csv, /Division 1,1,CRYO-GEN Beta,120,1,1,1st · 120 pts/);
+  const results = (await exp('results')).body;
+  assert.equal(results.filename, 'round-2-results.csv');
+  assert.match(results.csv, /^Race,Date,Team,Division,League,Position,Points,Note/);
+  assert.match(results.csv, /1,2026-11-17,CRYO-GEN Alpha,Division 1,,2,100,'=HYPERLINK\("x"\)|"'=HYPERLINK/, 'a note that looks like a formula is neutralised');
+});
+
+test('a long standings post is split below the Discord message limit', async () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ name: `CRYO-GEN Team ${String(i).padStart(2, '0')} with a rather long name`, region: 'eu', division: `Division ${i % 3 + 1}` }));
+  await app.post('/api/zrl/teams', { teams: many }, { token: admin });
+  await save(0, many.map((t, i) => ({ team: t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), pos: i + 1, pts: 100 - i })));
+  app.world.discord.length = 0;
+  assert.equal((await app.post('/api/zrl/post-standings', {}, { token: admin })).status, 200);
+  const msgs = app.world.discord.filter(p => p.channel === 'public').map(p => p.body.content);
+  assert.ok(msgs.every(m => m.length <= 2000), 'every message fits');
+  assert.match(msgs[msgs.length - 1], /Full table: /);
+});

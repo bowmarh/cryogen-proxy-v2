@@ -2140,6 +2140,21 @@ function zrlZrCard(){
       <input id="zrl-zr-id" class="inp" inputmode="numeric" placeholder="Event, rider or club id" value="${esc((z&&z.id)||'')}" style="width:190px"/>
       <select id="zrl-zr-host" class="inp" style="width:auto"><option value="site" ${z&&z.host==='api'?'':'selected'}>zwiftracing.app</option><option value="api" ${z&&z.host==='api'?'selected':''}>api.zwiftracing.app</option></select><button onclick="zrlZrFetch()" style="${btn}">Fetch</button></div>${out}${zrlProbeHtml()}</div>`;
 }
+async function zrlPostStandings(){
+  if(!confirm('Post the standings to the club channel?')) return;
+  let res,d; try{ res=await fetch('/api/zrl/post-standings',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
+async function zrlResultsExport(kind){
+  let res,d; try{ res=await fetch('/api/zrl/results-export?kind='+kind,{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
+}
+function zrlStandings0(){ return !!(zrlStand&&zrlStand.groups&&zrlStand.groups.length); }
+function zrlShareBar(){
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px"><button onclick="zrlPostStandings()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📣 Post standings to Discord</button><button onclick="zrlResultsExport('standings')" style="${btn}">⬇ Standings (CSV)</button><button onclick="zrlResultsExport('results')" style="${btn}">⬇ Results race by race (CSV)</button></div>`;
+}
 function zrlResultsTab(d,st){
   const r=d.round, s=zrlStand;
   if(!s){ zrlStandLoad(); return `<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Loading…</div>`; }
@@ -2152,7 +2167,7 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}${zrlEvCard()}${zrlZrCard()}`;
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
 }
 let zrlPast=null, zrlPastOpen=null, zrlPastWeek=0;
 async function zrlPastLoad(id){
