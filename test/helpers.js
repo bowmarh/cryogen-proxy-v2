@@ -170,6 +170,11 @@ function installFetch(world) {
       if (typeof world.zr.body === 'string') return new Response(world.zr.body, { status: world.zr.status || 200, headers: { 'Content-Type': 'text/html' } });
       return json(world.zr.body ?? {}, world.zr.status || 200);
     }
+    if (u.host === 'hooks.test') {   // an outbound webhook (Zapier, Make): world.hooks collects what was sent; world.hookFail makes it answer 500
+      (world.hooks = world.hooks || []).push({ path: u.pathname, body: JSON.parse(opts.body) });
+      return world.hookFail ? json({}, 500) : json({ ok: true });
+    }
+    if (u.host === 'cal.test') return new Response(world.ical || '', { status: world.icalStatus || 200 });   // an iCal feed
     if (u.host === 'discord.test') {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body

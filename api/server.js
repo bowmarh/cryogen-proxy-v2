@@ -1209,7 +1209,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1580,6 +1580,7 @@ async function healthChecks(){
     }),
     run('zrl', 'ZRL round', async () => zrl.healthRow(await zrl.load())),
     run('backup', 'Backups', async () => backup.healthRow()),
+    run('cover', 'Ride cover (leaders and sweepers)', async () => cover.healthRow(await cover.load())),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
@@ -1724,6 +1725,17 @@ const zrl = require('../lib/zrl')({
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
 });
 
+// Ride cover (lib/cover.js): leaders and sweepers for the weekly social rides.
+const cover = require('../lib/cover')({
+  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, teamId, siteUrl: SITE_URL,
+});
+async function handleCover(coverRoute, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await coverRoute(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, { ...body, rows: undefined }, { staffOnly: false }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
 const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS });
 async function handleBackup(route, req, res){
@@ -1780,6 +1792,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const coverRoute = cover.routes[`${req.method} ${pathname}`];
+  if (coverRoute) return handleCover(coverRoute, req, res);
 
   const backupRoute = backup.routes[`${req.method} ${pathname}`];
   if (backupRoute) return handleBackup(backupRoute, req, res);
