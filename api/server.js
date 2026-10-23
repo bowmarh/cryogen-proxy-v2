@@ -1780,6 +1780,7 @@ function serveStatic(res, reqPath){
 const zrl = require('../lib/zrl')({
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
+  coverHonours: (since, now) => cover.honours(since, now),   // ride cover is created further down
 });
 
 // Ride cover (lib/cover.js): leaders and sweepers for the weekly social rides.
