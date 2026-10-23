@@ -95,3 +95,25 @@ test('staff get the weekly answers and line-ups with the page data; nobody else 
   assert.equal((await app.get('/api/zrl', { token: ann })).body.weekly, undefined);
   assert.equal((await app.get('/api/zrl')).body.weekly, undefined);
 });
+
+test('subs finder: the bench and riders with no team, for a captain or staff only', async () => {
+  await app.post('/api/zrl/signup', { name: 'Free Fran', zwid: '5001', regions: ['eu'], cat: 'C' });
+  await app.post('/api/zrl/signup', { name: 'Far Fred', zwid: '5002', regions: ['ap'], cat: 'C' });
+  await app.post('/api/zrl/signup', { name: 'Strong Stan', zwid: '5003', regions: ['eu'], cat: 'A' });
+  await avail({ week: 0, status: 'maybe' }, ann);
+  const subs = (team, week, token) => app.get(`/api/zrl/subs?team=${team}&week=${week}`, { token });
+  assert.equal((await subs('cryo-gen-alpha', 0, null)).status, 401);
+  assert.equal((await subs('cryo-gen-alpha', 0, ann)).status, 403, 'a rider is not the captain');
+  assert.equal((await subs('cryo-gen-beta', 0, cap)).status, 403, 'not their team');
+  assert.equal((await subs('nope', 0, admin)).status, 404);
+  assert.equal((await subs('cryo-gen-alpha', 9, admin)).status, 400);
+  await lineup({ week: 0, team: 'cryo-gen-alpha', zwids: ['1002'] }, cap);
+  const r = (await subs('cryo-gen-alpha', 0, cap)).body;
+  assert.deepEqual([r.picked, r.short, r.rosterFull], [1, 4, false]);
+  assert.deepEqual(r.bench, [{ name: 'Ann Able', cat: 'C', status: 'maybe' }], 'the rider not in the line-up');
+  assert.deepEqual(r.pool.map(x => x.name), ['Free Fran', 'Strong Stan'].sort(), 'unplaced, in this time zone');
+  assert.ok(r.pool.every(x => x.key === undefined), 'a captain does not get keys');
+  assert.ok((await subs('cryo-gen-alpha', 0, admin)).body.pool.every(x => x.key), 'staff do');
+  await avail({ week: 0, status: 'no' }, ann);
+  assert.deepEqual((await subs('cryo-gen-alpha', 0, cap)).body.bench, [], 'someone who said no is not a sub');
+});
