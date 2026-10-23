@@ -1037,7 +1037,7 @@ const validDate = d => {
   const t = new Date(`${d}T00:00:00Z`);
   return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
 };
-function seasonSummary(snapshots){
+function seasonSummary(snapshots, full = false){
   const weeks = [];
   const teams = new Map();   // team name -> stats
   const riders = new Map();  // lowercase name -> stats
@@ -1095,6 +1095,7 @@ function seasonSummary(snapshots){
     },
     teams: teamList,
     riders: riderList.slice(0, 25),
+    ...(full ? { everyRider: riderList } : {}),
     weeks,
   };
 }
@@ -1503,6 +1504,62 @@ async function handleWpSso(req, res, token){
   }
 }
 
+// "Your season": one rider's ZRL, TTT, social-ride and ride-cover record in a single answer, for the card on their profile.
+async function handleMeSeason(req, res){
+  const member = memberFromRequest(req);
+  if (!member) return sendJSON(res, 401, { error: 'Sign in with your cryogen.team account.' });
+  const now = Date.now(), today = new Date(now).toISOString().slice(0, 10);
+  const names = new Set([member.name.toLowerCase()]);
+  const part = async (label, fn) => { try { return await fn(); } catch (e) { console.error(`Season ${label}:`, e.message); return null; } };
+
+  const zrlPart = await part('zrl', async () => {
+    const data = await zrl.load();
+    if (!data.round) return null;
+    const my = zrl.myZrl(data, member, data.weekly, await zrl.loadResults());
+    if (!my.team && !my.captainOf.length) return { round: data.round.name, placed: false };
+    const past = my.weeks.filter(w => w.date <= today), picked = past.filter(w => w.picked);
+    const scored = picked.filter(w => w.result && w.result.pts !== null);
+    return { round: data.round.name, placed: true, team: my.team && my.team.name, races: past.length, picked: picked.length, answered: my.weeks.filter(w => w.mine).length, yes: my.weeks.filter(w => w.mine === 'yes').length,
+      weeks: my.weeks.length, points: scored.reduce((n, w) => n + w.result.pts, 0), podiums: picked.filter(w => w.result && w.result.pos && w.result.pos <= 3).length };
+  });
+
+  const tttPart = await part('ttt', async () => {
+    const [data, seasons] = await Promise.all([loadTtt(), loadSeasons()]);
+    const choices = seasonChoices(seasons, data.archive), choice = choices[choices.length - 1];
+    const ids = data.archive.filter(id => inSeason(id, choice)).slice(0, SEASON_MAX_WEEKS);
+    const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => (x ? JSON.parse(x) : null)) : [];
+    if (data.week && inSeason(data.week.date, choice) && Object.keys(data.week.results || {}).length) snaps.unshift({ week: data.week, signups: data.signups, assign: data.assign });
+    const me = (seasonSummary(snaps, true).everyRider || []).find(r => names.has(r.name.toLowerCase()));
+    return { season: choice.name, weeks: me ? me.weeks : 0, captain: me ? me.captain : 0, podiums: me ? me.podiums : 0 };
+  });
+
+  const ridesPart = await part('rides', async () => {
+    const [rsvpRaw, rideRaw] = await redis([['HGETALL', KEYS.rsvps], ['HGETALL', KEYS.rides]]);
+    const dates = new Map();
+    for (let i = 0; i < (rideRaw || []).length; i += 2) { try { dates.set(rideRaw[i], JSON.parse(rideRaw[i + 1]).date); } catch (e) { /* skip */ } }
+    let total = 0, past = 0;
+    for (let i = 0; i < (rsvpRaw || []).length; i += 2) {
+      let who = ''; try { who = String(JSON.parse(rsvpRaw[i + 1]).name || '').toLowerCase(); } catch (e) { /* skip */ }
+      if (!names.has(who)) continue;
+      total++;
+      const d = dates.get(rsvpRaw[i].split('|')[0]);
+      if (d && d < today) past++;
+    }
+    return { rsvps: total, attended: past };
+  });
+
+  const coverPart = await part('cover', () => cover.statsFor(member.zwid, now));
+
+  const highlights = [];
+  if (zrlPart && zrlPart.races >= 2 && zrlPart.picked === zrlPart.races) highlights.push('🏁 Raced every ZRL race so far');
+  if (zrlPart && zrlPart.weeks && zrlPart.answered === zrlPart.weeks) highlights.push('✅ Answered availability for every ZRL race');
+  if (zrlPart && zrlPart.podiums) highlights.push(`🥇 ${zrlPart.podiums} ZRL podium${zrlPart.podiums === 1 ? '' : 's'} with your team`);
+  if (tttPart && tttPart.podiums) highlights.push(`🥇 ${tttPart.podiums} TTT podium${tttPart.podiums === 1 ? '' : 's'}`);
+  if (coverPart && coverPart.past >= 5) highlights.push('🧭 Ride-cover regular');
+  if (ridesPart && ridesPart.attended >= 10) highlights.push('🚴 Regular on the social rides');
+  sendJSON(res, 200, { name: member.name, zrl: zrlPart, ttt: tttPart, rides: ridesPart, cover: coverPart, highlights });
+}
+
 async function handleMe(req, res){
   const member = memberFromRequest(req);
   if (!member) return sendJSON(res, 401, { error: 'Not signed in as a member.' });
@@ -1776,6 +1833,7 @@ async function route(req, res){
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
+  if (pathname === '/api/me/season' && req.method === 'GET') return handleMeSeason(req, res);
   if (pathname === '/api/health' && req.method === 'GET'){
     requireRole(req, ['admin']);
     return sendJSON(res, 200, { checked: new Date().toISOString(), checks: await healthChecks() });

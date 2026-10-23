@@ -1526,6 +1526,7 @@ function renderProfile(){
       </div>
     </div>
 
+    <div id="my-season" style="margin-bottom:24px"></div>
     <div id="my-ttt" style="margin-bottom:24px"></div>
     <div id="my-zrl" style="margin-bottom:24px"></div>
     <div id="my-rides" style="margin-bottom:24px"></div>
@@ -1569,6 +1570,7 @@ function renderProfile(){
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}`
   ;
+  loadMySeason();
   loadMyTtt();
   loadMyZrl();
   renderMyRides();
@@ -2720,6 +2722,32 @@ function renderMyTtt(m){
       <table style="width:100%;font-size:12px;margin-top:6px"><tbody>${m.history.map(h=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:6px 8px 6px 0;color:#9ca3af;white-space:nowrap">${esc(h.date)}</td><td style="padding:6px 8px">${h.teams.map(t=>esc(t.name)+(t.result?' — '+esc(tttResultText(t.result)):'')).join('<br>')}</td></tr>`).join('')}</tbody></table>`;
   }
   return card(body);
+}
+// "Your season": the ZRL, TTT, social-ride and ride-cover record in one card at the top of the profile.
+async function loadMySeason(){
+  const el=document.getElementById('my-season'); if(!el) return;
+  if(!sessionStorage.getItem('sso')){ el.innerHTML=''; return; }   // My TTT already tells guests to sign in
+  try{
+    const res=await fetch('/api/me/season',{headers:tttHeaders()}); const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    el.innerHTML=renderMySeason(d);
+  }catch(e){ el.innerHTML=''; }   // the profile works without it
+}
+function renderMySeason(d){
+  const z=d.zrl, t=d.ttt, r=d.rides, c=d.cover;
+  const tile=(label,big,sub,col)=>`<div class="card" style="padding:14px 16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:${col};margin-bottom:6px">${label}</div><div style="font-size:24px;font-weight:900">${big}</div><div style="font-size:12px;color:#9ca3af;margin-top:4px">${sub}</div></div>`;
+  const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+  const zrlTile=!z?tile('🚀 ZRL','—','No round yet','#00D4FF')
+    :!z.placed?tile('🚀 ZRL','—','Not on a team this round','#00D4FF')
+    :tile('🚀 ZRL',`${z.picked}<span style="font-size:14px;color:#6b7280"> of ${z.races}</span>`,`${z.races?'races picked for':'No races yet'}${z.answered?` · said yes ${z.yes}×`:''}${z.points?` · team ${z.points} pts`:''}`,'#00D4FF');
+  const tttTile=tile('🏁 TTT',t?t.weeks:0,t&&t.weeks?`${plural(t.weeks,'week')} raced${t.podiums?` · ${plural(t.podiums,'podium')}`:''}${t.captain?` · captain ${t.captain}×`:''}`:'No weeks yet this season','#FBBF24');
+  const rideTile=tile('🚴 Social rides',r?r.attended:0,r&&r.rsvps?`${plural(r.rsvps,'RSVP')}${r.rsvps>r.attended?` · ${r.rsvps-r.attended} coming up`:''}`:'RSVP to a ride to start','#10B981');
+  const next=c&&c.upcoming&&c.upcoming[0];
+  const coverTile=tile('🧭 Ride cover',c?c.past:0,c&&c.past?`${plural(c.led,'ride')} led · ${c.swept} swept`:(next?'None yet':'Lead or sweep a ride'),'#A78BFA')
+    .replace('</div></div>',next?`</div><div style="font-size:11px;color:#A78BFA;margin-top:4px">Next: ${esc(next.role)} · ${esc(next.title)} · ${esc(new Date(next.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}</div></div>`:'</div></div>');
+  const hl=d.highlights&&d.highlights.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${d.highlights.map(h=>`<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25)">${esc(h)}</span>`).join('')}</div>`:'';
+  return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em;margin-bottom:8px">⭐ Your season</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">${zrlTile}${tttTile}${rideTile}${coverTile}</div>${hl}`;
 }
 async function loadMyTtt(){
   const el=document.getElementById('my-ttt'); if(!el) return;
