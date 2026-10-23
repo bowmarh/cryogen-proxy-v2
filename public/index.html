@@ -2270,45 +2270,57 @@ function zrlCalcOpen(teamId){
   const t=zrlData.round.teams.find(x=>x.id===teamId); if(!t) return;
   const lu=((zrlData.weekly||{}).lineup||{})[zrlResWeek+':'+teamId]||[];
   const sg=z=>(zrlData.signups||[]).find(x=>String(x.zwid)===String(z))||{};
-  const rows=(lu.length?lu:(zrlTeamStats(zrlData).by[teamId]||[]).filter(x=>x.zwid).slice(0,zrlData.round.racing).map(x=>x.zwid)).map(z=>({ name:sg(z).name||String(z), cat:sg(z).cat||'', pos:'', fal:'', fts:'', noHr:false, zpower:false }));
-  zrlCalc={ team:teamId, name:t.name, week:zrlResWeek, starters:(zrlCalc&&zrlCalc.starters)||'', rows, out:null };
+  const rows=(lu.length?lu:(zrlTeamStats(zrlData).by[teamId]||[]).filter(x=>x.zwid).slice(0,zrlData.round.racing).map(x=>x.zwid)).map(z=>({ name:sg(z).name||String(z), cat:sg(z).cat||'', pos:'', fal:'', fts:'', time:'', noHr:false, zpower:false }));
+  zrlCalc={ team:teamId, name:t.name, week:zrlResWeek, starters:(zrlCalc&&zrlCalc.starters)||'', rows, out:null, mode:'points' };
   renderZrl2();
 }
 function zrlCalcFromEvent(teamId){
   const e=zrlEv, t=e&&e.teams.find(x=>x.id===teamId), team=t&&zrlData.round.teams.find(x=>x.id===teamId); if(!t||!team) return;
   const set=t.lineupSet>0, racers=t.raced.filter(x=>!set||x.picked).slice(0,zrlData.round.racing);
-  const rows=racers.map(x=>({ name:x.name, cat:x.cat||'', pos:x.position||'', fal:'', fts:'', noHr:false, zpower:false }));
-  t.missing.forEach(n=>{ if(rows.length<zrlData.round.racing) rows.push({ name:n, cat:'', pos:'', fal:'', fts:'', noHr:false, zpower:false }); });
+  const rows=racers.map(x=>({ name:x.name, cat:x.cat||'', pos:x.position||'', fal:'', fts:'', time:x.time?zrlClock(x.time):'', noHr:false, zpower:false }));
+  t.missing.forEach(n=>{ if(rows.length<zrlData.round.racing) rows.push({ name:n, cat:'', pos:'', fal:'', fts:'', time:'', noHr:false, zpower:false }); });
   zrlResWeek=e.week;
-  zrlCalc={ team:teamId, name:team.name, week:e.week, starters:e.event.finishers, rows, out:null, fromRace:true };
+  zrlCalc={ team:teamId, name:team.name, week:e.week, starters:e.event.finishers, rows, out:null, fromRace:true, mode:/time trial/i.test(e.event.subType||'')?'ttt':'points' };
   renderZrl2();
   const c=document.getElementById('zrl-calc'); if(c) c.scrollIntoView({ behavior:'smooth', block:'center' });
 }
+function zrlClock(sec){ const m=Math.floor(sec/60), r=sec-m*60; return m+':'+(r<10?'0':'')+r.toFixed(1); }
+function zrlCalcMode(m){ zrlCalc.mode=m; zrlCalc.out=null; renderZrl2(); }
 function zrlCalcSet(i,k,v){ if(i<0) zrlCalc[k]=v; else zrlCalc.rows[i][k]=v; zrlCalc.out=null; }
 async function zrlCalcRun(){
-  let res,d; try{ res=await fetch('/api/zrl/score',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ starters:zrlCalc.starters, riders:zrlCalc.rows })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  let res,d; try{ res=await fetch('/api/zrl/score',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ mode:zrlCalc.mode, starters:zrlCalc.starters, riders:zrlCalc.rows })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
   zrlCalc.out=d; renderZrl2();
 }
 function zrlCalcUse(){
-  const tr=[...document.querySelectorAll('.zrl-res-row')].find(r=>r.dataset.team===zrlCalc.team); if(tr) tr.querySelector('.rs').value=zrlCalc.out.total;
-  const n=zrlCalc.name; zrlCalc=null; const c=document.getElementById('zrl-calc'); if(c) c.remove();   // no re-render: it would drop what is typed in the other rows
-  alert('Total filled in for '+n+'. Check the position, then press Save race.');
+  const tr=[...document.querySelectorAll('.zrl-res-row')].find(r=>r.dataset.team===zrlCalc.team), o=zrlCalc.out;
+  if(tr){ if(zrlCalc.mode==='ttt'){ tr.querySelector('.rn').value=o.dnq?'TTT: DNQ':'TTT team time '+o.teamClock; if(o.dnq) tr.querySelector('.rs').value=0; } else tr.querySelector('.rs').value=o.total; }
+  const n=zrlCalc.name, wasTtt=zrlCalc.mode; zrlCalc=null; const c=document.getElementById('zrl-calc'); if(c) c.remove();   // no re-render: it would drop what is typed in the other rows
+  alert((wasTtt==='ttt'?'Team time put in the note':'Total filled in')+' for '+n+'. Check the position and points, then press Save race.');
 }
 function zrlCalcCard(){
   const c=zrlCalc; if(!c) return '';
-  const inp='class="inp" style="width:64px" type="number" min="0"';
-  return `<div id="zrl-calc" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)">
-    <div style="font-size:14px;font-weight:800">🧮 Points for ${esc(c.name)} · race ${c.week+1}</div>
-    <div style="font-size:12px;color:#9ca3af;margin:4px 0 10px">Finish points = starters − position + 1. Top 5 get 10/8/6/4/2 more. Add each rider's First Across the Line and Fastest Through Segment points from the results. No heart rate: zero for an A rider, half for B to D. ZPower: half.</div>
-    ${c.fromRace?'<div style="font-size:12px;color:#10B981;margin-bottom:6px">Positions and starters came from ZwiftRacing.app (starters = riders in the results, so raise it if some did not finish). Riders have been taken from the captain\'s line-up, and categories are their ZwiftRacing category.</div>':''}<label style="font-size:12px;color:#9ca3af">Riders who started the race <input ${inp} value="${esc(c.starters)}" oninput="zrlCalcSet(-1,'starters',this.value)"/></label>
-    <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tr style="font-size:10px;color:#6b7280;text-transform:uppercase;text-align:left"><th>Rider</th><th>Pos</th><th>FAL</th><th>FTS</th><th>No HR</th><th>ZPower</th><th>Points</th></tr>
-    ${c.rows.map((r,i)=>{ const o=c.out&&c.out.riders[i]; return `<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:4px 8px 4px 0">${esc(r.name)} <span style="font-size:10px;color:#6b7280">${esc(r.cat)}</span></td>
+  const ttt=c.mode==='ttt', inp='class="inp" style="width:64px" type="number" min="0"', tin='class="inp" style="width:90px" placeholder="31:12.4"';
+  const tab=(m,l)=>`<button onclick="zrlCalcMode('${m}')" style="padding:3px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${c.mode===m?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${c.mode===m?'rgba(0,212,255,0.12)':'transparent'};color:${c.mode===m?'#00D4FF':'#e5e7eb'}">${l}</button>`;
+  const o=c.out;
+  const head=ttt?'<th>Rider</th><th>Finish time</th><th>ZPower</th>':'<th>Rider</th><th>Pos</th><th>FAL</th><th>FTS</th><th>No HR</th><th>ZPower</th><th>Points</th>';
+  const row=(r,i)=>{ const x=!ttt&&o&&o.riders[i];
+    return ttt?`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:4px 8px 4px 0">${esc(r.name)}</td><td><input ${tin} value="${esc(r.time)}" oninput="zrlCalcSet(${i},'time',this.value)"/></td><td><input type="checkbox" ${r.zpower?'checked':''} onchange="zrlCalcSet(${i},'zpower',this.checked)"/></td></tr>`
+    :`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:4px 8px 4px 0">${esc(r.name)} <span style="font-size:10px;color:#6b7280">${esc(r.cat)}</span></td>
       <td><input ${inp} value="${esc(r.pos)}" oninput="zrlCalcSet(${i},'pos',this.value)"/></td><td><input ${inp} value="${esc(r.fal)}" oninput="zrlCalcSet(${i},'fal',this.value)"/></td><td><input ${inp} value="${esc(r.fts)}" oninput="zrlCalcSet(${i},'fts',this.value)"/></td>
       <td><input type="checkbox" ${r.noHr?'checked':''} onchange="zrlCalcSet(${i},'noHr',this.checked)"/></td><td><input type="checkbox" ${r.zpower?'checked':''} onchange="zrlCalcSet(${i},'zpower',this.checked)"/></td>
-      <td style="font-weight:700">${o?`${o.points}<div style="font-size:10px;font-weight:400;color:#6b7280">${o.fin}+${o.pbp}+${o.segments}${o.notes.length?' · '+esc(o.notes.join(', ')):''}</div>`:''}</td></tr>`; }).join('')}</table>
-    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button onclick="zrlCalcRun()" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Work it out</button>
-    ${c.out?`<b style="font-size:14px">Team total ${c.out.total}</b><button onclick="zrlCalcUse()" style="padding:5px 12px;font-size:12px;background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.4);border-radius:6px;cursor:pointer">Use as the team's points</button>`:''}
+      <td style="font-weight:700">${x?`${x.points}<div style="font-size:10px;font-weight:400;color:#6b7280">${x.fin}+${x.pbp}+${x.segments}${x.notes.length?' · '+esc(x.notes.join(', ')):''}</div>`:''}</td></tr>`; };
+  const result=!o?'':ttt
+    ?`<b style="font-size:14px;color:${o.dnq?'#f87171':'#e5e7eb'}">${o.dnq?'DNQ (no league points)':'Team time '+esc(o.teamClock)}</b>${o.warnings.map(w=>`<span style="font-size:12px;color:#FBBF24">⚠️ ${esc(w)}</span>`).join('')}<button onclick="zrlCalcUse()" style="padding:5px 12px;font-size:12px;background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.4);border-radius:6px;cursor:pointer">Put in the note${o.dnq?' and score 0':''}</button>`
+    :`<b style="font-size:14px">Team total ${o.total}</b><button onclick="zrlCalcUse()" style="padding:5px 12px;font-size:12px;background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.4);border-radius:6px;cursor:pointer">Use as the team's points</button>`;
+  return `<div id="zrl-calc" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><div style="font-size:14px;font-weight:800">🧮 ${esc(c.name)} · race ${c.week+1}</div>${tab('points','Points race')}${tab('ttt','Team time trial')}</div>
+    <div style="font-size:12px;color:#9ca3af;margin:4px 0 10px">${ttt?'No individual points in a team time trial. The team time is taken when the fourth rider finishes; fewer than four finishers is a DNQ. ZPower riders can be at most 40% of the squad. Enter times as 31:12.4 or seconds.'
+      :"Finish points = starters − position + 1. Top 5 get 10/8/6/4/2 more. Add each rider's First Across the Line and Fastest Through Segment points from the results. No heart rate: zero for an A rider, half for B to D. ZPower: half."}</div>
+    ${c.fromRace?'<div style="font-size:12px;color:#10B981;margin-bottom:6px">Positions, times and starters came from ZwiftRacing.app (starters = riders in the results, so raise it if some did not finish). Riders are from the captain\'s line-up.</div>':''}
+    ${ttt?'':`<label style="font-size:12px;color:#9ca3af">Riders who started the race <input ${inp} value="${esc(c.starters)}" oninput="zrlCalcSet(-1,'starters',this.value)"/></label>`}
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tr style="font-size:10px;color:#6b7280;text-transform:uppercase;text-align:left">${head}</tr>${c.rows.map(row).join('')}</table>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button onclick="zrlCalcRun()" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Work it out</button>${result}
     <button onclick="zrlCalc=null;renderZrl2()" style="padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Close</button></div></div>`;
 }
 let zrlPast=null, zrlPastOpen=null, zrlPastWeek=0;
