@@ -2281,7 +2281,7 @@ async function zrlResultsExport(kind){
 function zrlStandings0(){ return !!(zrlStand&&zrlStand.groups&&zrlStand.groups.length); }
 function zrlShareBar(){
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
-  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px"><button onclick="zrlPostStandings()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📣 Post standings to Discord</button><button onclick="zrlResultsExport('standings')" style="${btn}">⬇ Standings (CSV)</button><button onclick="zrlResultsExport('results')" style="${btn}">⬇ Results race by race (CSV)</button></div>`;
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px"><button onclick="zrlPostStandings()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📣 Post standings to Discord</button><button onclick="zrlRecogOpen()" style="${btn}">🏅 Round recognition</button><button onclick="zrlResultsExport('standings')" style="${btn}">⬇ Standings (CSV)</button><button onclick="zrlResultsExport('results')" style="${btn}">⬇ Results race by race (CSV)</button></div>`;
 }
 function zrlRunbookCard(){
   const li=x=>`<li style="margin:3px 0">${x}</li>`;
@@ -2289,9 +2289,29 @@ function zrlRunbookCard(){
     <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">Before the race</div>
     <ol style="font-size:13px;margin:0 0 8px 18px;padding:0">${li('Check the readiness card at the top of the ZRL tab: every item green.')}${li('The admin channel gets the race-day digest by itself. Chase any team it lists without a line-up.')}${li('Remind riders to have a heart rate monitor, a power meter and (if the trainer estimates cadence) a cadence sensor.')}</ol>
     <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">After the race</div>
-    <ol style="font-size:13px;margin:0 0 8px 18px;padding:0">${li('Results tab, pick the race, paste the Zwift event id into <b>Check a race</b>.')}${li('Press <b>Score all teams from this race</b>. Finish and podium points (or team times) are filled in for every team, and riders too strong for their class are marked Ineligible.')}${li('Per team, press 🧮 to add the riders\' FAL and FTS points (and tick No HR or ZPower), then <b>Keep these rider points</b>.')}${li('Type each team\'s <b>position</b> from WTRL and <b>teams started</b>. League points fill in. Set Status for any ineligible rider or DNQ.')}${li('<b>Save race</b>, then <b>Post race to Discord</b>. Post the standings when the round is done.')}</ol>
+    <ol style="font-size:13px;margin:0 0 8px 18px;padding:0">${li('Results tab, pick the race, paste the Zwift event id into <b>Check a race</b>.')}${li('Press <b>Score all teams from this race</b>. Finish and podium points (or team times) are filled in for every team, and riders too strong for their class are marked Ineligible.')}${li('Per team, press 🧮 to add the riders\' FAL and FTS points (and tick No HR or ZPower), then <b>Keep these rider points</b>.')}${li('Type each team\'s <b>position</b> from WTRL and <b>teams started</b>. League points fill in. Set Status for any ineligible rider or DNQ.')}${li('<b>Save race</b>, then <b>Post race to Discord</b>. When the round is done, post the standings and the <b>🏅 Round recognition</b> (preview it first), then archive the round.')}</ol>
     <div style="font-size:12px;color:#9ca3af;margin:6px 0 4px">If something is wrong</div>
     <ul style="font-size:13px;margin:0 0 4px 18px;padding:0">${li('Open the health dot at the top: it names what is failing. A failed scheduled job is also posted to the ZRL admin channel.')}${li('Setup → Recent changes shows who changed what. Admin → Backups can restore a copy (type RESTORE).')}${li('ZwiftRacing allows one results lookup a minute: wait and press again if it says so.')}</ul></details>`;
+}
+let zrlRecog=null;
+async function zrlRecogOpen(){
+  zrlRecog={ loading:true }; renderZrl2();
+  let r,d; try{ r=await fetch('/api/zrl/recognition',{headers:tttHeaders()}); d=await r.json(); }catch(e){ zrlRecog={ error:'Could not reach the server.' }; renderZrl2(); return; }
+  zrlRecog=r.ok?d:{ error:d.error||('Request failed ('+r.status+')') }; renderZrl2();
+}
+async function zrlRecogPost(){
+  if(!confirm('Post the round recognition to the club channel?')) return;
+  let res,d; try{ res=await fetch('/api/zrl/post-recognition',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
+function zrlRecogCard(){
+  const c=zrlRecog; if(!c) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const body=c.loading?'<div style="font-size:13px;color:#9ca3af">Working it out…</div>':c.error?`<div style="font-size:13px;color:#FBBF24">${esc(c.error)}</div>`
+    :`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">This is exactly what would be posted (${c.messages.length} message${c.messages.length===1?'':'s'}), from ${c.races} race${c.races===1?'':'s'}. Names come from the line-ups and availability you have entered.</div>
+      <pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;margin:0 0 10px;max-height:340px;overflow:auto">${esc(c.messages.join('\n\n──────\n\n').replace(/\*\*/g,''))}</pre>
+      <button onclick="zrlRecogPost()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📣 Post to Discord</button> `;
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">🏅 Round recognition</div>${body}<button onclick="zrlRecog=null;renderZrl2()" style="${btn}">Close</button></div>`;
 }
 function zrlResultsTab(d,st){
   const r=d.round, s=zrlStand;
@@ -2307,7 +2327,7 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><select class="inp rx" onchange="zrlResAuto(this)" style="width:auto"><option value="">Normal</option><option value="ineligible" ${en.flag==='ineligible'?'selected':''}>Ineligible rider (−50%)</option><option value="dnq" ${en.flag==='dnq'?'selected':''}>DNQ (0)</option></select></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(en.pts??'')}" style="width:80px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(en.note||'')}" style="width:100%;min-width:110px"/></td><td style="padding:5px 0 5px 4px"><button title="Work out the team's rider points" onclick="zrlCalcOpen('${esc(t.id)}')" style="${btn}">🧮</button></td></tr>`; }).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button><button onclick="zrlPostRace()" style="${btn};margin:10px 0 0 8px">📣 Post race ${zrlResWeek+1} to Discord</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button><button onclick="zrlPostRace()" style="${btn};margin:10px 0 0 8px">📣 Post race ${zrlResWeek+1} to Discord</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlRecogCard()}${zrlEvCard()}${zrlZrCard()}`;
 }
 let zrlCalc=null;
 function zrlCalcOpen(teamId){
