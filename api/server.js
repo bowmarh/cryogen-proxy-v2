@@ -451,6 +451,23 @@ function postReminder(week, signups){
   });
 }
 
+// Race-day summary for the staff channel: teams racing, those under four riders, those with no captain, line-ups not published, and available
+// riders who are in no team.
+function postTttDigest(week, signups, assign){
+  const n = {};
+  for (const ids of Object.values(assign || {})) for (const id of ids) n[id] = (n[id] || 0) + 1;
+  const racing = week.teams.filter(t => n[t.id]);
+  const short = racing.filter(t => n[t.id] < 4).map(t => `${discordEscape(t.name)} (${n[t.id]})`);
+  const noCaptain = racing.filter(t => !(week.captains || {})[t.id]).map(t => discordEscape(t.name));
+  const unplaced = signups.filter(s => s.available && !(assign[s.name.toLowerCase()] || []).length).length;
+  const lines = [`📅 **${discordEscape(week.title)}: race day**`, `• ${racing.length} team${racing.length === 1 ? '' : 's'} racing`,
+    week.published ? '• ✅ Line-ups are published' : '• ⚠️ The line-ups are not published yet'];
+  if (short.length) lines.push(`• ⚠️ Under 4 riders: ${short.join(', ')}`);
+  if (noCaptain.length) lines.push(`• ⭐ No captain yet: ${noCaptain.join(', ')}`);
+  if (unplaced) lines.push(`• ${unplaced} available rider${unplaced === 1 ? ' is' : 's are'} in no team`);
+  lines.push(`${SITE_URL} → 🏁 TTT Week`);
+  return discord('admin', { content: lines.join('\n') });
+}
 function postClosed(week, signups, assign){
   const avail = signups.filter(s => s.available);
   const unplaced = avail.filter(s => !(assign[s.name.toLowerCase()] || []).length).length;
@@ -594,6 +611,55 @@ const TTT_ROUTES = {
     if (!snap) throw new HttpError(404, 'That week is not in the archive.');
     const data = JSON.parse(snap);
     return tttView({ ...data, archive: [] }, roleFromRequest(req));
+  },
+
+  // Staff: ask the club for riders: how many teams are short and who has signed up so far. While sign-ups are open, once a day.
+  'POST /api/ttt/recruit': async (req) => {
+    requireRole(req, ['admin', 'mod']);
+    const { week } = await requireWeek();
+    if (!week.open) throw new HttpError(409, 'Sign-ups are closed. Reopen them before asking for riders.');
+    const day = new Date().toISOString().slice(0, 10);
+    const [claimed] = await redis([['HSETNX', TTT_KEYS.sent, `${week.id}:recruit:${day}`, new Date().toISOString()]]);
+    if (!claimed) throw new HttpError(429, 'A message asking for riders was already posted today.');
+    const data = await loadTtt();
+    const n = {};
+    for (const ids of Object.values(data.assign)) for (const id of ids) n[id] = (n[id] || 0) + 1;
+    const short = week.teams.filter(t => n[t.id] && n[t.id] < 4);
+    const available = data.signups.filter(s => s.available).length;
+    await discord('public', { content: `🚴 **${discordEscape(week.title)}: we need more riders!**\n${available} signed up so far${short.length ? `, and ${short.length} team${short.length === 1 ? ' is' : 's are'} short of riders` : ''}. Every team needs at least four.\nSign up in a minute: ${SITE_URL} → 🏁 TTT Week` });
+    return { posted: true, available, short: short.length };
+  },
+
+  // Staff: a spreadsheet (CSV) of this week's line-ups, or the season's results. Cells that look like formulas are neutralised.
+  'GET /api/ttt/export': async (req) => {
+    requireRole(req, ['admin', 'mod']);
+    const q = parseRequestUrl(req).query;
+    const cell = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const rows = [];
+    if (q.kind === 'results') {
+      const [data, seasons] = await Promise.all([loadTtt(), loadSeasons()]);
+      const choices = seasonChoices(seasons, data.archive);
+      const choice = choices.find(c => c.id === (q.season || choices[choices.length - 1].id));
+      if (!choice) throw new HttpError(404, 'That season does not exist.');
+      const ids = data.archive.filter(id => inSeason(id, choice)).slice(0, SEASON_MAX_WEEKS);
+      const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => (x ? JSON.parse(x) : null)) : [];
+      if (data.week && inSeason(data.week.date, choice) && Object.keys(data.week.results || {}).length) snaps.unshift({ week: data.week, signups: data.signups, assign: data.assign });
+      rows.push(['Date', 'Week', 'Team', 'Level', 'Zone', 'Position', 'Time', 'Did not finish', 'Captain', 'Riders']);
+      for (const w of seasonSummary(snaps).weeks.slice().reverse()) for (const t of w.teams) {
+        if (!t.result) continue;
+        rows.push([w.date, w.title, t.name, t.level || '', t.zone || '', t.result.dnf ? '' : (t.result.position || ''), t.result.time || '', t.result.dnf ? 'yes' : '', t.captain || '', t.riders.join('; ')]);
+      }
+      if (rows.length === 1) throw new HttpError(409, 'There are no results to export yet.');
+      return { filename: `ttt-results-${String(choice.name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'all'}.csv`, csv: rows.map(r => r.map(cell).join(',')).join('\n') };
+    }
+    const { week, signups, assign } = await requireWeek();
+    const names = new Map(signups.map(s => [s.name.toLowerCase(), s.name]));
+    rows.push(['Team', 'Level', 'Zone', 'Rider', 'Captain', 'Double-up']);
+    for (const t of week.teams) for (const [k, ids] of Object.entries(assign)) if (ids.includes(t.id)) {
+      rows.push([t.name, t.level || '', t.zone || '', names.get(k) || k, (week.captains || {})[t.id] === k ? 'yes' : '', ids.length > 1 ? 'yes' : '']);
+    }
+    if (rows.length === 1) throw new HttpError(409, 'No riders are in teams yet.');
+    return { filename: `ttt-lineups-${week.date}.csv`, csv: rows.map(r => r.map(cell).join(',')).join('\n') };
   },
 
   'GET /api/ttt/season': async (req) => {
@@ -1111,11 +1177,14 @@ async function runTttSchedule(now = Date.now()){
   if (closesAt && now >= remindAt && now < closesAt) due.push('reminder');
   if (closesAt && now >= closesAt) due.push('close');
   if (now >= nextWeekAt) due.push('next-week');
+  const raceDay = Date.parse(`${week.date}T00:00:00Z`);
+  if (now >= raceDay && now < raceDay + DAY_MS && now < nextWeekAt) due.push('digest');
   const done = [];
   for (const event of due){
     const [claimed] = await redis([['HSETNX', TTT_KEYS.sent, `${week.id}:${event}`, new Date(now).toISOString()]]);
     if (!claimed) continue;
     if (event === 'reminder') await postReminder(week, data.signups);
+    if (event === 'digest') await postTttDigest(week, data.signups, data.assign);
     if (event === 'close'){
       if (week.open) await redis([['SET', TTT_KEYS.week, JSON.stringify({ ...week, open: false })]]);
       await postClosed(week, data.signups, data.assign);
@@ -1178,6 +1247,7 @@ async function handleTtt(tttRoute, req, res){
   }
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await tttRoute(req, body);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
 }
 
@@ -1203,6 +1273,7 @@ async function runRidesSchedule(now = Date.now()){
 async function handleData(dataRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await dataRoute(req, body);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result || await loadState());
 }
 

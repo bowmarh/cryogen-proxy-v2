@@ -269,6 +269,7 @@ table{width:100%;border-collapse:collapse}
       <span style="font-size:11px;color:#4b5563">Click "Sync Events" above to pull rides from ZwiftHacks calendar</span>
       <button id="rides-export-btn" onclick="ridesExport()" style="display:none;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">⬇ RSVPs (CSV)</button>
     </div>
+    <div id="rides-help"></div>
     <div id="rides-list"></div>
   </div>
 
@@ -1307,6 +1308,8 @@ function tttStaffPanel(d){
       <button onclick="if(confirm('Remove every rider from every team? You can then auto-assign again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear assignments</button>
       <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" class="tab" style="${w.published?'':'color:#10B981;border-color:rgba(16,185,129,0.3)'}">${w.published?'🙈 Unpublish line-ups':'📣 Publish line-ups'}</button>
       <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
+      ${w.open?`<button onclick="tttRecruit()" class="tab">📣 Ask for riders</button>`:''}
+      <button onclick="tttExport('lineups')" class="tab">⬇ Line-ups (CSV)</button>
       <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
     </div>
     ${tttSummaryBox()}
@@ -1342,6 +1345,16 @@ function tttSaveTeams(){
   const teams=document.getElementById('ttt-teams').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const [name,level,zone,max]=l.split('|').map(x=>(x||'').trim());return{name,level,zone,max};});
   tttWrite('/api/ttt/teams',{teams}).then(ok=>{if(ok){tttEditingTeams=false;renderTtt();}});
 }
+async function tttRecruit(){
+  if(!confirm('Post a message to the club channel asking for more riders?')) return;
+  let res,d; try{ res=await fetch('/api/ttt/recruit',{method:'POST',headers:tttHeaders(),body:'{}'}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
+async function tttExport(kind,season){
+  let res,d; try{ res=await fetch('/api/ttt/export?kind='+kind+(season?'&season='+encodeURIComponent(season):''),{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
+}
 function tttNewWeek(){
   const next=new Date(); next.setDate(next.getDate()+((3-next.getDay()+7)%7||7)); // next Wednesday
   const date=prompt('Date of the next TTT (YYYY-MM-DD). The current week will be archived with its line-ups.',next.toISOString().slice(0,10));
@@ -1368,10 +1381,12 @@ function renderTtt(){
         ${!archived&&w.open&&w.closesAt?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">⏱️ Sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK</div>`:''}</div>
       ${history}
     </div>
+    ${!archived?tttHelpCard():''}
     ${!archived?tttMyStatus(d):''}
     ${tttResults(d)}
     ${!archived&&role==='member'?tttSignupForm(d):''}
     ${!archived&&tttStaff()?tttStaffPanel(d):''}
+    ${!archived&&tttStaff()?changeLogCard('ttt'):''}
     ${(w.published||tttStaff())?`<label class="lbl">${w.published?'Team line-ups':'Line-ups (preview — only staff can see this until published)'}</label>${tttLineups(d)}${(w.published&&(d.waitlist||[]).length)?`<div class="card" style="padding:14px 16px;margin-top:12px"><label class="lbl">⏳ Waitlist — moves up automatically when someone withdraws</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.waitlist.map((n,i)=>`<span style="font-size:12px;background:rgba(251,191,36,0.08);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:99px">#${i+1} ${esc(n)}</span>`).join('')}</div></div>`:''}`:`<div class="card" style="padding:20px;text-align:center;color:#6b7280;font-size:13px">Team line-ups will appear here once the TTT admins publish them.</div>`}
     ${!archived&&!w.published&&d.signups.length?`<div style="margin-top:20px"><label class="lbl">Signed up so far</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.signups.filter(s=>s.available).map(s=>`<span style="font-size:12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(s.name)}</span>`).join('')}</div></div>`:''}
   `;
@@ -1379,6 +1394,7 @@ function renderTtt(){
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
+  const rh=document.getElementById('rides-help'); if(rh) rh.innerHTML=ridesHelpCard()+((role==='admin'||role==='mod')?changeLogCard('rides'):'');
   const everyRide = [...zwiftEventRides, ...rides].sort((a,b)=>new Date(a.date)-new Date(b.date));
   const todayStr = new Date().toISOString().slice(0,10);
   const allRides = everyRide.filter(r=>String(r.date)>=todayStr), pastRides = everyRide.filter(r=>String(r.date)<todayStr).reverse();
@@ -2105,6 +2121,31 @@ async function zrlWeeklyLoad(){
   if(zrlStaffTab==='weeks') renderZrl2();
 }
 let zrlStand=null, zrlResWeek=0;
+// A collapsed help card with numbered steps, and a lazily loaded "Recent changes" list for staff, shared by the TTT Week and Social Rides tabs.
+function plainHelp(title,steps){
+  return `<details class="card" style="padding:10px 16px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:700">❓ ${esc(title)}</summary><ol style="margin:8px 0 2px 18px;padding:0;font-size:13px;color:#d1d5db;line-height:1.55">${steps.map(x=>`<li style="margin-bottom:4px">${x}</li>`).join('')}</ol></details>`;
+}
+const CHANGE_LOG_PREFIX={ ttt:['ttt/'], rides:['rides','rsvps','signups'] };
+function changeLogCard(key){
+  return `<details class="card" style="padding:10px 16px;margin:14px 0" ontoggle="if(this.open)changeLogLoad('${key}')"><summary style="cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Recent changes (staff)</summary><div id="chg-${key}" style="margin-top:6px;font-size:12px;color:#9ca3af">Loading…</div></details>`;
+}
+async function changeLogLoad(key){
+  const el=document.getElementById('chg-'+key); if(!el) return;
+  let list; try{ const r=await fetch('/api/zrl/log',{headers:tttHeaders()}); list=r.ok?(await r.json()).entries:[]; }catch(e){ list=[]; }
+  const mine=list.filter(e=>CHANGE_LOG_PREFIX[key].some(p=>p.endsWith('/')?e.route.startsWith(p):(e.route===p||e.route.startsWith(p+'/'))));
+  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:'Europe/London',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  el.innerHTML=mine.length?`<div style="max-height:260px;overflow:auto"><table style="width:100%;border-collapse:collapse">${mine.map(e=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:3px 8px 3px 0;white-space:nowrap;color:#9ca3af">${esc(when(e.ts))}</td><td style="padding:3px 8px 3px 0;white-space:nowrap">${e.role==='admin'?'Admin':e.role==='mod'?'Moderator':esc(e.who||'Member')}</td><td style="padding:3px 8px 3px 0;white-space:nowrap;font-weight:700">${esc(e.route)}</td><td style="padding:3px 0;color:#9ca3af;word-break:break-word">${esc(e.what)}</td></tr>`).join('')}</table></div><div style="font-size:11px;color:#6b7280;margin-top:4px">What staff changed, newest first (UK time). Riders' own sign-ups are not listed.</div>`:'Nothing yet.';
+}
+function tttHelpCard(){
+  const staff=tttStaff();
+  return staff?plainHelp('Staff checklist for a TTT week',['<b>Sign-ups open</b> by themselves when the week starts, and the club channel is told. They close at the time shown, and a reminder goes out a day before.','<b>Build the teams:</b> press <i>Auto-assign unplaced</i>, then fix any short team in the builder (a ⚠️ shows teams with too few riders) and set captains.','<b>Publish the line-ups</b> when you are happy: riders see their team, and the club channel is told.','<b>Afterwards</b> enter the results; the Season tab picks them up. The next week starts by itself the day after.']):
+    plainHelp('How the TTT works',['<b>Sign up</b> below: say you are available, pick the teams you would like, and tick ⭐ if you would captain. Change it any time before sign-ups close.','<b>Sign-ups close</b> at the time shown. The staff then form the teams.','<b>Line-ups are published</b> on this page (and your <i>My Profile</i>): your team, zone and captain.','<b>Can\'t make it?</b> Withdraw so someone on the waiting list can take your place.']);
+}
+function ridesHelpCard(){
+  const staff=role==='admin'||role==='mod';
+  return staff?plainHelp('Staff checklist for social rides',['<b>Create a ride</b> with the + button: title, date and time, route, pace and the Zwift event link. Rides from the club sheet appear here too.','<b>Watch the RSVPs</b> on each ride: tap a name to remove someone. A ride shows <i>Almost full</i> and <i>Full</i> by itself.','<b>Remove a ride</b> that is cancelled.']):
+    plainHelp('How social rides work',['<b>Find a ride</b> that suits you: date, pace and distance are on each card.','<b>Tap RSVP</b> and confirm your name so the leader knows you are coming. Tap your name again to cancel.','<b>On the day</b> use the Zwift Event link to join the ride.']);
+}
 function zrlHelpCard(kind){
   const steps={
     rider:['<b>Sign up</b> below: tick the time zones you can race and your category. You can change it until sign-ups close.','<b>Wait for the rosters.</b> When the club publishes them, your team, race time and captain appear under <i>Your team</i>.','<b>Tell your captain each week</b> whether you can race: tap Yes, Maybe or No for each race.','<b>Check the line-up.</b> It shows under <i>Your team</i> once the captain has picked the five.'],
@@ -2438,7 +2479,7 @@ function renderSeason(d){
   const defined=d.seasons.filter(x=>x.id!=='all'&&x.id!=='before');
   const weekDate=(typeof tttData!=='undefined'&&tttData&&tttData.week&&tttData.week.date)||new Date().toISOString().slice(0,10);
   const manage=staff?`<div class="card" style="padding:14px 16px;margin-top:20px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:8px">Seasons (staff)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Seasons (staff)</div><button onclick="tttExport('results',seasonId||'')" class="tab" style="font-size:12px">⬇ This season's results (CSV)</button></div>
       ${defined.length?defined.map(x=>`<div style="display:flex;align-items:center;gap:10px;font-size:13px;padding:4px 0"><span style="flex:1"><b>${esc(x.name)}</b> <span style="color:#6b7280">from ${esc(seasonDay(x.start))}</span></span><button data-id="${esc(x.id)}" data-name="${esc(x.name)}" onclick="removeSeasonUi(this.dataset.id,this.dataset.name)" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px">Remove</button></div>`).join(''):'<div style="font-size:12px;color:#6b7280;margin-bottom:6px">No seasons yet, so this page covers every week.</div>'}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <input id="season-name" class="inp" maxlength="40" placeholder="e.g. Season ${defined.length+(d.seasons.some(x=>x.id==='before')?2:1)}" style="flex:1;min-width:150px"/>
