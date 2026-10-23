@@ -165,3 +165,23 @@ test('sign-up import keeps riders\' own sign-ups and refreshes earlier sheet imp
   const again = await sup({ apply: true });
   assert.equal(again.body.imported.signups, 3, 'running it twice changes nothing but the timestamps stay');
 });
+
+test('the board\'s league label is kept on each team, and a refresh updates only the labels', async () => {
+  await imp({ apply: true, regions: { 'cryo-beta': 'ap' } });
+  let v = await view(admin);
+  assert.deepEqual(v.round.teams.map(t => t.league), ['Red', 'Teal', 'AMERICAS E']);
+  // staff work on the teams, and the stored labels get lost (as for a round imported before labels were kept)
+  await app.post('/api/zrl/team-slot', { teams: ['cryo-alpha'], slot: 'Tue 18:00 UTC' }, { token: admin });
+  await app.post('/api/zrl/captain', { team: 'cryo-alpha', key: '4378027' }, { token: admin });
+  const stored = JSON.parse(app.world.db['cg:zrl:round']);
+  stored.teams = stored.teams.map(t => ({ ...t, league: '', division: '', grade: '' }));
+  app.world.db['cg:zrl:round'] = JSON.stringify(stored);
+  const r = await imp({ apply: true, refresh: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.refreshed, { teams: 3, missing: [] });
+  v = await view(admin);
+  const alpha = v.round.teams.find(t => t.id === 'cryo-alpha');
+  assert.deepEqual([alpha.league, alpha.division, alpha.grade], ['Red', 'Division 2', 'Open B']);
+  assert.deepEqual([alpha.slot, alpha.captain], ['Tue 18:00 UTC', '4378027'], 'race time and captain untouched');
+  assert.ok(Object.keys(v.assign).length >= 5, 'placements untouched');
+});
