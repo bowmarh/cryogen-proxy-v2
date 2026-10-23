@@ -2262,8 +2262,44 @@ function zrlResultsTab(d,st){
     <table style="width:100%;border-collapse:collapse"><tbody>${teams.map(t=>`<tr class="zrl-res-row" data-team="${esc(t.id)}" style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px 5px 0;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}<div style="font-size:10px;color:#6b7280;font-weight:400">${esc([t.division,t.league].filter(Boolean).join(' · '))}</div></td>
       <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
-      <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
+      <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td><td style="padding:5px 0 5px 4px"><button title="Work out the points" onclick="zrlCalcOpen('${esc(t.id)}')" style="${btn}">🧮</button></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlEvCard()}${zrlZrCard()}`;
+}
+let zrlCalc=null;
+function zrlCalcOpen(teamId){
+  const t=zrlData.round.teams.find(x=>x.id===teamId); if(!t) return;
+  const lu=((zrlData.weekly||{}).lineup||{})[zrlResWeek+':'+teamId]||[];
+  const sg=z=>(zrlData.signups||[]).find(x=>String(x.zwid)===String(z))||{};
+  const rows=(lu.length?lu:(zrlTeamStats(zrlData).by[teamId]||[]).filter(x=>x.zwid).slice(0,zrlData.round.racing).map(x=>x.zwid)).map(z=>({ name:sg(z).name||String(z), cat:sg(z).cat||'', pos:'', fal:'', fts:'', noHr:false, zpower:false }));
+  zrlCalc={ team:teamId, name:t.name, week:zrlResWeek, starters:(zrlCalc&&zrlCalc.starters)||'', rows, out:null };
+  renderZrl2();
+}
+function zrlCalcSet(i,k,v){ if(i<0) zrlCalc[k]=v; else zrlCalc.rows[i][k]=v; zrlCalc.out=null; }
+async function zrlCalcRun(){
+  let res,d; try{ res=await fetch('/api/zrl/score',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ starters:zrlCalc.starters, riders:zrlCalc.rows })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  zrlCalc.out=d; renderZrl2();
+}
+function zrlCalcUse(){
+  const tr=[...document.querySelectorAll('.zrl-res-row')].find(r=>r.dataset.team===zrlCalc.team); if(tr) tr.querySelector('.rs').value=zrlCalc.out.total;
+  const n=zrlCalc.name; zrlCalc=null; renderZrl2();
+  alert('Total filled in for '+n+'. Check the position, then press Save race.');
+}
+function zrlCalcCard(){
+  const c=zrlCalc; if(!c) return '';
+  const inp='class="inp" style="width:64px" type="number" min="0"';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)">
+    <div style="font-size:14px;font-weight:800">🧮 Points for ${esc(c.name)} · race ${c.week+1}</div>
+    <div style="font-size:12px;color:#9ca3af;margin:4px 0 10px">Finish points = starters − position + 1. Top 5 get 10/8/6/4/2 more. Add each rider's First Across the Line and Fastest Through Segment points from the results. No heart rate: zero for an A rider, half for B to D. ZPower: half.</div>
+    <label style="font-size:12px;color:#9ca3af">Riders who started the race <input ${inp} value="${esc(c.starters)}" oninput="zrlCalcSet(-1,'starters',this.value)"/></label>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tr style="font-size:10px;color:#6b7280;text-transform:uppercase;text-align:left"><th>Rider</th><th>Pos</th><th>FAL</th><th>FTS</th><th>No HR</th><th>ZPower</th><th>Points</th></tr>
+    ${c.rows.map((r,i)=>{ const o=c.out&&c.out.riders[i]; return `<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:4px 8px 4px 0">${esc(r.name)} <span style="font-size:10px;color:#6b7280">${esc(r.cat)}</span></td>
+      <td><input ${inp} value="${esc(r.pos)}" oninput="zrlCalcSet(${i},'pos',this.value)"/></td><td><input ${inp} value="${esc(r.fal)}" oninput="zrlCalcSet(${i},'fal',this.value)"/></td><td><input ${inp} value="${esc(r.fts)}" oninput="zrlCalcSet(${i},'fts',this.value)"/></td>
+      <td><input type="checkbox" ${r.noHr?'checked':''} onchange="zrlCalcSet(${i},'noHr',this.checked)"/></td><td><input type="checkbox" ${r.zpower?'checked':''} onchange="zrlCalcSet(${i},'zpower',this.checked)"/></td>
+      <td style="font-weight:700">${o?`${o.points}<div style="font-size:10px;font-weight:400;color:#6b7280">${o.fin}+${o.pbp}+${o.segments}${o.notes.length?' · '+esc(o.notes.join(', ')):''}</div>`:''}</td></tr>`; }).join('')}</table>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button onclick="zrlCalcRun()" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Work it out</button>
+    ${c.out?`<b style="font-size:14px">Team total ${c.out.total}</b><button onclick="zrlCalcUse()" style="padding:5px 12px;font-size:12px;background:rgba(16,185,129,0.12);color:#10B981;border:1px solid rgba(16,185,129,0.4);border-radius:6px;cursor:pointer">Use as the team's points</button>`:''}
+    <button onclick="zrlCalc=null;renderZrl2()" style="padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Close</button></div></div>`;
 }
 let zrlPast=null, zrlPastOpen=null, zrlPastWeek=0;
 async function zrlPastLoad(id){
