@@ -387,12 +387,19 @@ function scheduleFor(week){
 }
 
 // ── Discord ────────────────────────────────────────────────
-// Posts via channel webhooks: DISCORD_WEBHOOK_PUBLIC (club channel) and DISCORD_WEBHOOK_ADMIN
-// (private admin channel). A missing webhook just means that message isn't sent.
+// Posts via channel webhooks: DISCORD_WEBHOOK_PUBLIC (club channel) and DISCORD_WEBHOOK_ADMIN (private admin channel) for the
+// TTT. The ZRL has its own pair, DISCORD_WEBHOOK_ZRL_PUBLIC and DISCORD_WEBHOOK_ZRL_ADMIN, and uses the TTT ones when they are
+// not set. A missing webhook just means that message isn't sent.
+const DISCORD_HOOKS = {
+  public: ['DISCORD_WEBHOOK_PUBLIC'],
+  admin: ['DISCORD_WEBHOOK_ADMIN'],
+  'zrl-public': ['DISCORD_WEBHOOK_ZRL_PUBLIC', 'DISCORD_WEBHOOK_PUBLIC'],
+  'zrl-admin': ['DISCORD_WEBHOOK_ZRL_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
+};
 const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
 
 async function discord(channel, payload){
-  const hook = channel === 'admin' ? process.env.DISCORD_WEBHOOK_ADMIN : process.env.DISCORD_WEBHOOK_PUBLIC;
+  const hook = (DISCORD_HOOKS[channel] || DISCORD_HOOKS.public).map(k => process.env[k]).find(Boolean);
   if (!hook) return false;
   try {
     const r = await fetch(hook, {
@@ -1428,7 +1435,9 @@ async function healthChecks(){
     }),
     run('discord', 'Discord webhooks', async () => {
       const pub = Boolean(process.env.DISCORD_WEBHOOK_PUBLIC), adm = Boolean(process.env.DISCORD_WEBHOOK_ADMIN);
-      return [pub && adm ? 'ok' : 'warn', `Club channel: ${pub ? 'set' : 'NOT set'} · Admin channel: ${adm ? 'set' : 'NOT set'}. (Not tested here, to avoid posting.)`];
+      const zp = Boolean(process.env.DISCORD_WEBHOOK_ZRL_PUBLIC), za = Boolean(process.env.DISCORD_WEBHOOK_ZRL_ADMIN);
+      const zrl = `ZRL club channel: ${zp ? 'own channel' : pub ? 'shares the TTT club channel' : 'NOT set'} · ZRL admin channel: ${za ? 'own channel' : adm ? 'shares the TTT admin channel' : 'NOT set'}`;
+      return [pub && adm ? 'ok' : 'warn', `Club channel: ${pub ? 'set' : 'NOT set'} · Admin channel: ${adm ? 'set' : 'NOT set'} · ${zrl}. (Not tested here, to avoid posting.)`];
     }),
     run('week', 'TTT week', async () => {
       const { week } = await loadTtt();

@@ -42,6 +42,8 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
 | `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
+| `DISCORD_WEBHOOK_ZRL_PUBLIC` *(optional)* | Discord webhook for the ZRL club channel: round open, reminder, closed, rosters out. Falls back to `DISCORD_WEBHOOK_PUBLIC`. |
+| `DISCORD_WEBHOOK_ZRL_ADMIN` *(optional)* | Discord webhook for the private ZRL admin channel: sign-ups closed, rosters published with the to-do list. Falls back to `DISCORD_WEBHOOK_ADMIN`. |
 | `CRON_SECRET` | Shared secret for `/api/cron/tick`. Set the same value as a GitHub repository secret so the **TTT schedule** workflow (every 15 min) can run reminders, auto-close and the next-week rollover on time. |
 | `WP_SSO_SECRET` *(optional)* | Shared secret that lets riders sign in with their cryogen.team account (see ARCHITECTURE.md, "Member sign-in"). The same value goes into the WordPress snippet. Without it the "Sign in" button is hidden and the name-picker is the only member login. |
 | `WP_SSO_LOGIN_URL` *(optional)* | Where the "Sign in" button sends riders. Default `https://cryogen.team/club-login`. |
