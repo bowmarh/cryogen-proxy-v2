@@ -164,6 +164,9 @@ function installFetch(world) {
     if (u.host === 'docs.google.com') return handleSheet(world, u, opts);
     if (u.host === 'zwiftracing.app' || u.host === 'api.zwiftracing.app') {   // the ZwiftRacing.app organizer API: world.zr = { status, body, seen: [] }
       (world.zr.seen = world.zr.seen || []).push({ path: u.pathname, auth: (opts.headers || {}).Authorization });
+      (world.zr.calls = world.zr.calls || []).push({ method: (opts.method || 'GET').toUpperCase(), path: u.pathname, body: opts.body ? JSON.parse(opts.body) : null });
+      const special = (world.zr.byPath || {})[`${(opts.method || 'GET').toUpperCase()} ${u.pathname}`];   // an answer for one method and path
+      if (special) return json(special.body ?? {}, special.status || 200);
       if (typeof world.zr.body === 'string') return new Response(world.zr.body, { status: world.zr.status || 200, headers: { 'Content-Type': 'text/html' } });
       return json(world.zr.body ?? {}, world.zr.status || 200);
     }
