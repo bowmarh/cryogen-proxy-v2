@@ -160,6 +160,10 @@ test('an iCal link becomes ride series: preview first, repeats are one series, b
   const a = (await imp({ url: 'https://cal.test/a.ics', apply: true })).body;
   assert.equal(a.added, 2);
   assert.equal((await imp({ url: 'https://cal.test/a.ics', apply: true })).body.added, 0, 'no duplicates');
+  app.world.ical = '<!DOCTYPE html><html><body>Events</body></html>';
+  const page = await imp({ url: 'https://cal.test/a.ics' });
+  assert.equal(page.status, 422);
+  assert.match(page.body.error, /web page, not a calendar feed/);
   app.world.ical = 'not a calendar';
   assert.equal((await imp({ url: 'https://cal.test/a.ics' })).status, 422);
 });

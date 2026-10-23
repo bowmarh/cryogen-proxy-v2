@@ -2904,27 +2904,27 @@ function coverStaffPanel(){
     <div style="font-size:12px;color:#9ca3af;margin-top:6px">${cover.webhook?'✅ Call-outs go to your WhatsApp webhook, and to Discord if it does not answer.':'Call-outs go to Discord. To send them to WhatsApp, set <b>RIDE_COVER_WEBHOOK_URL</b> in Vercel (a Zapier or Make catch-hook that posts to WhatsApp), or use the buttons below to send by hand.'}</div>
     ${lbl('Weekly rides')}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <input id="cv-title" ${inp} placeholder="Ride name" maxlength="80" value="${esc(e.title||'')}" style="width:170px"/>
+      <input id="cv-title" class="inp" style="padding:6px 8px;font-size:12px;width:170px" placeholder="Ride name" maxlength="80" value="${esc(e.title||'')}"/>
       <select id="cv-dow" ${inp}>${days.map((d,i)=>`<option value="${i}" ${i==e.dow?'selected':''}>${d}</option>`).join('')}</select>
-      <input id="cv-time" ${inp} placeholder="19:00" maxlength="5" value="${esc(e.time)}" style="width:70px"/>
-      <input id="cv-zone" ${inp} placeholder="Europe/London" value="${esc(e.zone)}" style="width:130px"/>
-      <input id="cv-pace" ${inp} placeholder="Pace" maxlength="40" value="${esc(e.pace||'')}" style="width:110px"/>
-      <input id="cv-owner" ${inp} list="cv-people" placeholder="Owner" maxlength="60" value="${esc(e.ownerName||'')}" oninput="coverOwnerPick(this)" style="width:130px"/>
-      <input id="cv-ownerid" ${inp} placeholder="Owner Zwift ID" value="${esc(e.ownerZwid||'')}" style="width:120px"/>
+      <input id="cv-time" class="inp" style="padding:6px 8px;font-size:12px;width:70px" placeholder="19:00" maxlength="5" value="${esc(e.time)}"/>
+      <input id="cv-zone" class="inp" style="padding:6px 8px;font-size:12px;width:130px" placeholder="Europe/London" value="${esc(e.zone)}"/>
+      <input id="cv-pace" class="inp" style="padding:6px 8px;font-size:12px;width:110px" placeholder="Pace" maxlength="40" value="${esc(e.pace||'')}"/>
+      <input id="cv-owner" class="inp" style="padding:6px 8px;font-size:12px;width:130px" list="cv-people" placeholder="Owner" maxlength="60" value="${esc(e.ownerName||'')}" oninput="coverOwnerPick(this)"/>
+      <input id="cv-ownerid" class="inp" style="padding:6px 8px;font-size:12px;width:120px" placeholder="Owner Zwift ID" value="${esc(e.ownerZwid||'')}"/>
       <button onclick="coverSaveSeries()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">${e.id?'Save ride':'Add ride'}</button>${e.id?`<button onclick="coverEdit=null;renderCover()" style="${btn}">Cancel</button>`:''}
     </div>
     <datalist id="cv-people">${(riders||[]).slice(0,600).map(r=>`<option value="${esc(r.name)}"></option>`).join('')}</datalist>
     ${cover.series.map(s=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="flex:1">${esc(s.title)} · ${days[s.dow]} ${esc(s.time)}${s.ownerName?' · '+esc(s.ownerName):''}${s.source==='ical'?' <span style="color:#6b7280">(calendar)</span>':''}</span><button onclick="coverEditSeries('${esc(s.id)}')" style="${btn}">Edit</button><button onclick="coverRemoveSeries('${esc(s.id)}')" style="${btn}">Remove</button></div>`).join('')}
     ${lbl('Approved leaders and sweepers')}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <input id="cv-aname" ${inp} list="cv-people" placeholder="Name" maxlength="60" oninput="coverApprovePick(this)" style="width:160px"/><input id="cv-azwid" ${inp} placeholder="Zwift ID" style="width:110px"/>
+      <input id="cv-aname" class="inp" style="padding:6px 8px;font-size:12px;width:160px" list="cv-people" placeholder="Name" maxlength="60" oninput="coverApprovePick(this)"/><input id="cv-azwid" class="inp" style="padding:6px 8px;font-size:12px;width:110px" placeholder="Zwift ID"/>
       <label style="font-size:12px"><input type="checkbox" id="cv-alead" checked/> Lead</label><label style="font-size:12px"><input type="checkbox" id="cv-asweep" checked/> Sweep</label>
       <button onclick="coverApprove()" style="${btn}">Approve</button></div>
     ${cover.approved.map(a=>`<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="flex:1">${esc(a.name)} <span style="color:#6b7280">${esc(a.zwid)}</span></span><label><input type="checkbox" ${a.lead?'checked':''} onchange="coverApproveSet('${esc(a.zwid)}','${esc(a.name).replace(/'/g,'&#39;')}',this.checked,${!!a.sweep},this)"/> Lead</label><label><input type="checkbox" ${a.sweep?'checked':''} onchange="coverApproveSet('${esc(a.zwid)}','${esc(a.name).replace(/'/g,'&#39;')}',${!!a.lead},this.checked,this)"/> Sweep</label><button onclick="coverApproveSet('${esc(a.zwid)}','',false,false)" style="${btn}">Remove</button></div>`).join('')||'<div style="font-size:12px;color:#6b7280;margin-top:6px">Nobody is approved yet.</div>'}
     ${lbl('Call-outs')}
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="coverSend()" style="${btn}">📣 Send call-out now</button><button onclick="coverCopy()" style="${btn}">📋 Copy for WhatsApp</button><button onclick="coverWhatsApp()" style="${btn}">💬 Open WhatsApp</button></div>
     <div style="font-size:11px;color:#6b7280;margin-top:6px">Automatic: a call-out every Monday for the next two weeks, a chase when a ride is a week away, an alert to the owner at three days, and the cover confirmed the day before. Only gaps are posted.</div>
-    ${admin?`${lbl('Import from a calendar (admin)')}<div style="display:flex;gap:6px;flex-wrap:wrap"><input id="cv-ical" ${inp} placeholder="Calendar link (iCal / .ics / webcal://)" style="flex:1;min-width:220px"/><button onclick="coverIcal(false)" style="${btn}">Preview</button></div>${coverPreview?`<div style="font-size:12px;margin-top:6px">${coverPreview.map(p=>`<div>${esc(p.title)} · ${days[p.dow]} ${esc(p.time)} <span style="color:#6b7280">(${p.count} in the calendar)</span></div>`).join('')}<button onclick="coverIcal(true)" style="${btn};margin-top:6px">Add these ${coverPreview.length} ride${coverPreview.length===1?'':'s'}</button></div>`:''}`:''}
+    ${admin?`${lbl('Import from a calendar (admin)')}<div style="display:flex;gap:6px;flex-wrap:wrap"><input id="cv-ical" class="inp" style="padding:6px 8px;font-size:12px;flex:1;min-width:220px" placeholder="Calendar link (iCal / .ics / webcal://)"/><button onclick="coverIcal(false)" style="${btn}">Preview</button></div>${coverPreview?`<div style="font-size:12px;margin-top:6px">${coverPreview.map(p=>`<div>${esc(p.title)} · ${days[p.dow]} ${esc(p.time)} <span style="color:#6b7280">(${p.count} in the calendar)</span></div>`).join('')}<button onclick="coverIcal(true)" style="${btn};margin-top:6px">Add these ${coverPreview.length} ride${coverPreview.length===1?'':'s'}</button></div>`:''}`:''}
   </details>`;
 }
 function coverOwnerPick(el){ const r=(riders||[]).find(x=>x.name===el.value); if(r) document.getElementById('cv-ownerid').value=r.id; }
