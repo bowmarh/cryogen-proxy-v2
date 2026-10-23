@@ -1966,6 +1966,33 @@ function zrlTeamZone(id,region){
   const teams=zrlData.round.teams.map(t=>({ name:t.name, region:t.id===id?region:t.region, slot:t.slot||'', captain:t.captain||'' }));
   zrlPost('/api/zrl/teams',{ teams });
 }
+let zrlCat=null;
+async function zrlCatCheck(fresh){
+  zrlCat={ loading:true }; renderZrl2();
+  let r,d; try{ r=await fetch('/api/zrl/category-check'+(fresh?'?fresh=1':''),{headers:tttHeaders()}); d=await r.json(); }catch(e){ zrlCat={ error:'Could not reach the server.' }; renderZrl2(); return; }
+  zrlCat=r.ok?d:{ error:d.error||('Request failed ('+r.status+')') }; renderZrl2();
+}
+async function zrlCatFix(key,cat){ if(await zrlPost('/api/zrl/signup-edit',{ key, cat })) zrlCatCheck(false); }
+function zrlCatCard(){
+  const c=zrlCat, btn='padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer';
+  const small='padding:1px 8px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:5px;cursor:pointer';
+  const list=(title,color,rows,line)=>rows.length?`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;color:${color};margin-bottom:3px">${title} (${rows.length})</div>${rows.map(line).join('')}</div>`:'';
+  let out='';
+  if(c&&c.loading) out='<div style="font-size:12px;color:#9ca3af;margin-top:8px">Asking ZwiftRacing.app…</div>';
+  else if(c&&c.error) out=`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(c.error)}</div>`;
+  else if(c){
+    const row=x=>`<div style="font-size:12px;padding:2px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px">${esc(x.name)} · says <b>${esc(x.declared||'none')}</b>, ZwiftPower <b>${esc(x.zp||'?')}</b>${x.velo?' · vELO '+esc(x.velo):''}${x.team?' · '+esc(x.team.replace(/^CRYO-GEN\s+/,'')):''}</span>${x.zp&&x.declared!==x.zp?`<button data-key="${esc(x.key)}" data-cat="${esc(x.zp)}" onclick="zrlCatFix(this.dataset.key,this.dataset.cat)" style="${small}">Set to ${esc(x.zp)}</button>`:''}</div>`;
+    out=`<div style="font-size:12px;margin-top:8px;color:#9ca3af">Checked ${c.checked} racing riders against ${c.clubRiders} club riders${c.stale?' (the kept copy: ZwiftRacing.app asked us to wait)':''}. Club list from ${esc(new Date(c.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}.</div>
+      ${list('Declared a weaker category than ZwiftPower','#FBBF24',c.understated,row)}
+      ${list('On a team whose category is weaker than their ZwiftPower category','#f87171',c.misplaced,x=>`<div style="font-size:12px;padding:2px 0">${esc(x.name)} · ZwiftPower <b>${esc(x.zp)}</b> on ${esc(x.team.replace(/^CRYO-GEN\s+/,''))} (category ${esc(x.teamCat)})</div>`)}
+      ${list('Declared a stronger category than ZwiftPower (harmless)','#9ca3af',c.overstated,row)}
+      ${list('Not found in the club data','#9ca3af',c.notFound,x=>`<div style="font-size:12px;padding:2px 0">${esc(x.name)}${x.hasId?'':' · no Zwift ID'}</div>`)}
+      ${!c.understated.length&&!c.misplaced.length?'<div style="font-size:12px;margin-top:8px;color:#10B981">No category problems found.</div>':''}`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-top:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 6px">Category check (ZwiftPower, via ZwiftRacing.app)</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Compares what each rider said at sign-up with their ZwiftPower category, and checks nobody is on a team below their class. The club list is kept for an hour (ZwiftRacing.app allows it every ten minutes).</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="zrlCatCheck(false)" style="${btn}">Check categories</button><button onclick="zrlCatCheck(true)" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.15)">Refresh the club list</button></div>${out}</div>`;
+}
 function zrlRidersTab(d,st){
   const r=d.round, assign=d.assign||{};
   const all=d.signups;
@@ -1985,7 +2012,7 @@ function zrlRidersTab(d,st){
       <button onclick="zrlEditStart('new')" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;cursor:pointer">+ Add a rider</button></div>
     ${list.length?`<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Cat</th><th style="${th}">Time zones</th><th style="${th}">Team</th><th style="${th}">Notes</th></tr></thead><tbody id="zrl-rbody">${rows}</tbody></table></div>
       <div style="font-size:11px;color:#6b7280">Showing ${shown.length} of ${list.length}${list.length>shown.length?` · <button onclick="zrlRiderLimit=100000;renderZrl2()" style="background:none;border:none;color:#00D4FF;cursor:pointer;font-size:11px">show all</button>`:''}</div>`
-      :`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${zrlRiderFilter==='unplaced'?'Everyone racing has a team. 🎉':'Nobody matches this filter.'}</div>`}`;
+      :`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${zrlRiderFilter==='unplaced'?'Everyone racing has a team. 🎉':'Nobody matches this filter.'}</div>`}${zrlCatCard()}`;
 }
 function zrlRiderSearch(q){ q=q.trim().toLowerCase(); document.querySelectorAll('#zrl-rbody tr').forEach(tr=>{ tr.style.display=!q||tr.dataset.s.includes(q)?'':'none'; }); }
 let zrlMy=null, zrlWeekly=null;
