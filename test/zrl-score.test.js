@@ -24,6 +24,8 @@ test('finish points count down from the starters, the top five get the podium bo
   assert.deepEqual([c.fin, c.pbp, c.points], [1, 0, 1]);
   assert.equal(d.points, 0, 'a rider who did not finish scores nothing from the finish');
   assert.equal(r.body.total, 164);
+  assert.deepEqual(r.body.totals, { fin: 117, fal: 20, fts: 15 });
+  assert.equal(r.body.bestRider, 1);
 });
 
 test('missing heart rate is zero for A and half for the rest, ZPower is half, both multiply', async () => {
