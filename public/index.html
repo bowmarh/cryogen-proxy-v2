@@ -1807,7 +1807,7 @@ async function zrlImportApply(){
 let zrlStaffTab=(()=>{ try{ return sessionStorage.getItem('zrlTab')||'teams'; }catch(e){ return 'teams'; } })();
 let zrlOpenTeamId=null, zrlTeamFilter='all', zrlRiderFilter='unplaced', zrlRiderLimit=40;
 const zrlZoneShort={eu:'EU',am:'AM',ap:'AP'};
-function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
+function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; if(tab==='setup') zrlPast=null; try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
 function zrlTeamStats(d){
   const by={}; d.signups.forEach(x=>{ const t=(d.assign||{})[x.key]; if(t&&x.in)(by[t]=by[t]||[]).push(x); });
   const unplaced=d.signups.filter(x=>x.in&&!(d.assign||{})[x.key]);
@@ -1831,7 +1831,7 @@ function renderZrlStaff(d){
   else if(zrlStaffTab==='weeks') body=zrlWeeksTab();
   else if(zrlStaffTab==='results') body=zrlResultsTab(d,st);
   else if(zrlStaffTab==='export') body=zrlExportCard(d)||`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Put riders on teams first, then the registration list appears here.</div>`;
-  else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}`;
+  else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}${zrlPastCard(d)}`;
   return `<div style="margin-bottom:12px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
@@ -2013,6 +2013,56 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
     <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}`;
+}
+let zrlPast=null, zrlPastOpen=null, zrlPastWeek=0;
+async function zrlPastLoad(id){
+  try{
+    const r=await fetch('/api/zrl/archive'+(id?'?id='+encodeURIComponent(id):''),{headers:tttHeaders()}); const d=await r.json();
+    if(!r.ok){ alert(d.error||('Request failed ('+r.status+')')); return; }
+    if(id) zrlPastOpen=d; else zrlPast=d.rounds;
+  }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(zrlStaffTab==='setup') renderZrl2();
+}
+async function zrlPastPost(path,body){
+  let res,d; try{ res=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; } return true;
+}
+async function zrlPastRename(id,name){
+  const n=prompt('New name for this round:',name); if(n===null||!n.trim()) return;
+  if(await zrlPastPost('/api/zrl/archive-edit',{ id, name:n.trim() })){ zrlPast=null; if(zrlPastOpen&&zrlPastOpen.id===id) zrlPastOpen.name=n.trim(); renderZrl2(); }
+}
+async function zrlPastDelete(id,name){
+  if(!confirm('Delete "'+name+'" for good? Its sign-ups, teams, line-ups and results are removed and cannot be recovered.')) return;
+  if(await zrlPastPost('/api/zrl/archive-delete',{ id })){ zrlPast=null; if(zrlPastOpen&&zrlPastOpen.id===id) zrlPastOpen=null; renderZrl2(); }
+}
+async function zrlPastResultsSave(){
+  const rows=[...document.querySelectorAll('.zrl-pres-row')].map(tr=>({ team:tr.dataset.team, pos:tr.querySelector('.rp').value, pts:tr.querySelector('.rs').value, note:'' }));
+  if(await zrlPastPost('/api/zrl/archive-edit',{ id:zrlPastOpen.id, week:zrlPastWeek, rows })) zrlPastLoad(zrlPastOpen.id);
+}
+async function zrlRoundDelete(){
+  const r=zrlData.round; if(!r) return;
+  const c=prompt('This deletes the CURRENT round "'+r.name+'" with all its sign-ups, teams, line-ups and results. Type its first race date ('+r.id+') to confirm:');
+  if(c===null) return;
+  if(await zrlPastPost('/api/zrl/round-delete',{ confirm:c.trim() })){ zrlPast=null; zrlPastOpen=null; loadZrl(); }
+}
+function zrlPastCard(d){
+  if(!zrlPast){ zrlPastLoad(); return `<div class="card" style="padding:14px 16px;margin-top:16px;font-size:13px;color:#9ca3af">Loading past rounds…</div>`; }
+  const admin=role==='admin', btn='padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const label=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">${x}</div>`;
+  const rows=zrlPast.map(r=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:160px;font-size:13px"><b>${esc(r.name)}</b> <span style="color:#6b7280">· from ${esc(seasonDay(r.start))} · ${r.teams} teams · ${r.riders} riders</span></div>
+    <button onclick="zrlPastLoad('${esc(r.id)}')" style="${btn}">View</button><button onclick="zrlPastRename('${esc(r.id)}','${esc(r.name).replace(/'/g,'&#39;')}')" style="${btn}">Rename</button>${admin?`<button onclick="zrlPastDelete('${esc(r.id)}','${esc(r.name).replace(/'/g,'&#39;')}')" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete</button>`:''}</div>`).join('');
+  let detail='';
+  if(zrlPastOpen){
+    const o=zrlPastOpen, s=o.standings, byTeam=Object.fromEntries(o.teams.map(t=>[t.id,t])), entry=t=>(s.entries||{})[zrlPastWeek+':'+t.id]||{};
+    detail=`<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800">${esc(o.name)}</div><button onclick="zrlPastOpen=null;renderZrl2()" style="${btn}">✕ Close</button></div>
+      ${o.teams.map(t=>`<div style="font-size:12px;padding:3px 0"><b>${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</b>${t.captainName?' · ⭐ '+esc(t.captainName):''} <span style="color:#6b7280">${t.riders.length?esc(t.riders.join(', ')):'no riders'}</span></div>`).join('')}
+      <div style="margin-top:10px">${label('Correct the results')}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${s.dates.map((dt,i)=>`<button onclick="zrlPastWeek=${i};renderZrl2()" style="${btn};${zrlPastWeek===i?'border-color:rgba(0,212,255,0.6);color:#00D4FF':''}">Race ${i+1}</button>`).join('')}</div>
+      <table style="border-collapse:collapse">${o.teams.filter(t=>t.riders.length).map(t=>`<tr class="zrl-pres-row" data-team="${esc(t.id)}"><td style="padding:3px 8px 3px 0;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td><td style="padding:3px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td><td style="padding:3px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td></tr>`).join('')}</table>
+      <button onclick="zrlPastResultsSave()" style="${btn};margin-top:8px">Save race ${zrlPastWeek+1}</button></div>
+      ${s.groups.length?`<div style="margin-top:10px;font-size:12px;color:#9ca3af">Standings: ${s.groups.map(g=>esc(g.name)+': '+g.teams.map(t=>t.rank+'. '+esc(t.name.replace(/^CRYO-GEN\s+/,''))+' '+t.total).join(', ')).join(' · ')}</div>`:''}</div>`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Past rounds (staff)')}${rows||'<div style="font-size:13px;color:#6b7280">No past rounds yet. A round is archived when the next one starts.</div>'}${detail}
+    ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#4b5563;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
 }
 function zrlWeeksTab(){
   const w=zrlWeekly;
