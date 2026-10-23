@@ -139,15 +139,33 @@ function requireRole(req, roles){
   return role;
 }
 
+// ── Abuse limits (counters live in Redis, so every server instance shares them; if Redis is down they fail open) ──
+function clientIp(req){
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
+async function counter(key, windowSec){
+  try { return (await redis([['INCR', key], ['EXPIRE', key, windowSec]]))[0]; } catch (e) { return 0; }
+}
+async function peek(key){
+  try { return Number((await redis([['GET', key]]))[0]) || 0; } catch (e) { return 0; }
+}
+const LOGIN_WINDOW_SEC = 900;
+const loginMaxFails = () => Number(process.env.LOGIN_MAX_FAILS) || 10;
+const writesPerMinute = () => Number(process.env.RATE_LIMIT_WRITES_PER_MIN) || 120;
+
 async function handleLogin(req, res){
   const payload = await readJSONBody(req);
   const envName = ROLE_PASSWORD_ENV[payload.role];
   if (!envName) throw new HttpError(400, 'unknown role');
   const expected = process.env[envName];
   if (!expected) return sendJSON(res, 503, { error: 'login not configured', missing: envName });
+  // Too many wrong passwords from one address: no more tries (right or wrong) until the window passes.
+  const failKey = `cg:rl:login:${clientIp(req)}`;
+  if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
   if (typeof payload.password === 'string' && passwordMatches(payload.password, expected)){
     return sendJSON(res, 200, { role: payload.role, token: signToken(payload.role) });
   }
+  await counter(failKey, LOGIN_WINDOW_SEC);
   sendJSON(res, 401, { error: 'incorrect password' });
 }
 
@@ -161,11 +179,17 @@ function redisConfig(){
 async function redis(commands){
   const cfg = redisConfig();
   if (!cfg) throw new HttpError(503, 'Shared storage is not set up yet.');
-  const r = await fetch(`${cfg.base}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-  });
+  let r;
+  try {
+    r = await fetch(`${cfg.base}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(commands),
+      signal: AbortSignal.timeout(8000),   // a stuck connection must fail fast, not hold the request until the platform kills it
+    });
+  } catch (e) {
+    throw new HttpError(e && e.name === 'TimeoutError' ? 504 : 502, e && e.name === 'TimeoutError' ? 'Shared storage did not answer in time.' : 'Shared storage could not be reached.');
+  }
   if (!r.ok) throw new HttpError(502, `storage error (${r.status})`);
   const out = await r.json();
   const failed = out.find(x => x.error);
@@ -1825,6 +1849,11 @@ async function route(req, res){
       'Access-Control-Allow-Headers': 'Content-Type,Authorization'
     });
     return res.end();
+  }
+
+  // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && !roleFromRequest(req)){
+    if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);

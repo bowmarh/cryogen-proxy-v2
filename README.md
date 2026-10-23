@@ -44,6 +44,8 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
 | `DISCORD_WEBHOOK_ZRL_PUBLIC` *(optional)* | Discord webhook for the ZRL club channel: round open, reminder, closed, rosters out. Falls back to `DISCORD_WEBHOOK_PUBLIC`. |
 | `DISCORD_WEBHOOK_ZRL_ADMIN` *(optional)* | Discord webhook for the private ZRL admin channel: sign-ups closed, rosters published with the to-do list. Falls back to `DISCORD_WEBHOOK_ADMIN`. |
+| `LOGIN_MAX_FAILS` *(optional)* | Wrong staff passwords allowed from one connection in 15 minutes before every attempt gets 429 (default 10). |
+| `RATE_LIMIT_WRITES_PER_MIN` *(optional)* | Writes a minute allowed to anyone who is not staff, per connection (default 120). |
 | `RIDE_COVER_WEBHOOK_URL` *(optional)* | An https URL (a Zapier or Make "catch hook", or a Twilio function) that receives each ride-cover message as JSON `{source, channel: "public"|"admin", text, kind}` and posts it to WhatsApp. When it is not set, or does not answer, the message goes to Discord (`DISCORD_WEBHOOK_PUBLIC` / `DISCORD_WEBHOOK_ADMIN`). |
 | `ZWIFTRACING_API_KEY` *(optional)* | Your personal organizer key for the ZwiftRacing.app public API (sent raw in the `Authorization` header). Used only by the admin "ZwiftRacing.app lookup" in the ZRL Results tab, to look at an event's results. Never shown or logged. Mark it Sensitive in Vercel. |
 | `CRON_SECRET` | Shared secret for `/api/cron/tick`. Set the same value as a GitHub repository secret so the **TTT schedule** workflow (every 15 min) can run reminders, auto-close and the next-week rollover on time. |

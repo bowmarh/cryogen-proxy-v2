@@ -522,7 +522,7 @@ function doMemberLogin(){
     launchApp('member');
   } else if(matches.length>1){
     document.getElementById('member-results').innerHTML=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Multiple matches — click to select:</div>`+
-    matches.slice(0,6).map(r=>`<button onclick="selectMember(${r.id})" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;color:white;font-size:13px">${toFlag(r.cc)} ${r.name} · ${catB(r.cat)} · vELO ${r.velo}</button>`).join('');
+    matches.slice(0,6).map(r=>`<button onclick="selectMember(${r.id})" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:8px;color:white;font-size:13px">${toFlag(r.cc)} ${esc(r.name)} · ${catB(r.cat)} · vELO ${r.velo}</button>`).join('');
   } else {
     showLoginErr('Rider not found. Try a different name or your Zwift ID number. Live data may still be loading.');
   }
@@ -766,7 +766,7 @@ function renderOffboarding() {
               const state = r;
               return `
               <tr style="border-top:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:10px 0; font-weight:600;">${r.name}</td>
+                <td style="padding:10px 0; font-weight:600;">${esc(r.name)}</td>
                 <td style="padding:10px 0; text-align:center;">
                   <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
@@ -825,10 +825,10 @@ function rSortBy(col){
 // ── Rider profile links ────────────────────────────────────
 function riderLinks(m){
   if(!m.id||m.id<1) return m.name;
-  const zra = `https://www.zwiftracing.app/riders/${m.id}`;
-  const zp  = `https://zwiftpower.com/profile.php?z=${m.id}`;
+  const zra = `https://www.zwiftracing.app/riders/${encodeURIComponent(m.id)}`;
+  const zp  = `https://zwiftpower.com/profile.php?z=${encodeURIComponent(m.id)}`;
   return `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
-    <a href="${zra}" target="_blank" title="View on ZwiftRacing.app" style="color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,0.2)" onmouseover="this.style.color='#00D4FF';this.style.borderBottomColor='#00D4FF'" onmouseout="this.style.color='inherit';this.style.borderBottomColor='rgba(255,255,255,0.2)'">${m.name}</a>
+    <a href="${zra}" target="_blank" title="View on ZwiftRacing.app" style="color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,0.2)" onmouseover="this.style.color='#00D4FF';this.style.borderBottomColor='#00D4FF'" onmouseout="this.style.color='inherit';this.style.borderBottomColor='rgba(255,255,255,0.2)'">${esc(m.name)}</a>
     <span style="display:inline-flex;gap:3px;flex-shrink:0">
       <a href="${zra}" target="_blank" title="ZwiftRacing.app profile" style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.25);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='rgba(0,212,255,0.25)'" onmouseout="this.style.background='rgba(0,212,255,0.12)'">ZRA</a>
       <a href="${zp}" target="_blank" title="ZwiftPower profile" style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='rgba(251,191,36,0.25)'" onmouseout="this.style.background='rgba(251,191,36,0.12)'">ZP</a>
@@ -858,7 +858,7 @@ function renderAll(){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px">
         <span style="font-size:10px;color:#4b5563;width:16px;text-align:right">${i+1}</span>
-        <span style="font-size:13px">${m.name.split(' ')[0]}</span>
+        <span style="font-size:13px">${esc(m.name.split(' ')[0])}</span>
         ${catB(m.cat)}
         ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
       </div>
@@ -1023,7 +1023,7 @@ function trackAffiliations(rArr) {
 // ── Events & Sign-Up ───────────────────────────────────────
 function renderEvents(){
   document.getElementById('series-tabs').innerHTML=SERIES.map(s=>`
-    <button class="tab${activeSeries===s.id?' active':''}" onclick="activeSeries='${s.id}';renderEvents()">${s.emoji} ${s.name}</button>
+    <button class="tab${activeSeries===s.id?' active':''}" onclick="activeSeries='${s.id}';renderEvents()">${s.emoji} ${esc(s.name)}</button>
   `).join('');
 
   if(role==='admin'){
@@ -1043,8 +1043,8 @@ function renderEvents(){
   html+=`
     <div style="background:rgba(0,80,120,0.2);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:20px;margin-bottom:20px">
       <div style="font-size:10px;font-weight:700;color:#00D4FF;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Active Event</div>
-      <div style="font-size:18px;font-weight:900;margin-bottom:4px">${s.emoji} ${s.name}</div>
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${s.desc}</div>
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px">${s.emoji} ${esc(s.name)}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:16px">${esc(s.desc)}</div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:6px">
         <span>${sups.length} signed up</span><span>${s.max-sups.length} spots left</span>
       </div>
@@ -1055,7 +1055,7 @@ function renderEvents(){
 
   if(!locked){
     html+=`<div class="card" style="padding:16px;margin-bottom:20px">
-      <label class="lbl">Sign Up for ${s.name}</label>
+      <label class="lbl">Sign Up for ${esc(s.name)}</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="sup-zwid" class="inp" placeholder="Zwift ID (number)" style="width:140px" oninput="lookupZwid()" onkeydown="if(event.key==='Enter')doSignup()"/>
         <input id="sup-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')doSignup()"/>
@@ -1348,7 +1348,7 @@ function tttSummaryBox(){
 }
 function tttShortTeams(d){
   const n={}; for(const ids of Object.values(d.assign))for(const id of ids)n[id]=(n[id]||0)+1;
-  const short=d.week.teams.filter(t=>n[t.id]&&n[t.id]<4).map(t=>`${t.name} (${n[t.id]})`);
+  const short=d.week.teams.filter(t=>n[t.id]&&n[t.id]<4).map(t=>`${esc(t.name)} (${n[t.id]})`);
   const noCap=d.week.teams.filter(t=>n[t.id]&&!(d.captains||{})[t.id]).map(t=>t.name);
   return (short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⚠️ Under 4 riders: ${esc(short.join(', '))} — consider merging or moving riders.</div>`:'')
     +(noCap.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⭐ No captain yet: ${esc(noCap.join(', '))} — pick one on the team card below.</div>`:'');
@@ -1515,7 +1515,7 @@ function renderProfile(){
     <div style="display:flex;align-items:center;gap:20px;margin-bottom:28px;flex-wrap:wrap">
       <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#00D4FF22,#0080FF22);border:2px solid rgba(0,212,255,0.4);display:flex;align-items:center;justify-content:center;font-size:28px">${toFlag(r.cc)}</div>
       <div>
-        <div style="font-size:22px;font-weight:900">${r.name}</div>
+        <div style="font-size:22px;font-weight:900">${esc(r.name)}</div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
           ${catB(r.cat)}
           ${r.zraCat?`<span style="font-size:12px;color:${zraC};font-weight:700;background:${zraC}18;border:1px solid ${zraC}44;padding:2px 10px;border-radius:4px">${r.zraCat}</span>`:''}
@@ -2916,11 +2916,11 @@ const coverWhen=(o)=>new Date(o.startMs).toLocaleString(undefined,{weekday:'shor
 function coverSlot(s,o,roleDef){
   const slot=o.cover[roleDef.id], me=cover.me, base=roleDef.id.replace('2',''), isBackup=roleDef.id!==base;
   const open=!slot, col=slot?'#10B981':isBackup?'#FBBF24':'#f87171';
-  const mine=slot&&me&&slot.zwid===me.zwid;
+  const mine=!!(slot&&slot.mine);
   let act='';
   const approved=me&&me.approved&&me.approved[roleDef.kind];
   const btn='padding:2px 8px;font-size:11px;border-radius:5px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)';
-  const held=Object.values(o.cover).some(c=>c&&me&&c.zwid===me.zwid);
+  const held=Object.values(o.cover).some(c=>c&&c.mine);
   if(open&&approved&&!held&&!o.cancelled&&(!isBackup||o.cover[base])) act=`<button onclick="coverVolunteer('${esc(s.id)}','${o.date}','${base}')" style="${btn};border-color:rgba(0,212,255,0.5);color:#00D4FF">${isBackup?'Back up':'I\'ll '+(roleDef.kind==='lead'?'lead':'sweep')}</button>`;
   if(slot&&(mine||s.canManage)) act+=`<button onclick="coverWithdraw('${esc(s.id)}','${o.date}','${roleDef.id}')" style="${btn}" title="${mine?'Take me off':'Remove'}">${mine?'Withdraw':'✕'}</button>`;
   if(open&&s.canManage&&!o.cancelled){
