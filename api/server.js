@@ -1162,12 +1162,14 @@ async function handleTtt(tttRoute, req, res){
   }
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await tttRoute(req, body);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result || tttView(await loadTtt(), roleFromRequest(req)));
 }
 
 async function handleData(dataRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await dataRoute(req, body);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result || await loadState());
 }
 
