@@ -1950,6 +1950,19 @@ function zrlStaffLineups(d,t,riders){
     lineup:w.lineup[i+':'+t.id]||[], riders:withId.map(x=>({ zwid:x.zwid, name:x.name, status:w.avail[i+':'+x.zwid]||'' })) }));
   return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">${zrlLineupHtml({ id:t.id, weeks },r.racing)}</div>`;
 }
+async function zrlSubs(team,week){
+  const el=document.getElementById('zl-subs-'+team+'-'+week); if(!el) return;
+  el.innerHTML='<span style="font-size:12px;color:#6b7280">Looking…</span>';
+  let r,d; try{ r=await fetch('/api/zrl/subs?team='+encodeURIComponent(team)+'&week='+week,{headers:tttHeaders()}); d=await r.json(); }catch(e){ el.innerHTML='<span style="font-size:12px;color:#f87171">Could not reach the server.</span>'; return; }
+  if(!r.ok){ el.innerHTML=`<span style="font-size:12px;color:#f87171">${esc(d.error||'Request failed')}</span>`; return; }
+  const staff=role==='admin'||role==='mod', st={yes:'✅ yes',maybe:'🤔 maybe','':'no answer'};
+  const line=x=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:2px 0"><span style="flex:1">${esc(x.name)}${x.cat?' ('+esc(x.cat)+')':''}${x.status!==undefined?' · '+st[x.status]:''}${x.hasId===false?' · no Zwift ID':''}</span>${x.key&&staff&&!d.rosterFull?`<button onclick="zrlAssign(this.dataset.key,'${esc(team)}')" data-key="${esc(x.key)}" style="padding:1px 8px;font-size:11px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:5px;cursor:pointer">Add to team</button>`:''}</div>`;
+  el.innerHTML=`<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(255,255,255,0.03)">
+    <div style="font-size:12px;color:${d.short?'#FBBF24':'#10B981'};margin-bottom:4px">${d.picked}/${d.racing} picked${d.short?' · '+d.short+' more needed':''}</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-top:4px">On your bench</div>${d.bench.length?d.bench.map(line).join(''):'<div style="font-size:12px;color:#6b7280">Nobody else on the team can race.</div>'}
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-top:8px">Riders with no team (${esc(d.team)}'s time zone and category)</div>${d.pool.length?d.pool.map(line).join(''):'<div style="font-size:12px;color:#6b7280">Nobody unplaced fits.</div>'}
+    ${d.rosterFull?'<div style="font-size:11px;color:#9ca3af;margin-top:6px">The roster is full, so nobody can be added.</div>':(staff?'':'<div style="font-size:11px;color:#9ca3af;margin-top:6px">Ask the staff to add someone from this list to your team.</div>')}</div>`;
+}
 function zrlLineupSave(team,week){
   const zwids=[...document.querySelectorAll(`.zl-${CSS.escape(team)}-${week}:checked`)].map(x=>x.value);
   zrlPost('/api/zrl/lineup',{ team, week, zwids });
@@ -1961,7 +1974,8 @@ function zrlLineupHtml(t,racing){
     ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);padding:6px 0;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#6b7280">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${esc(r.name)}</td>
         <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
-      <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button></details>`).join('')}</div>`;
+      <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
+      <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
 }
 async function zrlWeeklyLoad(){
   try{ const r=await fetch('/api/zrl/weekly',{headers:tttHeaders()}); if(r.ok) zrlWeekly=await r.json(); }catch(e){}
