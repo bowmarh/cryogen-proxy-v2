@@ -84,6 +84,7 @@ function createWorld(overrides = {}) {
     staleMembers: null,       // if set, GET /members returns this instead of the live list
     sheet: { first: 'TEAM LIST', tabs: { 'TEAM LIST': { cols: ['Name', 'Zwift ID'], rows: [['Alice', '1']] } }, html: false },
     discord: [],              // { channel, body }
+    zr: { status: 200, body: {} },   // what zwiftracing.app answers
     ...overrides,
   };
 }
@@ -161,6 +162,10 @@ function installFetch(world) {
     }
     if (u.host === 'wp.test') return handleWp(world, u, opts);
     if (u.host === 'docs.google.com') return handleSheet(world, u, opts);
+    if (u.host === 'zwiftracing.app') {   // the ZwiftRacing.app organizer API: world.zr = { status, body, seen: [] }
+      (world.zr.seen = world.zr.seen || []).push({ path: u.pathname, auth: (opts.headers || {}).Authorization });
+      return json(world.zr.body ?? {}, world.zr.status || 200);
+    }
     if (u.host === 'discord.test') {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body
