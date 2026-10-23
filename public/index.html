@@ -1738,11 +1738,18 @@ function zrlSlotsCard(d){
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
   const unset=round.teams.filter(t=>!t.slot).length;
   return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">Race times (staff)</div>
+    ${(()=>{ const diff=round.teams.filter(t=>t.wtrlSlot&&t.wtrlSlot!==t.slot); const known=round.teams.filter(t=>t.wtrlSlot).length;
+      return known?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.05)"><div style="flex:1;min-width:200px;font-size:12px;color:#d1d5db">WTRL fixes each league's time by its colour. ${diff.length?`<b>${diff.length} of ${known} team${known===1?'':'s'}</b> ${diff.length===1?'differs':'differ'} from the WTRL time.`:'<b>Every team matches the WTRL time.</b>'}</div>${diff.length?`<button onclick="zrlLeagueTimes(${diff.length})" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Use WTRL times</button>`:''}</div>`:''; })()}
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Every team in a league races at the same time, so set it once per league.${unset?` <span style="color:#fbbf24">${unset} team${unset===1?' has':'s have'} no race time yet.</span>`:' Every team has a race time.'}</div>
     ${zrlSlotGroups.map((g,i)=>{ const vals=[...new Set(g.teams.map(t=>t.slot||''))], cur=vals.length===1?vals[0]:'';
-      return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:150px;font-size:13px"><b>${esc(g.label)}</b> <span style="color:#6b7280">· ${g.teams.length} team${g.teams.length===1?'':'s'}${vals.length>1?' · different times':''}</span></div>
+      return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:150px;font-size:13px"><b>${esc(g.label)}</b> <span style="color:#6b7280">· ${g.teams.length} team${g.teams.length===1?'':'s'}${vals.length>1?' · different times':''}</span>${g.teams[0].wtrlSlot?`<div style="font-size:11px;color:${vals.length===1&&cur===g.teams[0].wtrlSlot?'#10B981':'#FBBF24'}">WTRL: ${esc(g.teams[0].wtrlSlot)}${vals.length===1&&cur===g.teams[0].wtrlSlot?' ✓':''}</div>`:''}</div>
         <input id="zrl-slot-${i}" class="inp" list="zrl-slots" maxlength="40" placeholder="e.g. Tue 19:00 UTC" value="${esc(cur)}" style="width:190px"/><button onclick="zrlSetSlots(${i})" style="${btn}">Apply to ${g.teams.length}</button></div>`; }).join('')}
     <div style="font-size:11px;color:#4b5563;margin-top:8px">Use the time shown on the WTRL league table, and say which time zone it is in. Riders and captains see this text as it is.</div></div>`;
+}
+function zrlLeagueTimes(n){
+  const list=zrlData.round.teams.filter(t=>t.wtrlSlot&&t.wtrlSlot!==t.slot).slice(0,8).map(t=>t.name.replace(/^CRYO-GEN\s+/,'')+': '+(t.slot||'none')+' → '+t.wtrlSlot).join('\n');
+  if(!confirm('Set the WTRL race time on '+n+' team'+(n===1?'':'s')+'?\n\n'+list+(n>8?'\n…':''))) return;
+  zrlPost('/api/zrl/league-times',{});
 }
 function zrlSetSlots(i){
   const g=zrlSlotGroups[i], slot=document.getElementById('zrl-slot-'+i).value.trim();
