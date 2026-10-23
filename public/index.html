@@ -1807,7 +1807,7 @@ async function zrlImportApply(){
 let zrlStaffTab=(()=>{ try{ return sessionStorage.getItem('zrlTab')||'teams'; }catch(e){ return 'teams'; } })();
 let zrlOpenTeamId=null, zrlTeamFilter='all', zrlRiderFilter='unplaced', zrlRiderLimit=40;
 const zrlZoneShort={eu:'EU',am:'AM',ap:'AP'};
-function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
+function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
 function zrlTeamStats(d){
   const by={}; d.signups.forEach(x=>{ const t=(d.assign||{})[x.key]; if(t&&x.in)(by[t]=by[t]||[]).push(x); });
   const unplaced=d.signups.filter(x=>x.in&&!(d.assign||{})[x.key]);
@@ -1829,12 +1829,13 @@ function renderZrlStaff(d){
   if(zrlStaffTab==='teams') body=zrlTeamsTab(d,st);
   else if(zrlStaffTab==='riders') body=zrlRidersTab(d,st);
   else if(zrlStaffTab==='weeks') body=zrlWeeksTab();
+  else if(zrlStaffTab==='results') body=zrlResultsTab(d,st);
   else if(zrlStaffTab==='export') body=zrlExportCard(d)||`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Put riders on teams first, then the registration list appears here.</div>`;
   else body=`${zrlStaffPanel(d)}${zrlWtrlCard(d)}${zrlSlotsCard(d)}${zrlAutoCard(d)}${zrlImportCard(d)}${zrlSignupImportCard(d)}`;
   return `<div style="margin-bottom:12px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
     <div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${tab('teams','🏷️ Teams',r.teams.length+(attention?' · '+attention+' to check':''),attention)}${tab('riders','👥 Riders',st.unplaced.length?st.unplaced.length+' unplaced':String(dem.riders),st.unplaced.length)}${tab('setup','⚙️ Setup','')}${tab('export','📋 WTRL list','')}${tab('weeks','📅 Weeks','')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${tab('teams','🏷️ Teams',r.teams.length+(attention?' · '+attention+' to check':''),attention)}${tab('riders','👥 Riders',st.unplaced.length?st.unplaced.length+' unplaced':String(dem.riders),st.unplaced.length)}${tab('setup','⚙️ Setup','')}${tab('export','📋 WTRL list','')}${tab('weeks','📅 Weeks','')}${tab('results','🏆 Results','')}</div>
     ${zrlEditorCard(d)}${body}`;
 }
 function zrlTeamsTab(d,st){
@@ -1980,6 +1981,39 @@ async function zrlWeeklyLoad(){
   try{ const r=await fetch('/api/zrl/weekly',{headers:tttHeaders()}); if(r.ok) zrlWeekly=await r.json(); }catch(e){}
   if(zrlStaffTab==='weeks') renderZrl2();
 }
+let zrlStand=null, zrlResWeek=0;
+async function zrlStandLoad(){
+  try{ const r=await fetch('/api/zrl/standings',{headers:tttHeaders()}); if(r.ok) zrlStand=await r.json(); }catch(e){}
+  const el=document.getElementById('zrl-standings'); if(el) el.innerHTML=zrlStandingsHtml();
+  if(zrlStaffTab==='results'&&(role==='admin'||role==='mod')) renderZrl2();
+}
+function zrlStandingsHtml(){
+  const s=zrlStand; if(!s||!s.groups.length) return '';
+  const th='padding:5px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">🏆 Standings</div>
+    ${s.groups.map(g=>`<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">${esc(g.name)}</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="${th}">#</th><th style="${th}">Team</th>${s.dates.map((d,i)=>`<th style="${th}">R${i+1}</th>`).join('')}<th style="${th}">Points</th></tr></thead>
+      <tbody>${g.teams.map(t=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px;color:#9ca3af">${t.rank}</td><td style="padding:5px 8px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>
+        ${t.weeks.map(w=>`<td style="padding:5px 8px;color:#9ca3af;white-space:nowrap">${w?(w.pos?w.pos+(w.pos===1?'st':w.pos===2?'nd':w.pos===3?'rd':'th'):'')+(w.pts!==null?(w.pos?' · ':'')+w.pts:''):'–'}</td>`).join('')}<td style="padding:5px 8px;font-weight:800">${t.total}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>`;
+}
+async function zrlResultsSave(){
+  const rows=[...document.querySelectorAll('.zrl-res-row')].map(tr=>({ team:tr.dataset.team, pos:tr.querySelector('.rp').value, pts:tr.querySelector('.rs').value, note:tr.querySelector('.rn').value }));
+  if(await zrlPost('/api/zrl/results',{ week:zrlResWeek, rows })) zrlStandLoad();
+}
+function zrlResultsTab(d,st){
+  const r=d.round, s=zrlStand;
+  if(!s){ zrlStandLoad(); return `<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Loading…</div>`; }
+  const teams=r.teams.filter(t=>(st.by[t.id]||[]).length), entry=t=>(s.entries||{})[zrlResWeek+':'+t.id]||{};
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const wk=i=>`<button onclick="zrlResWeek=${i};renderZrl2()" style="${btn};${zrlResWeek===i?'border-color:rgba(0,212,255,0.6);color:#00D4FF;background:rgba(0,212,255,0.12)':''}">Race ${i+1} · ${esc(seasonDay(s.dates[i]))}</button>`;
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${s.dates.map((_,i)=>wk(i)).join('')}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Enter how each team finished (position in its division) and the points it scored. Leave a row blank for no result. Riders see the standings on the ZRL page.</div>
+    <table style="width:100%;border-collapse:collapse"><tbody>${teams.map(t=>`<tr class="zrl-res-row" data-team="${esc(t.id)}" style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px 5px 0;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}<div style="font-size:10px;color:#6b7280;font-weight:400">${esc([t.division,t.league].filter(Boolean).join(' · '))}</div></td>
+      <td style="padding:5px 4px"><input class="inp rp" type="number" min="1" placeholder="Pos" value="${esc(entry(t).pos||'')}" style="width:70px"/></td>
+      <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(entry(t).pts??'')}" style="width:90px"/></td>
+      <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(entry(t).note||'')}" style="width:100%;min-width:120px"/></td></tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button></div>${zrlStandingsHtml()}`;
+}
 function zrlWeeksTab(){
   const w=zrlWeekly;
   if(!w){ zrlWeeklyLoad(); return `<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Loading…</div>`; }
@@ -2029,7 +2063,7 @@ function renderZrl(d){
   const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
   return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
-    ${zrlMyCard()}${zrlSignupCard(d)}
+    ${zrlMyCard()}<div id="zrl-standings">${zrlStandingsHtml()}</div>${zrlSignupCard(d)}
     ${h3('Where we need riders')}<div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     ${h3('Who is in ('+dem.riders+')'+(staff?' <button onclick="zrlEditStart(\'new\')" style="margin-left:8px;padding:2px 10px;font-size:11px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;cursor:pointer;text-transform:none">+ Add a rider</button>':''))}${staff?zrlEditorCard(d):''}${zrlPoolTable(d,staff)}
     ${staff?zrlStaffPanel(d):''}`;
@@ -2090,7 +2124,7 @@ async function loadZrl(){
     if(role==='member'&&sessionStorage.getItem('token')){
       try{ const r2=await fetch('/api/zrl/mine',{headers:tttHeaders()}); if(r2.ok) zrlMy=await r2.json(); }catch(e){ /* the page works without it */ }
     }
-    zrlData=d; el.innerHTML=renderZrl(d);
+    zrlData=d; el.innerHTML=renderZrl(d); if(!(role==='admin'||role==='mod')) zrlStandLoad();
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load ZRL: ${esc(e.message)}</div>`; }
 }
 
