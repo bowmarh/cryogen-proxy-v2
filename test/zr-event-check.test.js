@@ -15,7 +15,7 @@ const check = (id = '5737438', token = admin) => app.get(`/api/zrl/event-check?i
 
 beforeEach(async () => {
   process.env.ZWIFTRACING_API_KEY = 'zr-secret-key';
-  world.zr = { status: 200, seen: [], body: { eventId: '5737438', time: 1791912780, title: TITLE, type: 'Race', subType: 'Team Time Trial', distance: 29.9, results: [result(3033869, 1), result(1002, 3), result(777, 4)] } };
+  world.zr = { status: 200, seen: [], body: { eventId: '5737438', time: Date.parse('2026-11-24T17:15:00Z') / 1000, title: TITLE, type: 'Race', subType: 'Team Time Trial', distance: 29.9, results: [result(3033869, 1), result(1002, 3), result(777, 4)] } };
   app.world.db = {};
   await app.post('/api/zrl/round', { name: 'Round 2', start: '2026-11-17', closes: h.ymd(10), weeks: 3 }, { token: admin });
   await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Ventoux', region: 'eu', league: 'Shamrock', division: 'Division 4' }, { name: 'CRYO-GEN Mint', region: 'eu', league: 'Mint', division: 'Division 1' }] }, { token: admin });
@@ -58,11 +58,23 @@ test('a team the title names whose whole line-up is missing is still listed; a r
   world.zr.body.results = [result(3033869, 1)];
   let r = await check();
   assert.deepEqual(r.body.teams.map(t => [t.name, t.raced.length, t.missing]), [['CRYO-GEN Ventoux', 0, ['Rider 2', 'Ann Able']]]);
-  world.zr.body.title = TITLE.replace('Race 2', 'Race 9'); world.zr.body.results = [result(1002, 2)];
+  world.zr.body.time = Date.parse('2026-10-13T17:15:00Z') / 1000; world.zr.body.results = [result(1002, 2)];
   r = await check();
-  assert.equal(r.body.week, null); assert.deepEqual(r.body.teams[0].raced.map(x => x.picked), [false], 'no week, no line-up to compare with');
-  world.zr.body.title = 'Some other event'; world.zr.body.results = [result(1002, 2), result(2436518, 5)];
+  assert.equal(r.body.week, null); assert.equal(r.body.outsideRound, true, 'a race before the round starts');
+  assert.equal(r.body.event.date, '2026-10-13');
+  assert.deepEqual(r.body.teams[0].raced.map(x => x.picked), [false], 'no week, no line-up to compare with');
+  world.zr.body.time = Date.parse('2026-11-25T01:30:00Z') / 1000;   // a Wednesday-morning UTC start still belongs to the week before
+  r = await check(); assert.equal(r.body.week, 1);
+  world.zr.body.title = TITLE.replace('Race 2', 'Race 9'); r = await check();
+  assert.equal(r.body.week, 1, 'the date decides, not the race number in the title');
+  world.zr.body.title = 'Some other event'; world.zr.body.time = Date.parse('2026-11-24T17:15:00Z') / 1000; world.zr.body.results = [result(1002, 2), result(2436518, 5)];
   r = await check();
   assert.equal(r.body.parsed, null);
   assert.deepEqual(r.body.teams.map(t => t.name).sort(), ['CRYO-GEN Mint', 'CRYO-GEN Ventoux'], 'without a title match, any team with a finisher counts');
+});
+
+test('a team outside the title\'s league and division is marked as such', async () => {
+  world.zr.body.results = [result(1002, 2), result(2436518, 5)];
+  const t = Object.fromEntries((await check()).body.teams.map(x => [x.name, x.named]));
+  assert.deepEqual(t, { 'CRYO-GEN Ventoux': true, 'CRYO-GEN Mint': false });
 });
