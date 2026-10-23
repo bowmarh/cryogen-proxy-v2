@@ -65,7 +65,50 @@ test('a team with a full line-up is not chased, and nothing is said when everyon
   assert.ok(!/Alpha/.test(posts('admin')[0]) && /Beta/.test(posts('admin')[0]));
 });
 
-test('a race that has started gets nothing', async () => {
-  setRound({ start: h.ymd(0) });
+test('a race that has started gets no reminder: yesterday nothing, today only the race-day summary', async () => {
+  setRound({ start: h.ymd(-1) });
   assert.deepEqual(await tick(), []);
+  setRound({ start: h.ymd(0) });
+  assert.deepEqual(await tick(), ['zrl-digest-1'], 'no rider ask and no line-up chase on the day itself');
+  assert.equal(posts('public').length, 0);
+});
+
+test('on race day the staff get one summary: missing line-ups, no race time, registrations and silent riders; once', async () => {
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Alpha', region: 'eu', slot: 'Tue 18:15 UTC' }, { name: 'CRYO-GEN Beta', region: 'eu' }, { name: 'CRYO-GEN Empty', region: 'am' }] }, { token: admin });
+  for (const [n, z, t] of [['Rider 2', '1002', 'cryo-gen-alpha'], ['Ann Able', '4378027', 'cryo-gen-alpha'], ['Bob Baker', '2436518', 'cryo-gen-beta']]) {
+    await app.post('/api/zrl/signup', { name: n, zwid: z, regions: ['eu'], cat: 'C' });
+    await app.post('/api/zrl/assign', { key: z, team: t }, { token: admin });
+  }
+  await app.post('/api/zrl/wtrl-deadline', { date: h.ymd(5) }, { token: admin });
+  const cap = await app.memberSession('1002');
+  await app.post('/api/zrl/availability', { week: 0, status: 'yes' }, { token: cap });
+  await app.post('/api/zrl/captain', { team: 'cryo-gen-alpha', key: '1002' }, { token: admin });
+  await app.post('/api/zrl/wtrl-registered', { team: 'cryo-gen-alpha' }, { token: cap });
+  setRound({ start: h.ymd(0) });
+  app.world.discord.length = 0;
+  const ran = await tick();
+  assert.ok(ran.includes('zrl-digest-1'));
+  const text = posts('admin').find(p => /race 1 is today/.test(p));
+  assert.match(text, /2 teams racing/);
+  assert.match(text, /⚠️ No full line-up of 5: Alpha, Beta/);
+  assert.match(text, /No race time set: Beta/);
+  assert.match(text, /Not marked as registered on WTRL: Beta/);
+  assert.match(text, /2 of 3 riders have not said if they can race/);
+  assert.ok(!/Empty/.test(text), 'a team with no riders is not counted');
+  assert.ok(!(await tick()).includes('zrl-digest-1'), 'once');
+});
+
+test('the day after the race, and a week with everything in place, read correctly', async () => {
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Alpha', region: 'eu', slot: 'Tue 18:15 UTC' }] }, { token: admin });
+  await app.post('/api/zrl/signup', { name: 'Rider 2', zwid: '1002', regions: ['eu'], cat: 'C' });
+  await app.post('/api/zrl/assign', { key: '1002', team: 'cryo-gen-alpha' }, { token: admin });
+  await app.post('/api/zrl/lineup', { week: 0, team: 'cryo-gen-alpha', zwids: ['1002'] }, { token: admin });
+  setRound({ start: h.ymd(-1), racing: 1 });
+  assert.ok(!(await tick()).includes('zrl-digest-1'), 'yesterday is too late');
+  setRound({ start: h.ymd(0), racing: 1 });
+  app.world.discord.length = 0;
+  await tick();
+  const text = posts('admin').find(p => /race 1 is today/.test(p));
+  assert.match(text, /✅ Every team has a full line-up of 1/);
+  assert.ok(!/No race time|registered on WTRL/.test(text), 'nothing else to flag');
 });
