@@ -1874,6 +1874,22 @@ function renderZrlStaff(d){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${tab('teams','🏷️ Teams',r.teams.length+(attention?' · '+attention+' to check':''),attention)}${tab('riders','👥 Riders',st.unplaced.length?st.unplaced.length+' unplaced':String(dem.riders),st.unplaced.length)}${tab('setup','⚙️ Setup','')}${tab('export','📋 WTRL list','')}${tab('weeks','📅 Weeks','')}${tab('results','🏆 Results','')}</div>
     ${zrlEditorCard(d)}${body}`;
 }
+async function zrlRecruit(region,name){
+  if(!confirm('Post a "riders wanted" message for '+name+' to the club channel?')) return;
+  let res,d; try{ res=await fetch('/api/zrl/recruit',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ region })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  alert(res.ok?'Posted to the club channel.':(d.error||('Request failed ('+res.status+')')));
+}
+function zrlGrowthCard(d,st){
+  const r=d.round; if(!r.open) return '';
+  const rows=d.demand.regions.map(z=>{
+    const teams=r.teams.filter(t=>t.region===z.id), placed=teams.reduce((n,t)=>n+(st.by[t.id]||[]).length,0), open=Math.max(0,teams.length*r.rosterSize-placed);
+    const loose=st.unplaced.filter(x=>x.regions.includes(z.id)).length;
+    const note=teams.length?(open?`<b style="color:#FBBF24">${open} place${open===1?'':'s'} open</b> on ${teams.length} team${teams.length===1?'':'s'}`:'<b style="color:#10B981">full</b>'):`<b style="color:#FBBF24">no team yet</b>, ${z.riders} interested`;
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:200px;font-size:13px">${z.id==='ap'?'🌏 ':''}<b>${esc(z.name)}</b> <span style="color:#9ca3af">· ${note}${loose?' · '+loose+' interested with no team':''}</span></div>
+      <button onclick="zrlRecruit('${z.id}','${esc(z.name)}')" style="padding:4px 10px;font-size:12px;background:${z.id==='ap'?'rgba(0,212,255,0.12)':'rgba(255,255,255,0.05)'};color:${z.id==='ap'?'#00D4FF':'#e5e7eb'};border:1px solid ${z.id==='ap'?'rgba(0,212,255,0.4)':'rgba(255,255,255,0.15)'};border-radius:6px;cursor:pointer">📣 Ask for riders</button></div>`;
+  }).join('');
+  return `<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">Growth: where riders are wanted</div>${rows}<div style="font-size:11px;color:#4b5563;margin-top:6px">One message per time zone a day. It says how many places are open and the race times.</div></div>`;
+}
 function zrlTeamsTab(d,st){
   const r=d.round, size=r.rosterSize;
   const zones=r.regions;
@@ -1896,7 +1912,7 @@ function zrlTeamsTab(d,st){
       ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}</div>`;
   };
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>
-    ${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
+    ${zrlGrowthCard(d,st)}${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
     ${shown.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${shown.map(tile).join('')}</div>`:`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${r.teams.length?'No teams match this filter.':'No teams yet. Import the team board from the Setup tab.'}</div>`}`;
 }
 function zrlOpenTeam(id){ zrlOpenTeamId=zrlOpenTeamId===id?null:id; renderZrl2(); const el=document.getElementById('zrl-team-detail'); if(el) el.scrollIntoView({block:'nearest',behavior:'smooth'}); }
