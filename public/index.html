@@ -156,6 +156,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
       <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
       <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
+      <button class="navbtn" onclick="showTab('ladder',this)">🪜 Ladder</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
@@ -222,6 +223,10 @@ table{width:100%;border-collapse:collapse}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
+  </div>
+
+  <div id="page-ladder" class="page">
+    <div id="ladder-root"><div class="card" style="padding:16px;font-size:13px;color:#6b7280">Loading the ladder…</div></div>
   </div>
 
   <div id="page-zrl" class="page">
@@ -678,6 +683,7 @@ function showTab(id,btn){
   if(id==='ttt')loadTtt();
   if(id==='season')loadSeason();
   if(id==='zrl')loadZrl();
+  if(id==='ladder')loadLadder();
   if(id==='members')renderMembers(); 
 }
 
@@ -1526,6 +1532,187 @@ function renderTtt(){
     ${!archived&&!w.published&&d.signups.length?`<div style="margin-top:20px"><label class="lbl">Signed up so far</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.signups.filter(s=>s.available).map(s=>`<span style="font-size:12px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(s.name)}</span>`).join('')}</div></div>`:''}
   `;
 }
+
+// ── Zwift Club Ladder (5v5 head-to-head, ZwiftRacing.app vELO ranks) ───────────────────────────
+let ladder=null, ladderErr='', ladderForm=null, ladderBuild=null, ladderResult=null, ladderOpen=new Set();
+async function loadLadder(){
+  try{
+    const r=await fetch('/api/ladder',{headers:tttHeaders()});
+    if(r.status===401){ ladder=null; ladderErr='signin'; }
+    else if(!r.ok){ ladder=null; ladderErr='Could not load the ladder.'; }
+    else { ladder=await r.json(); ladderErr=''; }
+  }catch(e){ ladder=null; ladderErr='Could not reach the server.'; }
+  renderLadder();
+}
+async function ladderPost(path,body){
+  let res,d; try{ res=await fetch('/api/ladder/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body||{})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  if(d.matches) ladder=d;
+  renderLadder(); return d;
+}
+const ladderStaff=()=>!!(ladder&&ladder.staff);
+const ladderRank=c=>ladder.ranks.indexOf(c);
+function ladderCatBadge(c){ const col=ZRA_COLOR[c]||'#6b7280'; return c?`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;color:${col};background:${col}1f;border:1px solid ${col}55">${esc(c)}</span>`:`<span style="font-size:10px;color:#6b7280">no category</span>`; }
+const ladderWhen=ms=>new Date(ms).toLocaleString(undefined,{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const ladderEta=ms=>{ const left=ms-Date.now(); if(left<0) return 'started'; const h=left/3600000; return h<20?'in '+Math.max(1,Math.round(h))+' hour'+(Math.round(h)===1?'':'s'):'in '+Math.ceil(h/24)+' day'+(Math.ceil(h/24)===1?'':'s'); };
+function ladderLegal(ids){
+  const rs=ids.map(z=>ladder.roster.find(r=>r.zwid===z)).filter(Boolean).map(r=>ladderRank(r.cat));
+  if(!rs.length) return { ok:true, window:'' };
+  if(rs.some(r=>r<0)) return { ok:false, window:'' };
+  const lo=Math.min(...rs), hi=Math.max(...rs);
+  return { ok:hi-lo<ladder.limits.spread, window:ladder.ranks[lo]+(hi>lo?' to '+ladder.ranks[hi]:''), ranks:hi-lo+1 };
+}
+function ladderMatchCard(m,open){
+  const staff=ladderStaff(), L=ladder.limits, chk=m.lineupCheck;
+  const status={challenge:['Challenge open','#FBBF24'],scheduled:['Scheduled','#10B981'],played:[m.result&&m.result.won?'Won':'Lost',m.result&&m.result.won?'#10B981':'#f87171'],cancelled:['Cancelled','#6b7280']}[m.status]||['','#6b7280'];
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const prim=btn+';background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)';
+  const link=m.eventLink&&m.eventLink!=='hidden'&&/^https:\/\//i.test(m.eventLink)?`<a href="${esc(m.eventLink)}" target="_blank" rel="noopener" style="color:#00D4FF;font-size:13px">Open the private Zwift event →</a>`:m.eventLink==='hidden'?'<span style="font-size:12px;color:#6b7280">The private event link is shown to riders on the ladder roster.</span>':'<span style="font-size:12px;color:#6b7280">Private event link: still to come</span>';
+  const route=m.route&&(m.route.name||m.route.km||m.route.minutes)?[m.route.name,m.route.km?m.route.km+' km':'',m.route.minutes?'about '+m.route.minutes+' min':''].filter(Boolean).join(' · '):'';
+  const mine=m.onRoster?['yes','maybe','no'].map(v=>`<button onclick="ladderPost('availability',{match:'${esc(m.id)}',status:'${m.myAvailability===v?'':v}'})" style="padding:7px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${m.myAvailability===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${m.myAvailability===v?'rgba(0,212,255,0.18)':'transparent'};color:${m.myAvailability===v?'#00D4FF':'#d1d5db'}">${{yes:'✅ I can ride',maybe:'🤔 Maybe',no:'❌ I can\'t'}[v]}</button>`).join(''):'';
+  const lineup=m.lineupInfo.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${m.lineupInfo.map(r=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:13px;font-weight:600">${ladderCatBadge(r.cat)} ${esc(r.name)}${m.result&&m.result.positions?` <span style="color:#00D4FF">${ordinal(m.result.positions[r.zwid])}</span>`:''}</div>`).join('')}</div>
+    <div style="font-size:12px;color:${chk.ok&&chk.complete?'#10B981':'#FBBF24'}">${chk.ok&&chk.complete?`✅ Legal line-up: ${esc(chk.window.from)}${chk.window.from!==chk.window.to?' to '+esc(chk.window.to):''} (${chk.window.ranks} rank${chk.window.ranks===1?'':'s'}, three allowed)`:chk.ok?`${m.lineupInfo.length} of ${L.lineup} riders picked`:esc(chk.issues.join(' '))}</div>`:'<div style="font-size:13px;color:#9ca3af;margin:6px 0">The line-up has not been picked yet.</div>';
+  const result=m.result?`<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:${m.result.won?'rgba(16,185,129,0.1)':'rgba(248,113,113,0.1)'};font-size:14px;font-weight:800">${m.result.won?'🏆 Won':'Lost'} ${m.result.ourPoints}–${m.result.theirPoints}</div>`:'';
+  return `<details class="card" ${open?'open':''} ontoggle="ladderToggle('${esc(m.id)}',this.open)" style="padding:0;margin-bottom:10px">
+    <summary style="cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
+      <span style="font-size:15px;font-weight:800;flex:1;min-width:160px">CRYO-GEN v ${esc(m.opponent)}</span>
+      ${m.at?`<span style="font-size:12px;color:#9ca3af">${esc(new Date(m.at).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}${m.upcoming?' · '+esc(ladderEta(m.at)):''}</span>`:''}
+      <span style="font-size:11px;font-weight:700;color:${status[1]}">${status[0]}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
+    <div style="padding:0 14px 14px">
+      <div style="font-size:12px;color:#9ca3af">${m.challenger==='us'?'We challenged, so we choose the route.':'They challenged us: they choose the route.'}${m.at?` · <b style="color:#e5e7eb">${esc(ladderWhen(m.at))}</b>`:' · date and time still to agree on Discord with their captain'}</div>
+      ${route?`<div style="font-size:13px;margin-top:4px">🗺️ ${esc(route)}</div>`:''}
+      <div style="margin-top:4px">${link}</div>
+      ${m.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(m.notes)}</div>`:''}
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${result}
+      ${m.upcoming?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you ride? <span style="font-weight:400;text-transform:none;color:#9ca3af">${m.counts.yes} yes · ${m.counts.maybe} maybe · ${m.counts.no} no</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:'<div style="font-size:12px;color:#6b7280">Only riders on the ladder roster answer. Ask the captains to add you.</div>'}`:''}
+      ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        ${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
+        ${m.lineup&&m.lineup.length===L.lineup&&m.status!=='cancelled'?`<button onclick="ladderResultOpen('${esc(m.id)}')" style="${btn}">🏆 ${m.result?'Edit':'Enter'} result</button>`:''}
+        <button onclick="ladderFormOpen('${esc(m.id)}')" style="${btn}">✏️ Edit</button>
+        ${m.status!=='cancelled'&&m.status!=='played'?`<button onclick="if(confirm('Cancel this challenge?'))ladderPost('status',{id:'${esc(m.id)}',status:'cancelled'})" style="${btn}">Cancel</button>`:''}
+        <button onclick="if(confirm('Delete this match and its answers for good?'))ladderPost('match-remove',{id:'${esc(m.id)}'})" style="${btn}">Delete</button></div>
+      ${ladderBuild&&ladderBuild.match===m.id?ladderBuilder(m):''}${ladderResult&&ladderResult.match===m.id?ladderResultForm(m):''}`:''}
+    </div></details>`;
+}
+function ladderToggle(id,open){ if(open) ladderOpen.add(id); else ladderOpen.delete(id); }
+// The line-up builder: tick five riders; riders who would break the three-rank rule are greyed out as you go.
+function ladderBuildOpen(id){
+  const m=ladder.matches.find(x=>x.id===id);
+  ladderBuild={ match:id, picked:new Set((m.lineup||[])), msg:'' }; ladderResult=null; ladderOpen.add(id); renderLadder();
+}
+function ladderBuilder(m){
+  const b=ladderBuild, L=ladder.limits, picked=[...b.picked], legal=ladderLegal(picked);
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const rows=ladder.roster.map(r=>{
+    const on=b.picked.has(r.zwid), rk=ladderRank(r.cat), ans=(m.availability||{})[r.zwid]||'';
+    const test=ladderLegal(on?picked:[...picked,r.zwid]);
+    const blocked=!on&&(rk<0||!test.ok||picked.length>=L.lineup);
+    const why=rk<0?'no category':!on&&!test.ok?'outside the three ranks':!on&&picked.length>=L.lineup?'five already picked':'';
+    return `<label style="display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:8px;${blocked?'opacity:.4':''};${on?'background:rgba(0,212,255,0.08)':''}"><input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="ladderBuildTick('${esc(r.zwid)}',this.checked)"/>
+      ${ladderCatBadge(r.cat)}<span style="flex:1;font-size:13px;font-weight:600">${esc(r.name)}</span><span style="font-size:11px;color:#6b7280">${r.rating||''}</span>
+      <span title="Their answer" style="font-size:12px">${{yes:'✅',maybe:'🤔',no:'❌','':'·'}[ans]}</span>${why?`<span style="font-size:10px;color:#6b7280">${why}</span>`:''}</label>`;
+  }).join('');
+  return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px">
+    <div style="font-size:13px;font-weight:800;margin-bottom:4px">Pick the line-up <span style="font-weight:400;color:#9ca3af">${picked.length} of ${L.lineup}${legal.window?' · '+esc(legal.window):''}</span></div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Five riders from at most three consecutive vELO ranks. As you pick, riders who would break that rule are greyed out. ✅ yes · 🤔 maybe · ❌ no is what each rider said.</div>
+    <div style="max-height:340px;overflow:auto;margin-bottom:8px">${rows||'<div style="font-size:12px;color:#6b7280">Add riders to the roster first.</div>'}</div>
+    ${b.msg?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">${esc(b.msg)}</div>`:''}
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="ladderSuggest('${esc(m.id)}')" style="${btn}">✨ Suggest the strongest legal five</button><button onclick="ladderBuildSave('${esc(m.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)" ${picked.length&&legal.ok?'':'disabled'}>Save line-up</button><button onclick="ladderBuild=null;renderLadder()" style="${btn}">Close</button></div></div>`;
+}
+function ladderBuildTick(z,on){ if(on) ladderBuild.picked.add(z); else ladderBuild.picked.delete(z); ladderBuild.msg=''; renderLadder(); }
+async function ladderSuggest(id){
+  let res,d; try{ res=await fetch('/api/ladder/suggest?match='+encodeURIComponent(id),{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server.'); return; }
+  if(!res.ok){ ladderBuild.msg=d.error||'No suggestion.'; renderLadder(); return; }
+  ladderBuild.picked=new Set(d.zwids); ladderBuild.msg='Suggested: the strongest legal five by vELO rating, leaving out anyone who said no. Change anyone you like, then save.'; renderLadder();
+}
+async function ladderBuildSave(id){ if(await ladderPost('lineup',{ match:id, zwids:[...ladderBuild.picked] })) ladderBuild=null, renderLadder(); }
+function ladderResultOpen(id){ ladderResult={ match:id }; ladderBuild=null; ladderOpen.add(id); renderLadder(); }
+function ladderResultForm(m){
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Result</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Where did each of our five finish in the race of ten? 1st scores 10 points down to 10th scoring 1; the team with the higher total wins.</div>
+    ${m.lineupInfo.map(r=>`<div style="display:flex;gap:8px;align-items:center;padding:3px 0"><span style="flex:1;font-size:13px">${esc(r.name)}</span><input class="inp" data-pos="${esc(r.zwid)}" type="number" min="1" max="10" value="${esc((m.result&&m.result.positions&&m.result.positions[r.zwid])||'')}" placeholder="1-10" style="width:80px" oninput="ladderResultTotal()"/></div>`).join('')}
+    <div id="ladder-total" style="font-size:13px;font-weight:700;margin:8px 0"></div>
+    <div style="display:flex;gap:6px"><button onclick="ladderResultSave('${esc(m.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save result</button><button onclick="ladderResult=null;renderLadder()" style="${btn}">Close</button></div></div>`;
+}
+function ladderResultTotal(){
+  const el=document.getElementById('ladder-total'); if(!el) return;
+  const ps=[...document.querySelectorAll('[data-pos]')].map(i=>parseInt(i.value,10));
+  if(ps.some(p=>!(p>=1&&p<=10))){ el.textContent=''; return; }
+  const ours=ps.reduce((n,p)=>n+11-p,0); el.textContent='Our '+ours+' – their '+(55-ours)+(ours>55-ours?' · we win':' · they win');
+}
+async function ladderResultSave(id){
+  const positions={}; document.querySelectorAll('[data-pos]').forEach(i=>{ positions[i.dataset.pos]=parseInt(i.value,10); });
+  if(await ladderPost('result',{ match:id, positions })) ladderResult=null, renderLadder();
+}
+function ladderFormOpen(id){
+  const m=id==='new'?null:ladder.matches.find(x=>x.id===id);
+  const p=m&&m.at?new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(m.at)).reduce((o,x)=>(o[x.type]=x.value,o),{}):null;
+  ladderForm={ id:m&&m.id, opponent:m?m.opponent:'', challenger:m?m.challenger:'us', routeName:m?m.route.name:'', routeKm:m&&m.route.km||'', routeMinutes:m&&m.route.minutes||45, date:p?`${p.year}-${p.month}-${p.day}`:'', time:p?`${p.hour}:${p.minute}`:'', eventLink:m&&m.eventLink!=='hidden'?m.eventLink:'', notes:m?m.notes:'' };
+  renderLadder();
+}
+function ladderFormCard(){
+  const f=ladderForm; if(!f) return '';
+  const inp='class="inp" style="padding:6px 8px;font-size:12px;', btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:8px">${f.id?'Edit the challenge':'New challenge'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <input id="lf-opp" ${inp}width:200px" placeholder="Opposing team" maxlength="60" value="${esc(f.opponent)}"/>
+      <select id="lf-ch" ${inp}width:auto"><option value="us" ${f.challenger==='us'?'selected':''}>We challenged (we pick the route)</option><option value="them" ${f.challenger==='them'?'selected':''}>They challenged us</option></select>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <input id="lf-route" ${inp}width:200px" placeholder="Route (15-25 km, about 45 min)" maxlength="80" value="${esc(f.routeName)}"/>
+      <input id="lf-km" ${inp}width:80px" placeholder="km" inputmode="decimal" value="${esc(f.routeKm)}"/><input id="lf-min" ${inp}width:80px" placeholder="minutes" inputmode="numeric" value="${esc(f.routeMinutes)}"/>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <input id="lf-date" type="date" ${inp}width:150px" value="${esc(f.date)}"/><input id="lf-time" ${inp}width:80px" placeholder="19:30" maxlength="5" value="${esc(f.time)}"/><span style="font-size:11px;color:#6b7280">UK time</span>
+      <input id="lf-link" ${inp}flex:1;min-width:220px" placeholder="Private Zwift event link (https://…)" value="${esc(f.eventLink)}"/>
+    </div>
+    <input id="lf-notes" ${inp}width:100%;margin-bottom:8px" placeholder="Notes (staff and riders can see)" maxlength="300" value="${esc(f.notes)}"/>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The date, time and link can be added later, once the two captains have agreed them on Discord.</div>
+    <div style="display:flex;gap:6px"><button onclick="ladderFormSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">${f.id?'Save':'Open the challenge'}</button><button onclick="ladderForm=null;renderLadder()" style="${btn}">Cancel</button></div></div>`;
+}
+async function ladderFormSave(){
+  const g=id=>document.getElementById(id).value.trim(), f=ladderForm;
+  const ok=await ladderPost('match',{ id:f.id, opponent:g('lf-opp'), challenger:g('lf-ch'), routeName:g('lf-route'), routeKm:g('lf-km'), routeMinutes:g('lf-min'), date:g('lf-date'), time:g('lf-time'), eventLink:g('lf-link'), notes:g('lf-notes'), clearTime:!g('lf-date')&&!g('lf-time') });
+  if(ok){ ladderForm=null; renderLadder(); }
+}
+function ladderRosterCard(){
+  const staff=ladderStaff(), L=ladder.limits, byRank={};
+  for(const r of ladder.roster) (byRank[r.cat||'—']=byRank[r.cat||'—']||[]).push(r);
+  const btn='padding:3px 10px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const ids=new Set(ladder.roster.map(r=>r.zwid));
+  const pool=(typeof riders!=='undefined'?riders:[]).filter(r=>!ids.has(String(r.id))&&r.name).slice(0,700);
+  return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px"><div style="font-size:14px;font-weight:800">Ladder roster <span style="font-weight:400;color:${ladder.roster.length>=L.roster?'#FBBF24':'#9ca3af'}">${ladder.roster.length} of ${L.roster}</span></div><div style="font-size:11px;color:#6b7280">A race line-up is five of these, from at most three consecutive vELO ranks.</div></div>
+    ${ladder.roster.length?ladder.ranks.concat(['—']).filter(k=>byRank[k]).map(k=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="width:96px;flex:none">${k==='—'?'<span style="font-size:10px;color:#6b7280">no category</span>':ladderCatBadge(k)}</div><div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">${byRank[k].map(r=>`<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,0.06);font-size:13px">${esc(r.name)}${r.rating?` <span style="font-size:11px;color:#6b7280">${r.rating}</span>`:''}${staff?`<button title="Take off the roster" onclick="if(confirm('Take ${esc(r.name).replace(/'/g,'')} off the ladder roster?'))ladderPost('roster',{zwid:'${esc(r.zwid)}',remove:true})" style="background:none;border:none;color:#6b7280;cursor:pointer;padding:0">✕</button>`:''}</span>`).join('')}</div></div>`).join(''):'<div style="font-size:13px;color:#9ca3af">Nobody on the ladder roster yet.</div>'}
+    ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><input id="lr-name" class="inp" list="lr-people" placeholder="Add a rider from the club roster" style="padding:6px 8px;font-size:12px;width:240px" oninput="ladderRosterPick(this)"/><datalist id="lr-people">${pool.map(r=>`<option value="${esc(r.name)}"></option>`).join('')}</datalist><input id="lr-id" class="inp" placeholder="Zwift ID" style="padding:6px 8px;font-size:12px;width:110px"/><button onclick="ladderRosterAdd()" style="${btn}">Add</button></div>`:''}</div>`;
+}
+function ladderRosterPick(el){ const r=(typeof riders!=='undefined'?riders:[]).find(x=>x.name===el.value); if(r) document.getElementById('lr-id').value=r.id; }
+async function ladderRosterAdd(){ const z=document.getElementById('lr-id').value.trim(); if(!z){ alert('Choose a rider from the list, or enter a Zwift ID.'); return; } await ladderPost('roster',{ zwid:z }); }
+function ladderHelpCard(){
+  return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">❓ How the ladder works</summary><ol style="font-size:13px;color:#d1d5db;margin:8px 0 0 18px;padding:0;line-height:1.7">
+    <li><b>Roster:</b> up to 15 riders. Their vELO category comes from ZwiftRacing.app through the club roster.</li>
+    <li><b>Line-up:</b> five riders, from at most <b>three consecutive vELO ranks</b> (a Diamond can race with Ruby and Emerald riders, not Sapphire).</li>
+    <li><b>Challenge:</b> captains challenge a team on a rung above on the ladder site, then agree the date and time with the other captain on Discord. The challenger picks the route: about 15 to 25 km, around 45 minutes.</li>
+    <li><b>Here:</b> open the challenge, call for riders, pick the line-up (the page checks the three-rank rule and can suggest the strongest legal five), add the private event link, then post the line-up to Discord.</li>
+    <li><b>Race:</b> 10 points for 1st down to 1 for 10th; the higher team total wins. Expect an all-out sprint from the start (the "Chilly"), and use steering.</li></ol></details>`;
+}
+function renderLadder(){
+  const el=document.getElementById('ladder-root'); if(!el) return;
+  if(ladderErr==='signin'){ el.innerHTML='<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Sign in with your cryogen.team account to see the ladder.</div>'; return; }
+  if(ladderErr){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#FBBF24">${esc(ladderErr)}</div>`; return; }
+  if(!ladder){ return; }
+  const staff=ladderStaff(), rec=ladder.record, up=ladder.matches.filter(m=>m.upcoming).sort((a,b)=>(a.at||9e15)-(b.at||9e15)), past=ladder.matches.filter(m=>!m.upcoming);
+  const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder</h2>
+      <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
+    ${staff?`<button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button>`:''}</div>
+    ${ladderFormCard()}
+    ${up.length?up.map((m,i)=>ladderMatchCard(m,ladderOpen.has(m.id)||(i===0&&!ladderOpen.size&&!past.some(p=>ladderOpen.has(p.id))))).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No challenge is open.'+(staff?' Press <b>+ New challenge</b> when a team above you accepts.':'')+'</div>'}
+    ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 8px">Past matches</div>${past.map(m=>ladderMatchCard(m,ladderOpen.has(m.id))).join('')}`:''}
+    ${rec.riders.length?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📊 Rider points</summary><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Rider</th><th>Races</th><th>Points</th><th>Average</th><th>Best</th></tr></thead><tbody>${rec.riders.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(r.name)}</td><td>${r.races}</td><td>${r.points}</td><td>${r.avg}</td><td>${r.best?ordinal(r.best):'—'}</td></tr>`).join('')}</tbody></table></details>`:''}
+    ${ladderRosterCard()}${ladderHelpCard()}`;
+}
+async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
