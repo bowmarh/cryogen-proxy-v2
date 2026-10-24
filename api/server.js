@@ -438,6 +438,8 @@ const DISCORD_HOOKS = {
   'zrl-admin': ['DISCORD_WEBHOOK_ZRL_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
   ladder: ['DISCORD_WEBHOOK_LADDER', 'DISCORD_WEBHOOK_PUBLIC'],
   'ladder-admin': ['DISCORD_WEBHOOK_LADDER_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
+  drs: ['DISCORD_WEBHOOK_DRS', 'DISCORD_WEBHOOK_PUBLIC'],
+  'drs-admin': ['DISCORD_WEBHOOK_DRS_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
 };
 const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
 
@@ -1333,7 +1335,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1762,6 +1764,7 @@ async function healthChecks(){
     run('backup', 'Backups', async () => backup.healthRow()),
     run('cover', 'Ride cover (leaders and sweepers)', async () => cover.healthRow(await cover.load())),
     run('ladder', 'Zwift Club Ladder', async () => ladder.healthRow()),
+    run('drs', 'DIRT Racing Series', async () => drs.healthRow()),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
@@ -1929,8 +1932,21 @@ async function handleLadder(ladderRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// DIRT Racing Series (lib/drs.js): a squad of eight in a vELO division, a fixed Tuesday calendar, the best four finishers score.
+const drs = require('../lib/drs')({
+  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  // Raw vELO ratings from the club roster the dashboard already caches: no ZwiftRacing.app calls of its own, so no rate limits to respect.
+  getRatings: async () => Object.fromEntries((await fetchRoster()).riders.map(r => [String(r.riderId), { name: r.name, rating: Math.round((r.race && r.race.current && r.race.current.rating) || 0), cat: (r.race && r.race.current && r.race.current.mixed && r.race.current.mixed.category) || '' }])),
+});
+async function handleDrs(drsRoute, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await drsRoute(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -1991,6 +2007,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const drsRoute = drs.routes[`${req.method} ${pathname}`];
+  if (drsRoute) return handleDrs(drsRoute, req, res);
 
   const ladderRoute = ladder.routes[`${req.method} ${pathname}`];
   if (ladderRoute) return handleLadder(ladderRoute, req, res);

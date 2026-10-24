@@ -44,6 +44,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
 | `DISCORD_WEBHOOK_ZRL_PUBLIC` *(optional)* | Discord webhook for the ZRL club channel: round open, reminder, closed, rosters out. Falls back to `DISCORD_WEBHOOK_PUBLIC`. |
 | `DISCORD_WEBHOOK_ZRL_ADMIN` *(optional)* | Discord webhook for the private ZRL admin channel: sign-ups closed, rosters published with the to-do list. Falls back to `DISCORD_WEBHOOK_ADMIN`. |
+| `DISCORD_WEBHOOK_DRS` *(optional)* | Discord webhook for the DIRT Racing Series channel: stage posts with the private link and the squad, and the reminders. Falls back to `DISCORD_WEBHOOK_PUBLIC`. `DISCORD_WEBHOOK_DRS_ADMIN` is for staff alerts (vELO near the cap, finalise-the-squad reminders; falls back to `DISCORD_WEBHOOK_ADMIN`). |
 | `DISCORD_WEBHOOK_LADDER` *(optional)* | Discord webhook for the Zwift Club Ladder channel: challenge call-outs, line-ups with the private event link, and match reminders. Falls back to `DISCORD_WEBHOOK_PUBLIC`. `DISCORD_WEBHOOK_LADDER_ADMIN` is for staff warnings (falls back to `DISCORD_WEBHOOK_ADMIN`). |
 | `LOGIN_MAX_FAILS` *(optional)* | Wrong staff passwords allowed from one connection in 15 minutes before every attempt gets 429 (default 10). |
 | `RATE_LIMIT_WRITES_PER_MIN` *(optional)* | Writes a minute allowed to anyone who is not staff, per connection (default 120). |
