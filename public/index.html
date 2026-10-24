@@ -157,6 +157,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
       <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
       <button class="navbtn" onclick="showTab('ladder',this)">🪜 Ladder</button>
+      <button class="navbtn" onclick="showTab('drs',this)">🏜️ DIRT Series</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
@@ -227,6 +228,10 @@ table{width:100%;border-collapse:collapse}
 
   <div id="page-ladder" class="page">
     <div id="ladder-root"><div class="card" style="padding:16px;font-size:13px;color:#6b7280">Loading the ladder…</div></div>
+  </div>
+
+  <div id="page-drs" class="page">
+    <div id="drs-root"><div class="card" style="padding:16px;font-size:13px;color:#6b7280">Loading the DIRT Racing Series…</div></div>
   </div>
 
   <div id="page-zrl" class="page">
@@ -684,6 +689,7 @@ function showTab(id,btn){
   if(id==='season')loadSeason();
   if(id==='zrl')loadZrl();
   if(id==='ladder')loadLadder();
+  if(id==='drs')loadDrs();
   if(id==='members')renderMembers(); 
 }
 
@@ -1713,6 +1719,177 @@ function renderLadder(){
     ${ladderRosterCard()}${ladderHelpCard()}`;
 }
 async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
+
+// ── DIRT Racing Series (DRS): squad of eight, fixed calendar, best four score, vELO buffer ─────────
+let drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
+async function loadDrs(){
+  try{
+    const r=await fetch('/api/drs',{headers:tttHeaders()});
+    if(r.status===401){ drs=null; drsErr='signin'; }
+    else if(!r.ok){ drs=null; drsErr='Could not load the series.'; }
+    else { drs=await r.json(); drsErr=''; }
+  }catch(e){ drs=null; drsErr='Could not reach the server.'; }
+  renderDrs();
+}
+async function drsPost(path,body){
+  let res,d; try{ res=await fetch('/api/drs/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body||{})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  if(d.staff!==undefined) drs=d;
+  renderDrs(); return d;
+}
+const drsStaff=()=>!!(drs&&drs.staff);
+const DRS_STATE={ok:['Within the threshold','#10B981'],buffer:['In the buffer','#38bdf8'],danger:['Danger zone','#FBBF24'],breach:['Past the cap','#f87171'],'entry-over':['Above the threshold','#f87171'],unknown:['No rating','#6b7280']};
+const DRS_ICON={scratch:'🏁',points:'🎯',itt:'⏱️',ttt:'🚂'};
+const drsWhen=(ms,tz)=>new Date(ms).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const drsEta=ms=>{ const left=ms-Date.now(); if(left<0) return 'passed'; const h=left/3600000; return h<20?'in '+Math.max(1,Math.round(h))+' h':'in '+Math.ceil(h/24)+' day'+(Math.ceil(h/24)===1?'':'s'); };
+function drsBar(r,s){
+  const lo=s.threshold-200, hi=s.cap+40, pc=v=>Math.max(0,Math.min(100,(v-lo)/(hi-lo)*100));
+  const col=(DRS_STATE[r.state]||DRS_STATE.ok)[1];
+  return `<div title="${esc(String(s.threshold))} threshold, ${esc(String(s.cap))} cap" style="position:relative;height:8px;border-radius:99px;background:linear-gradient(90deg,rgba(16,185,129,0.25) ${pc(s.threshold)}%,rgba(56,189,248,0.25) ${pc(s.threshold)}%,rgba(56,189,248,0.25) ${pc(s.cap)}%,rgba(248,113,113,0.3) ${pc(s.cap)}%)">
+    ${r.rating?`<div style="position:absolute;left:${pc(r.rating)}%;top:-3px;width:4px;height:14px;border-radius:2px;background:${col};transform:translateX(-2px)"></div>`:''}</div>`;
+}
+function drsSquadCard(){
+  const s=drs.season, staff=drsStaff();
+  const btn='padding:3px 10px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const ids=new Set(drs.squad.map(r=>r.zwid));
+  const pool=(typeof riders!=='undefined'?riders:[]).filter(r=>!ids.has(String(r.id))&&r.name).slice(0,700);
+  const rows=drs.squad.map(r=>{ const st=DRS_STATE[r.state]||DRS_STATE.ok;
+    return `<div style="display:grid;grid-template-columns:minmax(120px,1.2fr) 70px minmax(110px,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)">
+      <div style="font-size:13px;font-weight:700">${esc(r.name)}${r.spike?` <span title="Jumped ${r.change} points" style="font-size:11px;color:#f87171">▲${r.change}</span>`:r.change?` <span style="font-size:11px;color:#6b7280">${r.change>0?'+':''}${r.change}</span>`:''}</div>
+      <div style="font-size:14px;font-weight:800">${r.rating||'—'}</div>
+      <div>${drsBar(r,s)}<div style="font-size:11px;margin-top:3px;color:${st[1]}">${st[0]}${r.rating&&r.state!=='entry-over'?` · ${r.remaining>=0?r.remaining+' below the cap':(-r.remaining)+' over the cap'}`:r.state==='entry-over'?` · ${r.rating-s.threshold} over`:''}</div></div>
+      <div>${staff?`<button title="Take out of the squad" onclick="if(confirm('Take ${esc(r.name).replace(/'/g,'')} out of the squad?'))drsPost('squad',{zwid:'${esc(r.zwid)}',remove:true})" style="${btn}">✕</button>`:''}</div></div>`; }).join('');
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:14px;font-weight:800">Squad <span style="font-weight:400;color:${drs.squad.length>=s.squadMax?'#FBBF24':'#9ca3af'}">${drs.squad.length} of ${s.squadMax}</span></div>
+    <div style="font-size:11px;color:#6b7280">Threshold ${s.threshold} · cap ${s.cap} (${s.buffer} above) · all ${s.squadMax} can race, the best ${s.scorers} score</div></div>
+    ${drs.squad.length?rows:'<div style="font-size:13px;color:#9ca3af;padding:8px 0">Nobody nominated yet.</div>'}
+    ${drs.liveFeed?'':'<div style="font-size:11px;color:#FBBF24;margin-top:6px">⚠️ The club roster could not be read just now, so ratings may be missing.</div>'}
+    <div style="font-size:11px;color:#6b7280;margin-top:8px">Ratings are the raw vELO numbers from the club roster. A rider may sit up to ${s.buffer} above the threshold and stay; a rise of more than ${s.spikeLimit} in one race that breaks that buffer is a single-race DQ and an upgrade. You are alerted in Discord when someone is within ${s.alertWithin} points of the cap.</div>
+    ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><input id="dr-name" class="inp" list="dr-people" placeholder="Nominate a rider from the club roster" style="padding:6px 8px;font-size:12px;width:250px" oninput="drsPick(this)"/><datalist id="dr-people">${pool.map(r=>`<option value="${esc(r.name)}"></option>`).join('')}</datalist><input id="dr-id" class="inp" placeholder="Zwift ID" style="padding:6px 8px;font-size:12px;width:110px"/><button onclick="drsAdd()" style="${btn}">Nominate</button></div>`:''}</div>`;
+}
+function drsPick(el){ const r=(typeof riders!=='undefined'?riders:[]).find(x=>x.name===el.value); if(r) document.getElementById('dr-id').value=r.id; }
+async function drsAdd(){
+  const z=document.getElementById('dr-id').value.trim(); if(!z){ alert('Choose a rider from the list, or enter a Zwift ID.'); return; }
+  let res,d; try{ res=await fetch('/api/drs/squad',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zwid:z })}); d=await res.json(); }catch(e){ alert('Could not reach the server.'); return; }
+  if(res.status===400&&/above the/.test(d.error||'')){ if(confirm(d.error+'\n\nNominate them anyway?')) await drsPost('squad',{ zwid:z, force:true }); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  drs=d; renderDrs();
+}
+function drsStageCard(st,open){
+  const s=drs.season, staff=drsStaff(), up=st.upcoming;
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const prim=btn+';background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)';
+  const link=st.eventLink&&st.eventLink!=='hidden'&&/^https:\/\//i.test(st.eventLink)?`<a href="${esc(st.eventLink)}" target="_blank" rel="noopener" style="color:#00D4FF;font-size:13px">Open the private Zwift event →</a>`:st.eventLink==='hidden'?'<span style="font-size:12px;color:#6b7280">The private event link is shown to riders in the squad.</span>':'<span style="font-size:12px;color:#6b7280">Private event link: pull it from the DRS portal and add it here</span>';
+  const roles=st.roles||{}, names=Object.fromEntries(drs.squad.map(r=>[r.zwid,r.name]));
+  const sc=Object.keys(roles).filter(z=>roles[z]==='scorer'&&names[z]), sp=Object.keys(roles).filter(z=>roles[z]==='support'&&names[z]);
+  const res=st.result?`<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,0.1);font-size:13px"><b style="font-size:15px">Team ${st.result.teamPoints} pts</b> from our best ${s.scorers}: ${st.result.scorers.map(z=>`${esc(names[z]||z)} (${ordinal(st.result.riders[z].pos)}, ${st.result.riders[z].pts})`).join(' · ')}</div>`:'';
+  const lock=up?`<div style="font-size:12px;margin-top:6px;color:${st.lockMs<Date.now()?'#f87171':'#FBBF24'}">🔒 The squad must be final in the DRS portal by <b>${esc(drsWhen(st.lockMs))}</b> (${st.lockMs<Date.now()?'locked':drsEta(st.lockMs)}).</div>`:'';
+  return `<details class="card" ${open?'open':''} ontoggle="drsToggle('${esc(st.id)}',this.open)" style="padding:0;margin-bottom:10px"><summary style="cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
+    <span style="font-size:20px">${DRS_ICON[st.type]||'🏁'}</span><span style="font-size:14px;font-weight:800;flex:1;min-width:150px">Stage ${st.n} · ${esc(drs.types[st.type]||st.type)}${st.route?` <span style="font-weight:400;color:#9ca3af">${esc(st.route)}${st.km?' · '+st.km+' km':''}</span>`:''}</span>
+    <span style="font-size:12px;color:#9ca3af">${esc(new Date(st.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}${up?' · '+esc(drsEta(st.startMs)):''}</span>
+    <span style="font-size:11px;font-weight:700;color:${st.status==='played'?'#10B981':st.status==='cancelled'?'#6b7280':'#FBBF24'}">${st.status==='played'?'Played':st.status==='cancelled'?'Cancelled':'Upcoming'}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
+    <div style="padding:0 14px 14px"><div style="font-size:13px"><b>${esc(drsWhen(st.startMs))}</b> <span style="color:#6b7280">· ${esc(s.slot||'squad slot')}</span></div><div style="margin-top:4px">${link}</div>${lock}
+      ${st.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(st.notes)}</div>`:''}
+      <div style="font-size:12px;color:#d1d5db;margin-top:8px">💡 ${esc(st.tactics)} No PowerUps: pure racecraft and drafting.</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
+      ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>esc(names[z])).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>esc(names[z])).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
+      ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        ${up?`<button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
+        <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button><button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
+        <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
+      ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}${drsResult&&drsResult.stage===st.id?drsResultForm(st):''}`:''}</div></details>`;
+}
+function drsToggle(id,open){ if(open) drsOpen.add(id); else drsOpen.delete(id); }
+function drsRolesOpen(id){ const st=drs.stages.find(x=>x.id===id), has=Object.values(st.roles||{}).includes('scorer'); drsRoles={ stage:id, picked:new Set(has?Object.keys(st.roles).filter(z=>st.roles[z]==='scorer'):st.suggestedScorers) }; drsResult=null; drsOpen.add(id); renderDrs(); }
+function drsRolesForm(st){
+  const s=drs.season, picked=drsRoles.picked, btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Scoring ${s.scorers} <span style="font-weight:400;color:#9ca3af">${picked.size} picked</span></div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Only the best ${s.scorers} of our finishers score, so the others work for them: closing gaps, pacing climbs and leading out. Suggested: the ${s.scorers} highest vELO.</div>
+    ${drs.squad.map(r=>{ const on=picked.has(r.zwid), blocked=!on&&picked.size>=s.scorers; return `<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;${blocked?'opacity:.4':''}"><input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="drsRoleTick('${esc(r.zwid)}',this.checked)"/><span style="flex:1;font-size:13px;font-weight:600">${esc(r.name)}</span><span style="font-size:11px;color:#6b7280">${r.rating||''}</span></label>`; }).join('')}
+    <div style="display:flex;gap:6px;margin-top:8px"><button onclick="drsRolesSave('${esc(st.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save the plan</button><button onclick="drsRoles=null;renderDrs()" style="${btn}">Close</button></div></div>`;
+}
+function drsRoleTick(z,on){ if(on) drsRoles.picked.add(z); else drsRoles.picked.delete(z); renderDrs(); }
+async function drsRolesSave(id){ if(await drsPost('roles',{ stage:id, scorers:[...drsRoles.picked] })) drsRoles=null, renderDrs(); }
+function drsResultOpen(id){ drsResult={ stage:id }; drsRoles=null; drsOpen.add(id); renderDrs(); }
+function drsResultForm(st){
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer', old=(st.result&&st.result.riders)||{};
+  return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Result</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Each rider's finishing position and the stage points the DRS results gave them. Leave a rider blank if they did not finish. The ${drs.season.scorers} best finishers score for the team.</div>
+    ${drs.squad.map(r=>`<div style="display:flex;gap:8px;align-items:center;padding:3px 0"><span style="flex:1;font-size:13px">${esc(r.name)}</span><input class="inp" data-dpos="${esc(r.zwid)}" type="number" min="1" placeholder="Pos" value="${esc((old[r.zwid]||{}).pos||'')}" style="width:75px"/><input class="inp" data-dpts="${esc(r.zwid)}" type="number" min="0" step="any" placeholder="Pts" value="${esc((old[r.zwid]||{}).pts??'')}" style="width:75px"/></div>`).join('')}
+    <div style="display:flex;gap:6px;margin-top:8px"><button onclick="drsResultSave('${esc(st.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save result</button><button onclick="drsResult=null;renderDrs()" style="${btn}">Close</button></div></div>`;
+}
+async function drsResultSave(id){
+  const results={}; document.querySelectorAll('[data-dpos]').forEach(i=>{ const z=i.dataset.dpos, pts=document.querySelector(`[data-dpts="${CSS.escape(z)}"]`).value; if(i.value||pts) results[z]={ pos:i.value, pts }; });
+  if(await drsPost('result',{ stage:id, results })) drsResult=null, renderDrs();
+}
+function drsStageOpen(id){
+  const st=id==='new'?null:drs.stages.find(x=>x.id===id);
+  drsStageForm={ id:st&&st.id, n:st?st.n:'', date:st?st.date:'', time:st?st.time:'', type:st?st.type:'scratch', route:st?st.route:'', km:st&&st.km||'', eventLink:st&&st.eventLink!=='hidden'?st.eventLink:'', notes:st?st.notes:'' }; renderDrs();
+}
+function drsStageForm_(){
+  const f=drsStageForm; if(!f) return '';
+  const inp='class="inp" style="padding:6px 8px;font-size:12px;', btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:8px">${f.id?'Edit the stage':'Add a stage'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><input id="ds-date" type="date" ${inp}width:150px" value="${esc(f.date)}"/><input id="ds-time" ${inp}width:80px" placeholder="${esc(drs.season.time)}" maxlength="5" value="${esc(f.time)}"/>
+      <select id="ds-type" ${inp}width:auto">${Object.entries(drs.types).map(([k,v])=>`<option value="${k}" ${f.type===k?'selected':''}>${esc(v)}</option>`).join('')}</select><input id="ds-n" ${inp}width:70px" placeholder="No." inputmode="numeric" value="${esc(f.n)}"/></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><input id="ds-route" ${inp}width:220px" placeholder="Route" maxlength="80" value="${esc(f.route)}"/><input id="ds-km" ${inp}width:80px" placeholder="km" inputmode="decimal" value="${esc(f.km)}"/><input id="ds-link" ${inp}flex:1;min-width:220px" placeholder="Private event link from the DRS portal (https://…)" value="${esc(f.eventLink)}"/></div>
+    <input id="ds-notes" ${inp}width:100%;margin-bottom:8px" placeholder="Notes" maxlength="300" value="${esc(f.notes)}"/>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">Leave the time empty to use the squad's slot (${esc(drs.season.time)}, ${esc(drs.season.tz)}).</div>
+    <div style="display:flex;gap:6px"><button onclick="drsStageSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">${f.id?'Save':'Add the stage'}</button><button onclick="drsStageForm=null;renderDrs()" style="${btn}">Cancel</button></div></div>`;
+}
+async function drsStageSave(){
+  const g=id=>document.getElementById(id).value.trim(), f=drsStageForm;
+  if(await drsPost('stage',{ id:f.id, n:g('ds-n'), date:g('ds-date'), time:g('ds-time'), type:g('ds-type'), route:g('ds-route'), km:g('ds-km'), eventLink:g('ds-link'), notes:g('ds-notes') })) drsStageForm=null, renderDrs();
+}
+function drsSetupCard(){
+  const s=drs.season||{}, inp='class="inp" style="padding:6px 8px;font-size:12px;', btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const lab=t=>`<label style="font-size:11px;color:#9ca3af;display:flex;flex-direction:column;gap:2px">${t}`;
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:8px">${drs.season?'Season settings':'Set up the season'}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      ${lab('Season name')}<input id="dz-name" ${inp}width:170px" maxlength="60" placeholder="DRS Autumn" value="${esc(s.name||'')}"/></label>
+      ${lab('Division')}<input id="dz-div" ${inp}width:120px" maxlength="30" placeholder="Platinum" value="${esc(s.division||'')}"/></label>
+      ${lab('vELO threshold (raw rating)')}<input id="dz-thr" ${inp}width:120px" inputmode="numeric" placeholder="2500" value="${esc(s.threshold||'')}"/></label>
+      ${lab('Time slot name')}<input id="dz-slot" ${inp}width:140px" maxlength="60" placeholder="Tuesday EU" value="${esc(s.slot||'')}"/></label>
+      ${lab('Start time')}<input id="dz-time" ${inp}width:80px" maxlength="5" placeholder="19:30" value="${esc(s.time||'19:30')}"/></label>
+      ${lab('Time zone')}<input id="dz-tz" ${inp}width:140px" placeholder="Europe/London" value="${esc(s.tz||'Europe/London')}"/></label></div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||8}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
+    <div style="display:flex;gap:6px"><button onclick="drsSetupSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save</button>${drs.season?`<button onclick="drsSetup=false;renderDrs()" style="${btn}">Close</button>`:''}</div></div>`;
+}
+async function drsSetupSave(){
+  const g=id=>document.getElementById(id).value.trim();
+  if(await drsPost('season',{ name:g('dz-name'), division:g('dz-div'), threshold:g('dz-thr'), slot:g('dz-slot'), time:g('dz-time'), tz:g('dz-tz') })) drsSetup=false, renderDrs();
+}
+async function drsCalendarPaste(){
+  const el=document.getElementById('dc-lines'); if(!el.value.trim()){ alert('Paste one stage a line: date | type | route | km.'); return; }
+  if(await drsPost('calendar',{ lines:el.value })) el.value='', alert('Calendar added.');
+}
+function drsHelpCard(){
+  return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">❓ How the DIRT Racing Series works</summary><ol style="font-size:13px;color:#d1d5db;margin:8px 0 0 18px;padding:0;line-height:1.7">
+    <li><b>Squad:</b> up to eight riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
+    <li><b>Calendar:</b> a fixed run of Tuesday stages (scratch, points, individual time trial and team time trial), all in the squad's time slot for the season.</li>
+    <li><b>Lock:</b> the squad must be final in the DRS portal 24 hours before a stage, so Race Control can run its checks. You get a reminder, and the stage card shows the lock time.</li>
+    <li><b>Race:</b> all eight can race but only the best four finishers score. Name the scoring four; the rest ride support. No PowerUps.</li>
+    <li><b>vELO buffer:</b> ratings move after every race. A rider can sit up to 35 above the threshold and stay; a jump of more than 50 in one race that breaks that buffer is a single-race DQ and an upgrade. The page shows each rider's room and the Discord alert warns when it is under 10.</li>
+    <li><b>Links:</b> pull each stage's private event link from the DRS portal and paste it on the stage; post it to Discord with one button.</li></ol></details>`;
+}
+function renderDrs(){
+  const el=document.getElementById('drs-root'); if(!el) return;
+  if(drsErr==='signin'){ el.innerHTML='<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">Sign in with your cryogen.team account to see the DIRT Racing Series.</div>'; return; }
+  if(drsErr){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#FBBF24">${esc(drsErr)}</div>`; return; }
+  if(!drs) return;
+  const staff=drsStaff(), s=drs.season, rec=drs.record;
+  if(!s){ el.innerHTML=`<h2 style="font-size:20px;font-weight:900;margin-bottom:10px">🏜️ DIRT Racing Series</h2>${staff?drsSetupCard():'<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">The DIRT Racing Series has not been set up yet.</div>'}${drsHelpCard()}`; return; }
+  const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)', sec=btn.replace('rgba(0,212,255,0.12)','rgba(255,255,255,0.05)').replace('#00D4FF','#e5e7eb').replace('rgba(0,212,255,0.4)','rgba(255,255,255,0.18)');
+  const up=drs.stages.filter(x=>x.upcoming), past=drs.stages.filter(x=>!x.upcoming);
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🏜️ DIRT Racing Series</h2>
+      <p style="font-size:13px;color:#6b7280">${esc(s.name)} · ${esc(s.division)} · ${esc(s.slot||'squad slot')} ${esc(s.time)} (${esc(s.tz)})${rec.played?` · ${rec.played} stage${rec.played===1?'':'s'}, ${rec.teamPoints} team points`:''}</p></div>
+    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="drsSetup=!drsSetup;renderDrs()" style="${sec}">⚙️ Season</button><button onclick="drsStageOpen('new')" style="${btn}">+ Add a stage</button></div>`:''}</div>
+    ${staff&&drsSetup?drsSetupCard():''}${drsStageForm_()}${drsSquadCard()}
+    ${up.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:6px 0 8px">Coming up</div>${up.map((st,i)=>drsStageCard(st,drsOpen.has(st.id)||(i===0&&!drsOpen.size))).join('')}`:`<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af;margin-bottom:10px">No stage is coming up.${staff?' Add the calendar below.':''}</div>`}
+    ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:14px 0 8px">Played and past</div>${past.map(st=>drsStageCard(st,drsOpen.has(st.id))).join('')}`:''}
+    ${rec.riders.length?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📊 Rider points (best ${s.scorers} score)</summary><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Rider</th><th>Stages</th><th>Scored in</th><th>Points</th><th>Best</th></tr></thead><tbody>${rec.riders.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(r.name)}</td><td>${r.stages}</td><td>${r.scored}</td><td>${r.points}</td><td>${r.best?ordinal(r.best):'—'}</td></tr>`).join('')}</tbody></table></details>`:''}
+    ${staff?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📅 Paste the calendar</summary><div style="font-size:12px;color:#9ca3af;margin:8px 0">One stage a line: <code>date | type | route | km</code> (type: scratch, points, itt or ttt).</div><textarea id="dc-lines" class="inp" rows="5" placeholder="2026-11-03 | scratch | Route name | 28&#10;2026-11-10 | points | Route name | 30&#10;2026-11-17 | ttt | Route name | 25" style="font-size:12px;font-family:monospace"></textarea><button onclick="drsCalendarPaste()" style="margin-top:8px;padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Add these stages</button></details>`:''}
+    ${drsHelpCard()}`;
+}
 
 // ── Rides ──────────────────────────────────────────────────
 function renderRides(){
