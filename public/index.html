@@ -222,7 +222,6 @@ table{width:100%;border-collapse:collapse}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="series-tabs"></div>
     <div id="series-content"></div>
-    <div id="sheet-panel"></div>
   </div>
 
   <div id="page-zrl" class="page">
@@ -307,7 +306,6 @@ table{width:100%;border-collapse:collapse}
       <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
       <div style="display:flex;gap:8px">
         <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
-        <button onclick="syncSheet()" style="flex:1;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Sync Sheet</button>
       </div>
       <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
@@ -414,7 +412,6 @@ let activeSeries='ladder';
 let mSort={col:'velo',dir:'desc'};
 let rSort={col:'velo',dir:'desc'};
 let liveResults = [];
-let sheetData = null;
 
 function setZRA(color, msg) {
   const dot = document.getElementById('zra-dot');
@@ -1159,6 +1156,26 @@ async function loadTtt(){
 }
 async function loadTttSummary(){
   try{ const res=await fetch('/api/ttt',{headers:tttHeaders()}); if(res.ok){ tttData=await res.json(); renderAll(); } }catch(e){}
+  if(role==='member'&&sessionStorage.getItem('sso')) loadTttMine();
+}
+// What "Run it back" would do for this rider (their last available sign-up), so the button can say it.
+async function loadTttMine(){
+  try{ const res=await fetch('/api/ttt/mine',{headers:tttHeaders()}); if(res.ok){ tttMineData=await res.json(); if(tttData&&!tttArchiveView) renderTtt(); } }catch(e){}
+}
+function tttRunItBack(){
+  tttWrite('/api/ttt/repeat').then(ok=>{ if(ok){ loadTttMine(); if(document.getElementById('my-ttt')) loadMyTtt(); } });
+}
+function tttRepeatText(r){
+  return [TTT_STYLE_LABEL[r.style]||'',r.doubleUp?'happy to double up':'',r.captain?'⭐ captain':'',r.preferred.length?'teams: '+r.preferred.join(', '):'no team preference'].filter(Boolean).join(' · ');
+}
+function tttRepeatCard(d){
+  const m=tttMineData; if(!m||!m.repeat||!d.week.open) return '';
+  const r=m.repeat;
+  if(m.signup&&m.signup.available&&r.same) return `<div class="card" style="padding:12px 16px;margin-bottom:16px;font-size:13px;color:#10B981">✅ You're signed up this week with the same settings as last time.</div>`;
+  return `<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:rgba(0,212,255,0.35);display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <button class="btn-cyan" style="width:auto;padding:10px 20px;font-size:14px" onclick="tttRunItBack()">🔁 Run it back</button>
+    <div style="flex:1;min-width:200px"><div style="font-size:13px;font-weight:700">${m.signup&&m.signup.available?'Switch back to last time\'s settings':'Same as last time, one tap'}</div>
+      <div style="font-size:12px;color:#9ca3af">Signs you up as available with: ${esc(tttRepeatText(r))}. You can still change anything below.</div></div></div>`;
 }
 async function tttWrite(path,payload){
   let res,d;
@@ -1166,7 +1183,9 @@ async function tttWrite(path,payload){
   catch(e){ alert('Could not reach the server. Please try again.'); return false; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
   tttSummary=d.summary||null;
-  tttData=d; tttArchiveView=null; renderTtt(); return true;
+  tttData=d; tttArchiveView=null; renderTtt();
+  if(role==='member'&&sessionStorage.getItem('sso')&&/\/api\/ttt\/(signup|withdraw)/.test(path)) loadTttMine();
+  return true;
 }
 async function tttShowArchive(id){
   if(!id){ tttArchiveView=null; renderTtt(); return; }
@@ -1300,42 +1319,146 @@ function tttSubmit(){
   });
 }
 function tttWithdraw(name){ if(confirm(`Withdraw ${name} from this week's TTT?`)) tttWrite('/api/ttt/withdraw',{name}); }
-function tttAssign(name){
-  const sels=[...document.querySelectorAll(`select[data-assign="${CSS.escape(tttKey(name))}"]`)];
-  tttWrite('/api/ttt/assign',{name,teams:sels.map(s=>s.value).filter(Boolean)});
+let tttImport=null, tttPlan=null, tttMineData=null;
+const tttTeamName=d=>Object.fromEntries(d.week.teams.map(t=>[t.id,t.name]));
+// One rider as a chip: drag it to a team (or back to the unplaced pool), or use the small menu, which works on a phone. ⭐ sets the captain.
+function tttChip(d,s,from){
+  const k=tttKey(s.name), r=tttRider(s), cat=s.cat||(r&&r.cat)||'', tn=tttTeamName(d);
+  const cap=from&&(d.captains||{})[from]===k;
+  const wants=(s.preferred||[]).map(id=>tn[id]||id);
+  const tip=[s.name,r&&r.velo?'vELO '+r.velo:'',TTT_STYLE_LABEL[s.style]||'',s.doubleUp?'happy to double up':'',wants.length?'wants: '+wants.join(', '):'no team preference',s.captain?'volunteered to captain':''].filter(Boolean).join(' · ');
+  const opts=d.week.teams.filter(t=>t.id!==from).map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  const star=from?`<button class="ttt-star" title="${cap?'Captain: tap to clear':'Make captain'}" data-team="${esc(from)}" data-name="${esc(s.name)}" onclick="tttCaptainToggle(this)" style="color:${cap?'#FBBF24':s.captain?'#9ca3af':'#374151'}">${cap?'★':'☆'}</button>`:'';
+  return `<div class="ttt-chip" draggable="true" title="${esc(tip)}" data-k="${esc(k)}" data-from="${esc(from||'')}" ondragstart="tttDrag(event,this)">
+    ${cat?catB(esc(cat)):''}<span class="ttt-chip-name">${esc(s.name)}</span>${s.style==='race'?'<span title="Competitive">🏁</span>':''}${s.doubleUp?'<span class="ttt-tag" title="Happy to double up">×2</span>':''}${star}
+    <select class="ttt-mv" data-k="${esc(k)}" data-from="${esc(from||'')}" onchange="tttMoveSel(this)" title="Move"><option value="">${from?'⇄':'Place in…'}</option>${opts}${from?'<option value="__out">↩ Unplace</option>':''}</select></div>`;
+}
+function tttBoard(d){
+  const w=d.week, byTeam=Object.fromEntries(w.teams.map(t=>[t.id,[]]));
+  for(const s of d.signups) for(const id of (d.assign[tttKey(s.name)]||[])) if(byTeam[id]) byTeam[id].push(s);
+  const pool=d.signups.filter(s=>s.available&&!(d.assign[tttKey(s.name)]||[]).length).sort((a,b)=>a.name.localeCompare(b.name));
+  const away=d.signups.filter(s=>!s.available).sort((a,b)=>a.name.localeCompare(b.name));
+  const zone=(attrs,inner,extra)=>`<div class="ttt-zone" ${attrs} ondragover="event.preventDefault();this.classList.add('ttt-over')" ondragleave="this.classList.remove('ttt-over')" ondrop="tttDrop(event,this)" style="${extra||''}">${inner}</div>`;
+  const cards=w.teams.map(t=>{
+    const list=byTeam[t.id], velos=list.map(s=>(tttRider(s)||{}).velo).filter(Boolean), avg=velos.length?Math.round(velos.reduce((a,b)=>a+b,0)/velos.length):0;
+    const over=list.length>t.max, full=list.length>=t.max, thin=list.length>0&&list.length<4;
+    const col=over?'#f87171':full?'#10B981':thin?'#FBBF24':'#6b7280';
+    const capKey=(d.captains||{})[t.id], capName=capKey&&(d.signups.find(s=>tttKey(s.name)===capKey)||{}).name;
+    return zone(`data-team="${esc(t.id)}"`,`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px"><b style="font-size:14px">${esc(t.name)}</b><span style="font-size:12px;font-weight:700;color:${col}">${list.length}/${t.max}</span></div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:4px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
+      <div style="height:4px;border-radius:99px;background:rgba(255,255,255,0.08);margin-bottom:8px"><div style="height:4px;border-radius:99px;width:${Math.min(100,Math.round(list.length/t.max*100))}%;background:${col}"></div></div>
+      ${list.length?`<div style="display:flex;flex-direction:column;gap:5px">${list.map(s=>tttChip(d,s,t.id)).join('')}</div>`:'<div style="font-size:12px;color:#4b5563;padding:10px 0;text-align:center">Drop riders here</div>'}
+      ${list.length?`<div style="font-size:11px;margin-top:8px;color:${capName?'#FBBF24':'#6b7280'}">${capName?'★ Captain: '+esc(capName):thin?'⚠️ Needs 4 or more riders':'☆ No captain yet'}</div>`:''}`,`border-color:${over?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.1)'}`);
+  }).join('');
+  return `<style>.ttt-zone{border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.025);min-height:90px}.ttt-over{outline:2px dashed #00D4FF;background:rgba(0,212,255,0.06)}
+    .ttt-chip{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0f1623;font-size:13px;cursor:grab}.ttt-chip:active{cursor:grabbing}
+    .ttt-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.ttt-tag{font-size:10px;font-weight:700;padding:0 5px;border-radius:99px;background:rgba(0,212,255,0.12);color:#00D4FF}
+    .ttt-star{background:none;border:none;font-size:15px;line-height:1;padding:0 2px;cursor:pointer}.ttt-mv{width:24px;max-width:78px;font-size:11px;padding:2px;background:#0f1623;color:#9ca3af;border:1px solid rgba(255,255,255,0.14);border-radius:5px}
+    .ttt-pool .ttt-chip{display:inline-flex}</style>
+    ${zone('data-team=""',`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${pool.length?'#FBBF24':'#10B981'};margin-bottom:6px">Not in a team yet · ${pool.length}</div>
+      <div class="ttt-pool" style="display:flex;flex-wrap:wrap;gap:6px">${pool.length?pool.map(s=>tttChip(d,s,'')).join(''):'<span style="font-size:12px;color:#10B981">✅ Everyone who is available has a team.</span>'}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">Drag a rider onto a team, or use the small menu on each rider. Riders with ×2 are happy to be in two teams: drop them on a second team too.</div>`,'margin-bottom:12px')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">${cards}</div>
+    ${away.length?`<details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:#9ca3af">${away.length} rider${away.length===1?'':'s'} not available this week</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${away.map(s=>`<span style="font-size:12px;padding:3px 9px;border-radius:99px;background:rgba(255,255,255,0.05);color:#6b7280">${esc(s.name)}</span>`).join('')}</div></details>`:''}`;
+}
+function tttDrag(ev,el){ ev.dataTransfer.setData('text/plain',JSON.stringify({ k:el.dataset.k, from:el.dataset.from })); ev.dataTransfer.effectAllowed='move'; }
+function tttDrop(ev,el){
+  ev.preventDefault(); el.classList.remove('ttt-over');
+  let p; try{ p=JSON.parse(ev.dataTransfer.getData('text/plain')); }catch(e){ return; }
+  tttMove(p.k,p.from,el.dataset.team);
+}
+function tttMoveSel(el){ const v=el.value; el.value=''; if(!v) return; tttMove(el.dataset.k,el.dataset.from,v==='__out'?'':v); }
+function tttMove(k,from,to){
+  const d=tttData; if(!d||!d.week||from===to) return;
+  const cur=[...(d.assign[k]||[])];
+  let next;
+  if(!to) next=cur.filter(id=>id!==from);
+  else if(from) next=[...new Set(cur.map(id=>id===from?to:id))];
+  else next=[...new Set([to,...cur])];
+  if(next.length>2){ alert('A rider can be in at most 2 teams. Take them out of one first.'); return; }
+  const team=to&&d.week.teams.find(t=>t.id===to);
+  if(team){ const n=Object.values(d.assign).filter(ids=>ids.includes(to)).length; if(n>=team.max&&!confirm(team.name+' already has '+n+' of '+team.max+' riders. Add them anyway?')) return; }
+  const s=d.signups.find(x=>tttKey(x.name)===k); if(!s) return;
+  tttWrite('/api/ttt/assign',{ name:s.name, teams:next });
+}
+function tttCaptainToggle(el){
+  const team=el.dataset.team, k=tttKey(el.dataset.name), cur=(tttData.captains||{})[team];
+  tttWrite('/api/ttt/captain',{ team, name:cur===k?'':el.dataset.name });
+}
+// Sign-ups from the club's Google Form sheet: preview, then bring them in as real sign-ups.
+async function tttImportRun(apply){
+  if(!apply){ tttImport={ loading:true }; renderTtt(); }
+  let res,d; try{ res=await fetch('/api/ttt/import-sheet',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ apply })}); d=await res.json(); }catch(e){ tttImport={ error:'Could not reach the server.' }; renderTtt(); return; }
+  if(!res.ok){ tttImport={ error:d.error||('Request failed ('+res.status+')') }; renderTtt(); return; }
+  if(apply){ tttData=d; tttSummary=null; tttImport={ done:d.imported }; } else tttImport={ preview:d.preview };
+  renderTtt();
+}
+function tttImportCard(){
+  const c=tttImport; if(!c) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  let body;
+  if(c.loading) body='<div style="font-size:13px;color:#9ca3af">Reading the sheet…</div>';
+  else if(c.error) body=`<div style="font-size:13px;color:#FBBF24">${esc(c.error)}</div>`;
+  else if(c.done!==undefined) body=`<div style="font-size:13px;color:#10B981">✅ ${c.done} rider${c.done===1?'':'s'} imported. They are in the unplaced pool below: press <b>Auto-allocate</b> or drag them into teams.</div>`;
+  else{
+    const p=c.preview, n=p.counts;
+    body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${n.total} rider${n.total===1?'':'s'} on the sheet: <b style="color:#e5e7eb">${n.new} new</b>${n.exists?`, ${n.exists} already signed up here (left as they are)`:''}${n.unmatched?`, ${n.unmatched} not found in the club roster (imported without a Zwift ID)`:''}${n.unavailable?`, ${n.unavailable} not available this week`:''}.</div>
+      <div style="max-height:260px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Rider</th><th style="padding:3px 6px">Cat</th><th style="padding:3px 6px">Status</th><th style="padding:3px 6px">This week</th><th style="padding:3px 6px">Style</th></tr></thead><tbody>${p.rows.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.05);${r.status==='exists'?'opacity:.5':''}"><td style="padding:4px 6px;font-weight:600">${esc(r.name)}${r.zwid?'':' <span title="Not found in the club roster" style="color:#FBBF24">⚠️</span>'}</td><td style="padding:4px 6px">${esc(r.cat||'—')}</td><td style="padding:4px 6px">${r.status==='new'?'New':'Already in'}</td><td style="padding:4px 6px;color:${r.available?'#10B981':'#6b7280'}">${r.available?'Available':'Not available'}</td><td style="padding:4px 6px;color:#9ca3af">${r.style==='race'?'Competitive':'Social'}${r.doubleUp?' · ×2':''}</td></tr>`).join('')}</tbody></table></div>
+      ${n.new?`<button onclick="tttImportRun(true)" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">📥 Import ${n.new} new rider${n.new===1?'':'s'}</button> `:'<div style="font-size:12px;color:#10B981;margin-bottom:6px">Everyone on the sheet is already signed up here.</div>'}`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">📥 Sign-ups from the Google Form sheet</div>${body}<button onclick="tttImport=null;renderTtt()" style="${btn}">Close</button></div>`;
+}
+// Auto-allocation shows its plan first: who would go where. Nothing is placed until it is applied, and everything can be edited after.
+async function tttPlanRun(){
+  tttPlan={ loading:true }; renderTtt();
+  let res,d; try{ res=await fetch('/api/ttt/auto-assign',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ preview:true })}); d=await res.json(); }catch(e){ tttPlan={ error:'Could not reach the server.' }; renderTtt(); return; }
+  tttPlan=res.ok?d:{ error:d.error||('Request failed ('+res.status+')') }; renderTtt();
+}
+function tttPlanApply(){ tttPlan=null; tttWrite('/api/ttt/auto-assign'); }
+function tttPlanCard(d){
+  const c=tttPlan; if(!c) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  let body;
+  if(c.loading) body='<div style="font-size:13px;color:#9ca3af">Working out the teams…</div>';
+  else if(c.error) body=`<div style="font-size:13px;color:#FBBF24">${esc(c.error)}</div>`;
+  else if(!c.plan.length) body=`<div style="font-size:13px;color:#9ca3af">Nobody to place: everyone who is available already has a team.${c.summary.unplaced.length?` Could not fit: ${esc(c.summary.unplaced.join(', '))}.`:''}</div>`;
+  else{
+    const tn=tttTeamName(d), by={};
+    for(const x of c.plan) for(const id of x.teams) (by[id]=by[id]||[]).push(x.name);
+    const sm=c.summary;
+    body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">This would place <b style="color:#e5e7eb">${sm.placed}</b> rider${sm.placed===1?'':'s'}${sm.placed?` (${sm.preferred} in a team they asked for)`:''}, balancing the teams by vELO and keeping riders in the teams they chose where there is room. Nothing changes until you apply it, and you can move anyone afterwards.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:8px">${d.week.teams.filter(t=>by[t.id]).map(t=>`<div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px"><div style="font-weight:700;font-size:13px">${esc(t.name)} <span style="color:#6b7280;font-weight:400">+${by[t.id].length}</span></div><div style="font-size:12px;color:#9ca3af">${by[t.id].map(esc).join(', ')}</div></div>`).join('')}</div>
+      ${sm.outside.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">⚠️ Outside their choices (their teams were full): ${esc(sm.outside.join(', '))}</div>`:''}${sm.unplaced.length?`<div style="font-size:12px;color:#f87171;margin-bottom:6px">❌ Could not fit (all teams full): ${esc(sm.unplaced.join(', '))}</div>`:''}${sm.short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">Under 4 riders: ${esc(sm.short.join(', '))}</div>`:''}
+      <button onclick="tttPlanApply()" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">✅ Apply this allocation</button> `;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(16,185,129,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">✨ Proposed allocation</div>${body}<button onclick="tttPlan=null;renderTtt()" style="${btn}">${c.plan&&c.plan.length?'Cancel':'Close'}</button></div>`;
 }
 function tttStaffPanel(d){
   const w=d.week;
-  const teamOpts=sel=>`<option value="">—</option>`+w.teams.map(t=>`<option value="${esc(t.id)}" ${t.id===sel?'selected':''}>${esc(t.name)}</option>`).join('');
-  const teamName=Object.fromEntries(w.teams.map(t=>[t.id,t.name]));
-  const rows=[...d.signups].sort((a,b)=>(b.available-a.available)||a.name.localeCompare(b.name)).map(s=>{
-    const k=tttKey(s.name); const a=d.assign[k]||[]; const r=tttRider(s); const cat=s.cat||(r&&r.cat)||'';
-    return `<tr style="${s.available?'':'opacity:.45'}">
-      <td style="padding:6px 8px">${cat?catB(esc(cat)):''}</td>
-      <td style="padding:6px 8px;font-weight:600">${esc(s.name)}${s.captain?' <span title="Volunteered to captain" style="font-size:11px">⭐</span>':''}${w.published&&!a.length&&s.available?` <span style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⏳ waitlist #${(d.waitlist||[]).findIndex(n=>tttKey(n)===k)+1}</span>`:''}${a.length&&s.preferred.length&&!a.some(id=>s.preferred.includes(id))?` <span title="Placed in a team they didn't pick" style="font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:1px 6px;border-radius:99px">⚠ not their choice</span>`:''}${s.comments?`<div style="font-size:11px;color:#9ca3af;font-weight:400">💬 ${esc(s.comments)}</div>`:''}</td>
-      <td style="padding:6px 8px;color:#9ca3af">${r&&r.velo?r.velo:'—'}</td>
-      <td style="padding:6px 8px;font-size:11px;color:#9ca3af">${s.available?'':'Not available · '}${esc(TTT_STYLE_LABEL[s.style]||'')}${s.doubleUp?' · double-up':''}<div>${esc(s.preferred.map(id=>teamName[id]||id).join(', '))}</div></td>
-      <td style="padding:6px 8px;white-space:nowrap">
-        <select class="inp" style="width:auto;padding:4px 6px" data-assign="${esc(k)}" data-name="${esc(s.name)}" onchange="tttAssign(this.dataset.name)">${teamOpts(a[0])}</select>
-        ${s.doubleUp||a[1]?`<select class="inp" style="width:auto;padding:4px 6px;margin-left:4px" data-assign="${esc(k)}" data-name="${esc(s.name)}" onchange="tttAssign(this.dataset.name)">${teamOpts(a[1])}</select>`:''}
-      </td></tr>`;}).join('');
   const unplaced=d.signups.filter(s=>s.available&&!(d.assign[tttKey(s.name)]||[]).length).length;
+  const placed=d.signups.filter(s=>(d.assign[tttKey(s.name)]||[]).length).length;
+  const prim='padding:9px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer';
   return `<div class="card" style="padding:16px;margin-bottom:20px">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <button onclick="tttWrite('/api/ttt/status',{open:${!w.open}})" class="tab">${w.open?'🔒 Close sign-ups':'🔓 Reopen sign-ups'}</button>
-      <button onclick="tttWrite('/api/ttt/auto-assign')" class="tab">✨ Auto-assign unplaced (${unplaced})</button>
-      <button onclick="if(confirm('Remove every rider from every team? You can then auto-assign again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear assignments</button>
-      <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" class="tab" style="${w.published?'':'color:#10B981;border-color:rgba(16,185,129,0.3)'}">${w.published?'🙈 Unpublish line-ups':'📣 Publish line-ups'}</button>
-      <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
-      ${w.open?`<button onclick="tttRecruit()" class="tab">📣 Ask for riders</button>`:''}
-      <button onclick="tttExport('lineups')" class="tab">⬇ Line-ups (CSV)</button>
-      <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div style="font-size:15px;font-weight:800">Team builder</div><div style="font-size:12px;color:#9ca3af">${d.signups.length} signed up · ${placed} in a team · <span style="color:${unplaced?'#FBBF24':'#10B981'}">${unplaced} waiting</span></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="tttImportRun(false)" style="${prim};background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)">📥 Import from the sheet</button>
+        <button onclick="tttPlanRun()" style="${prim};background:rgba(16,185,129,0.14);color:#10B981;border:1px solid rgba(16,185,129,0.4)" ${unplaced?'':'disabled'}>✨ Auto-allocate${unplaced?` (${unplaced})`:''}</button>
+        <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" style="${prim};background:${w.published?'rgba(255,255,255,0.05)':'rgba(0,212,255,0.12)'};color:${w.published?'#e5e7eb':'#00D4FF'};border:1px solid ${w.published?'rgba(255,255,255,0.18)':'rgba(0,212,255,0.4)'}">${w.published?'🙈 Unpublish line-ups':'📢 Publish line-ups'}</button>
+      </div>
     </div>
-    ${tttSummaryBox()}
-    ${tttShortTeams(d)}
+    ${tttImportCard()}${tttPlanCard(d)}${tttSummaryBox()}
     ${tttEditingTeams?tttTeamsEditor(w):''}
-    <label class="lbl">Team builder · ${d.signups.length} signed up · ${unplaced} available and not placed</label>
-    ${d.signups.length?`<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:4px 8px">Cat</th><th style="padding:4px 8px">Rider</th><th style="padding:4px 8px">vELO</th><th style="padding:4px 8px">Preferences</th><th style="padding:4px 8px">Team</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div style="font-size:13px;color:#4b5563">Nobody has signed up yet.</div>`}
+    ${d.signups.length?tttBoard(d):`<div style="font-size:13px;color:#9ca3af;padding:14px 0">No sign-ups yet. Riders sign up on this page, or press <b>Import from the sheet</b> to bring in the Google Form responses.</div>`}
+    <details style="margin-top:14px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#9ca3af">More tools</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button onclick="tttWrite('/api/ttt/status',{open:${!w.open}})" class="tab">${w.open?'🔒 Close sign-ups':'🔓 Reopen sign-ups'}</button>
+        <button onclick="if(confirm('Remove every rider from every team? You can then auto-allocate again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear all teams</button>
+        <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
+        ${w.open?`<button onclick="tttRecruit()" class="tab">📣 Ask for riders</button>`:''}
+        <button onclick="tttExport('lineups')" class="tab">⬇ Line-ups (CSV)</button>
+        <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
+      </div></details>
   </div>`;
 }
 function tttSummaryBox(){
@@ -1345,13 +1468,6 @@ function tttSummaryBox(){
     <div style="display:flex;justify-content:space-between;gap:8px"><b style="color:#10B981">✨ Auto-assign: placed ${m.placed} rider${m.placed===1?'':'s'}${m.placed?` (${m.preferred} in a team they picked)`:''}</b><button onclick="tttSummary=null;renderTtt()" style="background:none;border:none;color:#6b7280">×</button></div>
     ${line('⚠️','Outside their choices',m.outside)}${line('⭐','No captain volunteer',m.noCaptain||[])}${line('❌','Couldn\'t fit (all teams full)',m.unplaced)}${m.placed||m.unplaced.length?'':'<div style="margin-top:4px;color:#9ca3af">Nobody was waiting to be placed.</div>'}
   </div>`;
-}
-function tttShortTeams(d){
-  const n={}; for(const ids of Object.values(d.assign))for(const id of ids)n[id]=(n[id]||0)+1;
-  const short=d.week.teams.filter(t=>n[t.id]&&n[t.id]<4).map(t=>`${esc(t.name)} (${n[t.id]})`);
-  const noCap=d.week.teams.filter(t=>n[t.id]&&!(d.captains||{})[t.id]).map(t=>t.name);
-  return (short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⚠️ Under 4 riders: ${esc(short.join(', '))} — consider merging or moving riders.</div>`:'')
-    +(noCap.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:12px">⭐ No captain yet: ${esc(noCap.join(', '))} — pick one on the team card below.</div>`:'');
 }
 function tttTeamsEditor(w){
   return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:14px">
@@ -1403,7 +1519,7 @@ function renderTtt(){
     ${!archived?tttHelpCard():''}
     ${!archived?tttMyStatus(d):''}
     ${tttResults(d)}
-    ${!archived&&role==='member'?tttSignupForm(d):''}
+    ${!archived&&role==='member'?tttRepeatCard(d)+tttSignupForm(d):''}
     ${!archived&&tttStaff()?tttStaffPanel(d):''}
     ${!archived&&tttStaff()?changeLogCard('ttt'):''}
     ${(w.published||tttStaff())?`<label class="lbl">${w.published?'Team line-ups':'Line-ups (preview — only staff can see this until published)'}</label>${tttLineups(d)}${(w.published&&(d.waitlist||[]).length)?`<div class="card" style="padding:14px 16px;margin-top:12px"><label class="lbl">⏳ Waitlist — moves up automatically when someone withdraws</label><div style="display:flex;flex-wrap:wrap;gap:6px">${d.waitlist.map((n,i)=>`<span style="font-size:12px;background:rgba(251,191,36,0.08);color:#FBBF24;border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:99px">#${i+1} ${esc(n)}</span>`).join('')}</div></div>`:''}`:`<div class="card" style="padding:20px;text-align:center;color:#6b7280;font-size:13px">Team line-ups will appear here once the TTT admins publish them.</div>`}
@@ -2159,8 +2275,8 @@ async function changeLogLoad(key){
 }
 function tttHelpCard(){
   const staff=tttStaff();
-  return staff?plainHelp('Staff checklist for a TTT week',['<b>Sign-ups open</b> by themselves when the week starts, and the club channel is told. They close at the time shown, and a reminder goes out a day before.','<b>Build the teams:</b> press <i>Auto-assign unplaced</i>, then fix any short team in the builder (a ⚠️ shows teams with too few riders) and set captains.','<b>Publish the line-ups</b> when you are happy: riders see their team, and the club channel is told.','<b>Afterwards</b> enter the results; the Season tab picks them up. The next week starts by itself the day after.']):
-    plainHelp('How the TTT works',['<b>Sign up</b> below: say you are available, pick the teams you would like, and tick ⭐ if you would captain. Change it any time before sign-ups close.','<b>Sign-ups close</b> at the time shown. The staff then form the teams.','<b>Line-ups are published</b> on this page (and your <i>My Profile</i>): your team, zone and captain.','<b>Can\'t make it?</b> Withdraw so someone on the waiting list can take your place.']);
+  return staff?plainHelp('Staff checklist for a TTT week',['<b>Sign-ups open</b> by themselves when the week starts, and the club channel is told. They close at the time shown, and a reminder goes out a day before.','<b>Bring in the Google Form sign-ups</b> with <i>Import from the sheet</i> (check the preview, then import). Riders who also signed up here are left as they are.','<b>Build the teams:</b> press <i>Auto-allocate</i> to see the proposed teams, then <i>Apply</i>. Then edit freely: drag riders between teams (or use the small menu on each rider), tap ☆ to set a captain, and watch the team counts (a ⚠️ shows teams with fewer than 4).','<b>Publish the line-ups</b> when you are happy: riders see their team, and the club channel is told.','<b>Afterwards</b> enter the results; the Season tab picks them up. The next week starts by itself the day after.']):
+    plainHelp('How the TTT works',['<b>Sign up</b> below: say you are available, pick the teams you would like, and tick ⭐ if you would captain. Change it any time before sign-ups close.','<b>Rode last week?</b> Tap <i>🔁 Run it back</i> to sign up again with the same settings in one tap.','<b>Sign-ups close</b> at the time shown. The staff then form the teams.','<b>Line-ups are published</b> on this page (and your <i>My Profile</i>): your team, zone and captain.','<b>Can\'t make it?</b> Withdraw so someone on the waiting list can take your place.']);
 }
 function ridesHelpCard(){
   const staff=role==='admin'||role==='mod';
@@ -2716,7 +2832,7 @@ function renderMyTtt(m){
     body+=`<div style="font-size:14px;font-weight:700">${esc(w.title)}<span style="font-weight:400;color:#9ca3af;font-size:12px">${closes}</span></div>`;
     const s=m.signup;
     if(!s){
-      body+=`<div style="font-size:13px;color:#FBBF24;margin-top:8px">You haven't signed up for this week.</div>`+(w.open?goBtn('Sign up →'):`<div style="font-size:12px;color:#6b7280;margin-top:6px">Sign-ups are closed.</div>`);
+      body+=`<div style="font-size:13px;color:#FBBF24;margin-top:8px">You haven't signed up for this week.</div>`+(w.open?(m.repeat?`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="tttRunItBack()">🔁 Run it back</button><span style="font-size:12px;color:#9ca3af">${esc(tttRepeatText(m.repeat))}</span></div>`:'')+goBtn(m.repeat?'Or sign up fresh →':'Sign up →'):`<div style="font-size:12px;color:#6b7280;margin-top:6px">Sign-ups are closed.</div>`);
     }else if(!s.available){
       body+=`<div style="font-size:13px;color:#9ca3af;margin-top:8px">You've told us you're <b>not available</b> this week.</div>`+(w.open?goBtn('Change my sign-up →'):'');
     }else if(m.teams.length){
@@ -3044,45 +3160,6 @@ async function coverIcal(apply){
 
 function catColor(c){
   return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#6b7280',F:'#ec4899'}[c]||'#6b7280';
-}
-
-async function syncSheet(){
-  try{
-    const btn = event.target;
-    btn.textContent = '↻ Syncing…';
-    const r = await fetch('/api/proxy?endpoint=ttt-sheet');
-    if(r.ok){
-      const d = await r.json();
-      sheetData = d;
-      btn.textContent = `✓ ${d.rows.length} rows synced`;
-      btn.style.color = '#10B981';
-      renderSheetPanel(d);
-    } else {
-      btn.textContent = 'Sheet Error';
-      btn.style.color = '#f87171';
-    }
-  } catch(e){
-    console.error('Sheet sync error:', e);
-    event.target.textContent = 'Failed';
-    event.target.style.color = '#f87171';
-  }
-}
-
-function renderSheetPanel(d){
-  const el = document.getElementById('sheet-panel');
-  if(!el || !d) return;
-  const shown = d.rows.slice(0,20);
-  el.innerHTML = `<div class="card" style="margin-top:20px">
-    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Google Sheet — TTT Data (${d.rows.length} rows)</span>
-      <span style="font-size:10px;color:#10B981">● Live</span>
-    </div>
-    <div style="overflow-x:auto"><table>
-      <thead><tr>${d.headers.slice(0,6).map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
-      <tbody>${shown.map(row=>`<tr>${d.headers.slice(0,6).map(h=>`<td style="font-size:12px;color:#9ca3af">${esc(row[h]||'-')}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></div>
-    ${d.rows.length>20?`<div style="padding:10px 14px;font-size:11px;color:#4b5563">Showing 20 of ${d.rows.length} rows</div>`:''}
-  </div>`;
 }
 
 // ── Init ───────────────────────────────────────────────────
