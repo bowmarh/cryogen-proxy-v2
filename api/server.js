@@ -348,6 +348,7 @@ const TTT_KEYS = {
   assign: 'cg:ttt:assign',     // field "<lowercase name>" -> JSON array of team ids
   archive: 'cg:ttt:archive',   // field "<week id>" -> snapshot JSON
   sent: 'cg:ttt:sent',         // field "<week id>:<event>" -> ISO time; makes scheduled events fire once
+  last: 'cg:ttt:last',         // field "<zwid, or lowercase name>" -> the settings of that rider's last available sign-up (for "run it back")
 };
 const TTT_STYLES = ['race', 'casual'];
 const TTT_TEAM_MAX = 6; // default riders per team
@@ -462,7 +463,7 @@ const teamLabel = t => [t.level, t.zone].filter(Boolean).join(' · ');
 function postSignupsOpen(week){
   const close = week.closesAt ? `\nSign-ups close **${ukLabel(Date.parse(week.closesAt))}**.` : '';
   return discord('public', {
-    content: `📣 **TTT sign-ups are open — ${discordEscape(week.title)}**\nSign up at ${SITE_URL} → 🏁 TTT Week.${close}`,
+    content: `📣 **TTT sign-ups are open — ${discordEscape(week.title)}**\nSign up at ${SITE_URL} → 🏁 TTT Week.\nRode last week? Tap **🔁 Run it back** there to sign up with the same settings in one go.${close}`,
     embeds: [{ title: 'Teams this week', color: 0x00d4ff,
       description: week.teams.map(t => `**${discordEscape(t.name)}** — ${discordEscape(teamLabel(t))} (max ${t.max})`).join('\n').slice(0, 4000) }],
   });
@@ -471,7 +472,7 @@ function postSignupsOpen(week){
 function postReminder(week, signups){
   const n = signups.filter(s => s.available).length;
   return discord('public', {
-    content: `⏰ **Last day to sign up for ${discordEscape(week.title)}** — ${n} rider${n === 1 ? '' : 's'} signed up so far.\nSign-ups close **${ukLabel(Date.parse(week.closesAt))}**: ${SITE_URL}`,
+    content: `⏰ **Last day to sign up for ${discordEscape(week.title)}** — ${n} rider${n === 1 ? '' : 's'} signed up so far.\nSign-ups close **${ukLabel(Date.parse(week.closesAt))}**: ${SITE_URL}\nSame as last week? Tap **🔁 Run it back** on the TTT Week page.`,
   });
 }
 
@@ -732,7 +733,10 @@ const TTT_ROUTES = {
     const ids = data.archive.slice(0, MY_TTT_HISTORY);
     const snaps = ids.length ? await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id])) : [];
     const own = data.signups.find(s => s.zwid === member.zwid);   // may be under another spelling of their name
-    return myTttStatus(data, (own ? own.name : member.name).toLowerCase(), snaps.map(x => (x ? JSON.parse(x) : null)));
+    const out = myTttStatus(data, (own ? own.name : member.name).toLowerCase(), snaps.map(x => (x ? JSON.parse(x) : null)));
+    const last = data.week ? await lastSettings(data, member, data.week) : null;
+    if (last) out.repeat = { style: last.style, doubleUp: last.doubleUp, captain: last.captain, preferred: last.preferred.map(id => (data.week.teams.find(t => t.id === id) || { name: id }).name), same: !!own && own.available && own.style === last.style && own.doubleUp === last.doubleUp && own.captain === last.captain && JSON.stringify([...(own.preferred || [])].sort()) === JSON.stringify([...last.preferred].sort()) };
+    return out;
   },
 
   'POST /api/ttt/signup': async (req, body) => {
@@ -763,7 +767,7 @@ const TTT_ROUTES = {
     const key = name.toLowerCase();
     const existing = data.signups.find(s => s.name.toLowerCase() === key);
     if (existing) entry.ts = existing.ts;
-    await redis([['HSET', TTT_KEYS.signups, key, JSON.stringify(entry)]]);
+    await redis([['HSET', TTT_KEYS.signups, key, JSON.stringify(entry)], ...(entry.available ? [['HSET', TTT_KEYS.last, zwid || key, JSON.stringify(lastOf(entry))]] : [])]);
     if (!week.published) return;
     const placed = (data.assign[key] || []).length > 0;
     const fresh = { ...data, signups: [...data.signups.filter(s => s.name.toLowerCase() !== key), entry] };
@@ -782,6 +786,34 @@ const TTT_ROUTES = {
         await discord('admin', { content: `⏳ Late sign-up: **${discordEscape(name)}** joined the waitlist (#${position}) — ${discordEscape(week.title)}.` });
       }
     }
+  },
+
+  // "Run it back": sign up again with the settings of the rider's last available sign-up (cat, style, double-up, captain, preferred teams that still exist).
+  'POST /api/ttt/repeat': async (req) => {
+    const member = memberFromRequest(req);
+    if (!member) throw new HttpError(401, 'Sign in with your cryogen.team account.');
+    const { week } = await requireWeek();
+    if (!week.open) throw new HttpError(409, 'TTT sign-ups are closed for this week.');
+    const last = await lastSettings(await loadTtt(), member, week);
+    if (!last) throw new HttpError(404, 'There is no earlier sign-up to copy yet. Sign up once and next week it is one tap.');
+    return TTT_ROUTES['POST /api/ttt/signup'](req, { name: member.name, zwid: member.zwid, cat: last.cat, available: true, style: last.style, doubleUp: last.doubleUp, captain: last.captain, preferred: last.preferred, comments: '' })
+      .then(() => undefined);
+  },
+
+  // Staff: bring the Google Form sign-ups from the club sheet into this week's sign-ups (preview first, then apply). In-app sign-ups are never overwritten.
+  'POST /api/ttt/import-sheet': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    await requireWeek();
+    const [candidates, data] = await Promise.all([readTttSheet(), loadTtt()]);
+    const taken = new Set(data.signups.map(s => s.name.toLowerCase())), takenIds = new Set(data.signups.map(s => s.zwid).filter(Boolean));
+    const rows = candidates.map(c => ({ ...c, status: taken.has(c.name.toLowerCase()) || (c.zwid && takenIds.has(c.zwid)) ? 'exists' : 'new' }));
+    const fresh = rows.filter(r => r.status === 'new');
+    if (!body.apply) return { preview: { rows, counts: { total: rows.length, new: fresh.length, exists: rows.length - fresh.length, unmatched: fresh.filter(r => !r.zwid).length, unavailable: fresh.filter(r => !r.available).length } } };
+    if (fresh.length) {
+      const now = new Date().toISOString();
+      await redis(fresh.map(r => ['HSETNX', TTT_KEYS.signups, r.name.toLowerCase(), JSON.stringify({ name: r.name, zwid: r.zwid, cat: r.cat, available: r.available, style: r.style, doubleUp: r.doubleUp, preferred: [], comments: '', captain: false, ts: now, source: 'sheet' })]));
+    }
+    return { ...tttView(await loadTtt(), roleFromRequest(req)), imported: fresh.length };
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
@@ -815,11 +847,16 @@ const TTT_ROUTES = {
     await redis([ids.length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)] : ['HDEL', TTT_KEYS.assign, key]]);
   },
 
-  'POST /api/ttt/auto-assign': async (req) => {
+  'POST /api/ttt/auto-assign': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const data = await requireWeek();
     const velo = await riderVelos(data.signups);
     const { placements, summary } = planTeams({ teams: data.week.teams, signups: data.signups, assign: data.assign, velo });
+    // A preview shows who would go where and changes nothing; staff look, then apply.
+    if (body && body.preview) {
+      const nameOf = new Map(data.signups.map(x => [x.name.toLowerCase(), x.name]));
+      return { plan: Object.entries(placements).map(([key, ids]) => ({ name: nameOf.get(key) || key, teams: ids })), summary };
+    }
     const commands = Object.entries(placements).map(([key, ids]) => ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]);
     // Give every team without a captain its strongest volunteer.
     const assign = { ...data.assign, ...placements };
@@ -890,6 +927,66 @@ const TTT_ROUTES = {
     await startWeek(date, text(body.title, 'title', 80, false) || weekTitle(date));
   },
 };
+
+// The part of a sign-up worth repeating next week.
+const lastOf = e => ({ cat: e.cat || '', style: e.style, doubleUp: !!e.doubleUp, captain: !!e.captain, preferred: e.preferred || [] });
+// A rider's last available sign-up, from the "last" record, or failing that the newest archived week they were in. Preferred teams that
+// are not in this week's list are dropped.
+async function lastSettings(data, member, week){
+  const key = member.name.toLowerCase();
+  let found = null;
+  const [raw] = await redis([['HGET', TTT_KEYS.last, member.zwid]]);
+  if (raw) { try { found = JSON.parse(raw); } catch (e) { /* fall through */ } }
+  if (!found) {
+    const [byName] = await redis([['HGET', TTT_KEYS.last, key]]);
+    if (byName) { try { found = JSON.parse(byName); } catch (e) { /* fall through */ } }
+  }
+  if (!found && data.archive.length) {
+    const snaps = await redis(data.archive.slice(0, MY_TTT_HISTORY).map(id => ['HGET', TTT_KEYS.archive, id]));
+    for (const raw2 of snaps) {
+      let snap; try { snap = raw2 && JSON.parse(raw2); } catch (e) { snap = null; }
+      const s = snap && (snap.signups || []).find(x => x.available && ((x.zwid && x.zwid === member.zwid) || x.name.toLowerCase() === key));
+      if (s) { found = lastOf(s); break; }
+    }
+  }
+  if (!found) return null;
+  const ids = new Set(week.teams.map(t => t.id));
+  return { cat: CATS.includes(found.cat) ? found.cat : '', style: TTT_STYLES.includes(found.style) ? found.style : 'casual', doubleUp: !!found.doubleUp, captain: !!found.captain,
+    preferred: (found.preferred || []).filter(id => ids.has(id)).slice(0, 5) };
+}
+
+// The club's Google Form responses (the TEAM LIST sheet), as TTT sign-up candidates: name, matched Zwift ID and category when the rider is in the
+// club roster, whether they are available, riding style, double-up. The last row for a name wins.
+const nameKey = n => String(n || '').toLowerCase().replace(/\[[^\]]*\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+async function readTttSheet(){
+  const { headers, rows } = parseGviz(await fetchTab(SHEET_TABS['ttt-sheet']));
+  const find = re => headers.find(h => re.test(h));
+  const col = { name: find(/rider|name/i), cat: find(/^cat/i), avail: find(/avail/i), style: find(/practice|race/i), region: find(/region/i), dbl: find(/double/i) };
+  if (!col.name) throw new HttpError(422, 'The TEAM LIST sheet has no column with the riders\' names.');
+  let roster = [];
+  try { roster = (await fetchRoster()).riders || []; } catch (e) { /* match nobody: names are still imported */ }
+  const byName = new Map();
+  for (const r of roster) { const k = nameKey(r.name); byName.set(k, byName.has(k) ? null : r); }   // two riders with one name: no safe match
+  const out = new Map();
+  for (const row of rows) {
+    const name = String(row[col.name] || '').trim().replace(/\s+/g, ' ');
+    if (!name || name === '-' || /^(total|riders? left|team\b)/i.test(name) || name.length > 60) continue;
+    const r = byName.get(nameKey(name)) || null;
+    const sheetCat = String(col.cat ? row[col.cat] : '').trim().toUpperCase();
+    const availText = String(col.avail ? row[col.avail] : '');
+    out.set(name.toLowerCase(), {
+      name: r && r.name ? String(r.name).trim() : name,
+      zwid: r ? String(r.riderId) : '',
+      cat: CATS.includes(sheetCat) ? sheetCat : CATS.includes(r && r.zpCategory) ? r.zpCategory : '',
+      available: !/\bnot\b|unavailable|can'?t|no\b/i.test(availText),
+      style: /compet|race/i.test(String(col.style ? row[col.style] : '')) && !/not bothered/i.test(String(row[col.style])) ? 'race' : 'casual',
+      doubleUp: /^\s*y/i.test(String(col.dbl ? row[col.dbl] : '')),
+      region: String(col.region ? row[col.region] : '').replace(/^-$/, '').trim(),
+      note: availText.trim().slice(0, 60),
+    });
+  }
+  return [...out.values()];
+}
 
 // ── Auto-assign planner ────────────────────────────────────
 const TTT_MIN_TEAM = 4;                  // fewer than this can't really race a TTT
