@@ -758,9 +758,9 @@ async function loadMyWeek(){
     myWeek=await r.json(); renderMyWeek();
   }catch(e){ /* the dashboard works without it */ }
 }
-async function myWeekAvail(week,status){
+async function myWeekAvail(week,status,team){
   try{
-    const r=await fetch('/api/zrl/availability',{method:'POST',headers:tttHeaders(),body:JSON.stringify({week,status})});
+    const r=await fetch('/api/zrl/availability',{method:'POST',headers:tttHeaders(),body:JSON.stringify({week,status,team})});
     if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save your answer.'); return; }
   }catch(e){ alert('Could not reach the server. Please try again.'); return; }
   zrlReady=null; loadMyWeek();
@@ -772,7 +772,7 @@ function renderMyWeek(){
   const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
   const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:'Europe/London'}):u.date; (days[k]=days[k]||[]).push(u); });
-  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
+  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
   const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
   el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
 }
@@ -2577,7 +2577,7 @@ async function zrlImportPreview(){
   zrlRememberSheet(sheet); zrlPreview={...d.preview,sheet}; renderZrl2();
 }
 function zrlPickRegions(){ document.querySelectorAll('.zrl-imp-region').forEach(s=>{ const t=zrlPreview.teams.find(x=>x.id===s.dataset.team); if(t)t.region=s.value; }); }
-function renderZrl2(){ document.getElementById('zrl-root').innerHTML=renderZrl(zrlData); }
+function renderZrl2(){ document.getElementById('zrl-root').innerHTML=renderZrl(zrlData); if(document.getElementById('zg-body')) zrlGridApply(); }
 async function zrlImportApply(){
   zrlPickRegions();
   const missing=zrlPreview.teams.filter(t=>!t.region); if(missing.length){ alert('Pick a time zone for every team first ('+missing.length+' left).'); return; }
@@ -2748,12 +2748,12 @@ function zrlRidersTab(d,st){
 function zrlRiderSearch(q){ q=q.trim().toLowerCase(); document.querySelectorAll('#zrl-rbody tr').forEach(tr=>{ tr.style.display=!q||tr.dataset.s.includes(q)?'':'none'; }); }
 let zrlMy=null, zrlWeekly=null;
 const ZRL_AVAIL=[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']];
-function zrlAvail(week,status,zwid){ zrlPost('/api/zrl/availability',{ week, status, zwid }); }
+function zrlAvail(week,status,zwid,team){ zrlPost('/api/zrl/availability',{ week, status, zwid, team }); }   // with a team: the answer is for that team only
 function zrlAvailHtml(m){
   const weeks=m.weeks||[]; if(!weeks.length) return '';
   const today=new Date().toISOString().slice(0,10);
   const ord=n=>n+(n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th'));
-  const btn=(w,v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${w.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${w.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`;
+  const btn=(w,v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}','','${esc(w.team||'')}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${w.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${w.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`;
   const past=weeks.filter(w=>w.date<=today), picked=past.filter(w=>w.picked).length, yes=weeks.filter(w=>w.mine==='yes').length, scored=weeks.filter(w=>w.result&&w.result.pts!==null);
   const total=scored.reduce((n,w)=>n+w.result.pts,0);
   return `<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">Your season · can you race? Tell your captain for each week</div>
@@ -2778,7 +2778,7 @@ function zrlStaffLineups(d,t,riders){
   const w=d.weekly||{avail:{},lineup:{}}, r=d.round, withId=riders.filter(x=>x.zwid);
   if(!withId.length) return '';
   const weeks=Array.from({length:r.weeks},(_,i)=>({ i, date:new Date(Date.parse(r.start+'T00:00:00Z')+7*i*864e5).toISOString().slice(0,10),
-    lineup:w.lineup[i+':'+t.id]||[], riders:withId.map(x=>({ zwid:x.zwid, name:x.name, status:w.avail[i+':'+x.zwid]||'' })) }));
+    lineup:w.lineup[i+':'+t.id]||[], riders:withId.map(x=>({ zwid:x.zwid, name:x.name, status:w.avail[i+':'+x.zwid+':'+t.id]||w.avail[i+':'+x.zwid]||'' })) }));
   return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">${zrlLineupHtml({ id:t.id, weeks },r.racing)}</div>`;
 }
 async function zrlSubs(team,week){
@@ -2804,7 +2804,7 @@ function zrlLineupHtml(t,racing){
   return `<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:6px">Pick your ${racing} for each race</div>
     ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);padding:6px 0;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#6b7280">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${esc(r.name)}</td>
-        <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
+        <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}','${esc(t.id)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
       <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
       <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
 }
@@ -3171,7 +3171,48 @@ function zrlWeeksTab(){
   return `<div class="card" style="padding:14px 16px;overflow-x:auto"><div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Line-up picked by each captain (green = full), then how many riders said yes, maybe or no. The health panel warns when a race is within three days and a team has no full line-up.</div>
     <table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Team</th>${w.weeks.map(x=>`<th style="${th}">Race ${x.i+1} · ${esc(seasonDay(x.date))}</th>`).join('')}</tr></thead>
     <tbody>${teams.map((t,k)=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 8px;font-size:13px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>${w.weeks.map(x=>cell(x.teams[k])).join('')}</tr>`).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlWeekly=null;renderZrl2()" style="margin-top:10px;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></div>`;
+    <button onclick="zrlWeekly=null;renderZrl2()" style="margin-top:10px;padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></div>${zrlAnswersCard()}`;
+}
+// Every rider's answer for every race, one row per rider and team (a rider on two teams answers for each), with a search box and filters.
+let zrlGrid={q:'',team:'',week:'',ans:'',picked:''};
+function zrlAnswersCard(){
+  const d=zrlData; if(!d||!d.round||!d.weekly||!d.placements) return '';
+  const r=d.round, w=d.weekly, rows=[];
+  for(const x of d.signups){ if(!x.in||!x.zwid) continue;
+    for(const id of (d.placements[x.key]||[])){ const t=r.teams.find(tt=>tt.id===id); if(!t) continue;
+      rows.push({x,t,a:Array.from({length:r.weeks},(_,i)=>w.avail[i+':'+x.zwid+':'+t.id]||w.avail[i+':'+x.zwid]||''),p:Array.from({length:r.weeks},(_,i)=>(w.lineup[i+':'+t.id]||[]).includes(x.zwid))}); } }
+  rows.sort((a,b)=>a.x.name.localeCompare(b.x.name)||a.t.name.localeCompare(b.t.name));
+  const th='padding:6px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;white-space:nowrap';
+  const sel=(id,opts,cur)=>`<select id="${id}" class="inp" onchange="zrlGridSet()" style="width:auto;font-size:12px">${opts.map(([v,l])=>`<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  const body=rows.map(o=>`<tr data-s="${esc((o.x.name+' '+o.x.zwid).toLowerCase())}" data-team="${esc(o.t.id)}" data-a="${esc(o.a.join(','))}" data-p="${o.p.map(v=>v?1:0).join(',')}" style="border-top:1px solid rgba(255,255,255,0.06)">
+    <td style="padding:5px 8px;font-size:13px"><b>${esc(o.x.name)}</b> <span style="color:#6b7280;font-size:11px">${esc(o.x.cat||'')}</span></td><td style="padding:5px 8px;font-size:12px;color:#9ca3af;white-space:nowrap">${esc(o.t.name.replace(/^CRYO-GEN\s+/,''))}</td>
+    ${o.a.map((v,i)=>`<td style="padding:3px 6px;white-space:nowrap">${o.p[i]?'🏁 ':''}<select class="inp" onchange="zrlAvail(${i},this.value,'${esc(o.x.zwid)}','${esc(o.t.id)}')" style="width:auto;font-size:12px;padding:3px 6px"><option value="">—</option>${ZRL_AVAIL.map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('')}</select></td>`).join('')}</tr>`).join('');
+  return `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-weight:800;margin-bottom:2px">Who can race</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Each rider's answer for each race and team. 🏁 means picked in that team's line-up. A rider on two teams has a row for each.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <input id="zg-q" class="inp" placeholder="Search name or Zwift ID…" value="${esc(zrlGrid.q)}" oninput="zrlGridSet()" style="width:210px"/>
+      ${sel('zg-team',[['','All teams'],...r.teams.filter(t=>rows.some(o=>o.t.id===t.id)).map(t=>[t.id,t.name.replace(/^CRYO-GEN\s+/,'')])],zrlGrid.team)}
+      ${sel('zg-week',[['','All races'],...Array.from({length:r.weeks},(_,i)=>[String(i),'Race '+(i+1)])],zrlGrid.week)}
+      ${sel('zg-ans',[['','Any answer'],['yes','Yes'],['maybe','Maybe'],['no','No'],['none','No answer']],zrlGrid.ans)}
+      ${sel('zg-picked',[['','Picked or not'],['in','In the line-up'],['out','Not picked']],zrlGrid.picked)}
+      <button onclick="zrlGrid={q:'',team:'',week:'',ans:'',picked:''};renderZrl2()" style="padding:5px 10px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#9ca3af;font-size:12px">Clear</button>
+      <span id="zg-count" style="font-size:12px;color:#6b7280;margin-left:auto"></span></div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Team</th>${Array.from({length:r.weeks},(_,i)=>`<th style="${th}">Race ${i+1} · ${esc(seasonDay(new Date(Date.parse(r.start+'T00:00:00Z')+7*i*864e5).toISOString().slice(0,10)))}</th>`).join('')}</tr></thead><tbody id="zg-body">${body||'<tr><td colspan="9" style="padding:10px;color:#6b7280;font-size:13px">No riders are on a team yet.</td></tr>'}</tbody></table></div></div>`;
+}
+function zrlGridSet(){
+  zrlGrid={ q:document.getElementById('zg-q').value, team:document.getElementById('zg-team').value, week:document.getElementById('zg-week').value, ans:document.getElementById('zg-ans').value, picked:document.getElementById('zg-picked').value };
+  zrlGridApply();
+}
+function zrlGridApply(){
+  const g=zrlGrid, q=g.q.trim().toLowerCase(), rows=[...document.querySelectorAll('#zg-body tr[data-s]')]; let shown=0;
+  rows.forEach(tr=>{
+    const a=tr.dataset.a.split(','), p=tr.dataset.p.split(',').map(v=>v==='1'), weeks=g.week===''?a.map((_,i)=>i):[Number(g.week)];
+    const ok=(!q||tr.dataset.s.includes(q))&&(!g.team||tr.dataset.team===g.team)
+      &&(!g.ans||weeks.some(i=>g.ans==='none'?!a[i]:a[i]===g.ans))
+      &&(!g.picked||weeks.some(i=>g.picked==='in'?p[i]:!p[i]));
+    tr.style.display=ok?'':'none'; if(ok) shown++;
+  });
+  const c=document.getElementById('zg-count'); if(c) c.textContent=rows.length?`Showing ${shown} of ${rows.length}`:'';
 }
 const ZRL_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 // The team's race start as a real moment: the race date plus the league's fixed "Tue 18:00 UTC" time, shown in the rider's own time zone.
@@ -3188,7 +3229,7 @@ function zrlNextRaceCard(m){
   const when=at?new Date(at).toLocaleString(undefined,{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}):seasonDay(w.date);
   const left=at?at-now:null;
   const eta=left===null?'':left<0?(left>-5400000?'under way':'today'):left<3600000*20?'in '+Math.max(1,Math.round(left/3600000))+' hour'+(Math.round(left/3600000)===1?'':'s'):'in '+Math.ceil(left/86400000)+' day'+(Math.ceil(left/86400000)===1?'':'s');
-  const btn=(v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}')" style="padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${w.mine===v?'rgba(0,212,255,0.18)':'transparent'};color:${w.mine===v?'#00D4FF':'#d1d5db'}">${l}</button>`;
+  const btn=(v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}','','${esc(w.team||'')}')" style="padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${w.mine===v?'rgba(0,212,255,0.18)':'transparent'};color:${w.mine===v?'#00D4FF':'#d1d5db'}">${l}</button>`;
   const status=w.picked?'<span style="color:#10B981">🏁 You are in the line-up</span>':w.lineupSet?'<span style="color:#FBBF24">Line-up picked: you are not in it (yet)</span>':'<span style="color:#9ca3af">Your captain has not picked the line-up yet</span>';
   return `<div class="card" style="padding:16px;margin-bottom:12px;border-color:rgba(0,212,255,0.35)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 6px">Your next race · race ${w.i+1}</div>
     <div style="font-size:18px;font-weight:800">${esc(when)}</div><div style="font-size:12px;color:#9ca3af;margin:2px 0 8px">${esc(t.name)}${eta?' · '+esc(eta):''}${at?'':' · race time not set yet'}</div>
@@ -3298,7 +3339,7 @@ async function loadZrl(){
     if(role==='member'&&sessionStorage.getItem('token')){
       try{ const r2=await fetch('/api/zrl/mine',{headers:tttHeaders()}); if(r2.ok) zrlMy=await r2.json(); }catch(e){ /* the page works without it */ }
     }
-    zrlData=d; el.innerHTML=renderZrl(d); if(!(role==='admin'||role==='mod')) zrlStandLoad();
+    zrlData=d; el.innerHTML=renderZrl(d); if(document.getElementById('zg-body')) zrlGridApply(); if(!(role==='admin'||role==='mod')) zrlStandLoad();
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load ZRL: ${esc(e.message)}</div>`; }
 }
 
