@@ -120,7 +120,9 @@ test('the tick calls out gaps, alerts the owner for a ride in two days, confirms
   const o = await next();
   const date = o.date;
   await post('assign', { series: sid, date, role: 'leader', zwid: '4378027', name: 'Ann Able' });
-  const r = await post('series', SERIES(1, { id: undefined, title: 'Tomorrow Spin' }));
+  // a ride five hours from now, whatever the time of day the test runs at (a fixed 19:00 tomorrow is more than 24 hours away late in the evening)
+  const soon = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23', weekday: 'short', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(Date.now() + 5 * 3600000)).reduce((o, x) => (o[x.type] = x.value, o), {});
+  const r = await post('series', SERIES(1, { id: undefined, title: 'Tomorrow Spin', dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(soon.weekday), time: `${soon.hour}:${soon.minute}` }));
   const tomorrow = r.body.series.find(s => s.title === 'Tomorrow Spin');
   const t = tomorrow.occurrences[0];
   await post('assign', { series: tomorrow.id, date: t.date, role: 'leader', zwid: '1002', name: 'Bob Baker' });

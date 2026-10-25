@@ -220,7 +220,11 @@ async function startApp(world) {
       return r.body.token;
     },
     // Signs a rider in through the cryogen.team hand-off and returns their member session token.
-    async memberSession(zwid, { name = 'WP Name', nonce } = {}) {
+    // Signs a rider in through the cryogen.team hand-off. Test riders are full members: unless `associate` is set, a member record is added
+    // for a Zwift ID the roster does not know, so they are not mistaken for an associate (someone not yet in the club).
+    async memberSession(zwid, { name = 'WP Name', nonce, associate = false } = {}) {
+      const known = world.riders.some(r => String(r.riderId) === String(zwid)) || (world.members || []).some(m => String(m.zwift_id) === String(zwid));
+      if (!associate && !known) world.members.push({ id: 9000 + world.members.length, zwift_id: String(zwid), name, status: 'active', tier: 'full', offboard_discord: '0', offboard_fb: '0', offboard_zp: '0', testRecord: true });
       const r = await app.get(`/api/auth/wp?t=${ssoToken({ zwid, name, nonce })}`);
       const m = /#sso=(.+)$/.exec(r.location || '');
       if (!m) throw new Error(`sign-in failed: ${r.location}`);

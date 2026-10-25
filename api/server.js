@@ -115,7 +115,7 @@ function roleFromRequest(req){
 function memberFromRequest(req){
   const session = sessionFromRequest(req);
   return session && session.role === 'member' && /^\d{1,12}$/.test(String(session.zwid)) && session.name
-    ? { zwid: String(session.zwid), name: String(session.name) } : null;
+    ? { zwid: String(session.zwid), name: String(session.name), assoc: session.assoc === true } : null;
 }
 
 // Who a sign-up / withdrawal / RSVP is for. A signed-in member always acts as themselves.
@@ -1335,7 +1335,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1524,7 +1524,7 @@ async function handleRoster(req, res){
 
 // Staff edits to a member record, saved to WordPress with the server's credentials.
 const MEMBER_FIELDS = {
-  tier: ['full', 'half'],
+  tier: ['full', 'half', 'associate'],
   status: ['active', 'suspended', 'left'],
   offboard_discord: ['0', '1'],
   offboard_fb: ['0', '1'],
@@ -1616,13 +1616,25 @@ async function handleWpSso(req, res, token){
     const t = readSsoToken(token);
     const [fresh] = await redis([['SET', `cg:sso:${t.n}`, '1', 'NX', 'EX', '900']]);
     if (fresh !== 'OK') throw new HttpError(400, 'That sign-in link was already used. Please try again.');
-    const { riders, members } = await fetchRoster();
-    const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === t.zwid);
+    const lookup = async () => {
+      const { riders, members } = await fetchRoster();
+      return { record: members && uniqueMembers(members).find(m => String(m.zwift_id) === t.zwid), rider: riders.find(r => String(r.riderId) === t.zwid) };
+    };
+    let { record, rider } = await lookup();
     if (record && record.status === 'left') throw new HttpError(403, 'Your membership is no longer active.');
-    const rider = riders.find(r => String(r.riderId) === t.zwid);
+    // Not a full member yet (or marked as an associate): a signed session that is limited until staff approve the upgrade. Before limiting
+    // anyone, look again with fresh data: someone who joined in the last few minutes must not be called an associate by an old copy.
+    let associate = await assoc.classify({ zwid: t.zwid, record, rider });
+    if (associate) {
+      rosterCache = null;
+      ({ record, rider } = await lookup());
+      if (record && record.status === 'left') throw new HttpError(403, 'Your membership is no longer active.');
+      associate = await assoc.classify({ zwid: t.zwid, record, rider });
+    }
     const name = (rider && rider.name) || t.name;
     if (!name) throw new HttpError(403, 'Your Zwift ID is not in the club roster yet. Ask a moderator.');
-    ssoRedirect(res, `sso=${signToken('member', { zwid: t.zwid, name })}`);
+    if (associate) await assoc.noteFirstSeen(t.zwid, name);
+    ssoRedirect(res, `sso=${signToken('member', { zwid: t.zwid, name, ...(associate ? { assoc: true } : {}) })}`);
   } catch (e) {
     if (!(e instanceof HttpError)) throw e;
     ssoRedirect(res, `sso_error=${encodeURIComponent(e.message)}`);
@@ -1690,7 +1702,8 @@ async function handleMe(req, res){
   if (!member) return sendJSON(res, 401, { error: 'Not signed in as a member.' });
   const { members } = await fetchRoster();
   const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === member.zwid);
-  sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && record.tier, status: record && record.status });
+  const associate = member.assoc && await assoc.stillAssociate(member.zwid);
+  sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && record.tier, status: record && record.status, associate: !!associate });
 }
 
 // ── System health (admin) ──────────────────────────────────
@@ -1765,6 +1778,7 @@ async function healthChecks(){
     run('cover', 'Ride cover (leaders and sweepers)', async () => cover.healthRow(await cover.load())),
     run('ladder', 'Zwift Club Ladder', async () => ladder.healthRow()),
     run('drs', 'DIRT Racing Series', async () => drs.healthRow()),
+    run('assoc', 'Associate members', async () => assoc.healthRow()),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
@@ -1945,8 +1959,50 @@ async function handleDrs(drsRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// Associate members (lib/assoc.js): a limited sign-in with a route to full membership.
+async function wpSaveMember(zwiftId, changes){
+  const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
+  if (!auth) return false;
+  const record = uniqueMembers(await wpGet('/members', auth)).find(m => String(m.zwift_id) === String(zwiftId));
+  if (!record) return false;
+  const r = await fetch(`${WP_API}/members/${encodeURIComponent(record.id ?? zwiftId)}`, {
+    method: 'PATCH',
+    headers: { 'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(auth).toString('base64')}` },
+    body: JSON.stringify(changes),
+  });
+  if (!r.ok) throw new HttpError(502, `WordPress refused the change (${r.status}).`);
+  rosterCache = null;
+  return true;
+}
+const assoc = require('../lib/assoc')({
+  redis, HttpError, text, requireRole, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  // What an associate has done: social rides joined (RSVPs under their name) and team events (a TTT or ZRL sign-up).
+  activityOf: async (zwid, name) => {
+    const [rsvps, last, zrlSignup] = await redis([['HGETALL', KEYS.rsvps], ['HGET', TTT_KEYS.last, zwid], ['HGET', zrl.KEYS.signups, zwid]]);
+    const mine = String(name || '').toLowerCase();
+    let n = 0;
+    for (let i = 0; i < (rsvps || []).length; i += 2) { try { if (String(JSON.parse(rsvps[i + 1]).name || '').toLowerCase() === mine) n++; } catch (e) { /* skip */ } }
+    return { rsvps: n, teamEvents: (last ? 1 : 0) + (zrlSignup ? 1 : 0) };
+  },
+  inClub: async zwid => { try { return (await fetchRoster()).riders.some(r => String(r.riderId) === String(zwid)); } catch (e) { return false; } },
+  setWpTier: zwid => wpSaveMember(zwid, { tier: 'full' }),
+});
+// What a signed-in associate may call: the weekly TTT and ZRL sign-up, the other race sign-ups and the social-ride RSVPs, plus what the pages
+// read and their own upgrade journey. Everything else answers "for full members".
+const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
+  'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
+  'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
+  'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
+  'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+async function handleAssoc(assocRoute, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await assocRoute(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body, { staffOnly: false }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -1983,6 +2039,13 @@ async function route(req, res){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
+  // A signed-in associate reaches only the routes above; staff approval lifts it at once, even mid-session.
+  const sess = sessionFromRequest(req);
+  if (sess && sess.role === 'member' && sess.assoc === true && pathname.startsWith('/api/') && !['/api/login', '/api/auth/wp', '/api/auth/status', '/api/cron/tick'].includes(pathname)
+      && !ASSOCIATE_ALLOWED.has(`${req.method} ${pathname}`) && await assoc.stillAssociate(sess.zwid)){
+    return sendJSON(res, 403, { error: 'That is for full members. Request full membership from your profile to unlock it.', associate: true });
+  }
+
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
@@ -2007,6 +2070,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const assocRoute = assoc.routes[`${req.method} ${pathname}`];
+  if (assocRoute) return handleAssoc(assocRoute, req, res);
 
   const drsRoute = drs.routes[`${req.method} ${pathname}`];
   if (drsRoute) return handleDrs(drsRoute, req, res);
