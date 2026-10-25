@@ -28,9 +28,11 @@ test('without a bot a rider\'s ID is saved as unverified, and staff can use it',
   assert.equal((await mePost('', { discordId: 'nope' }, t)).status, 400);
   const r = await mePost('', { discordId: D1 }, t);
   assert.deepEqual([r.body.saved, r.body.needsCode, r.body.verified], [true, false, false]);
-  assert.deepEqual(await mine(t), { linked: true, id: D1, verified: false, dm: true, byStaff: false, canVerify: false, pending: false });
+  const me = await mine(t);
+  assert.deepEqual([me.linked, me.id, me.verified, me.dm, me.byStaff, me.canVerify, me.pending, me.oauth], [true, D1, false, true, false, false, false, false]);
+  assert.deepEqual(me.prefs, { race: true, rides: true, club: true });
   const row = (await app.get('/api/comms', { token: admin })).body.links['1002'];
-  assert.deepEqual(row, { id: D1, self: true, verified: false, dm: true });
+  assert.deepEqual(row, { id: D1, self: true, verified: false, dm: true, off: [] });
   const out = await send({ audience: 'members', zwids: ['1002'], message: 'Hello' });
   assert.equal(out.body.sent, 1, 'with no bot there is nothing to verify with, so the ID is used');
 });

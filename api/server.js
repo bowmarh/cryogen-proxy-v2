@@ -1336,7 +1336,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1840,6 +1840,13 @@ async function healthChecks(){
     run('ladder', 'Zwift Club Ladder', async () => ladder.healthRow()),
     run('drs', 'DIRT Racing Series', async () => drs.healthRow()),
     run('assoc', 'Associate members', async () => assoc.healthRow()),
+    run('comms', 'Discord messages (Comms)', async () => {
+      const auth = wpAuth();   // member records only: this check never calls the rate-limited roster source
+      const [s, list, auto] = await Promise.all([comms.stats(), auth ? wpGet('/members', auth).catch(() => null) : null, comms.getSettings()]);
+      const total = list ? uniqueMembers(list).filter(m => m.status === 'active').length : null;
+      const bot = !!process.env.DISCORD_BOT_TOKEN, parts = [`${s.linked}${total === null ? '' : ` of ${total}`} members have a Discord ID saved (${s.verified} verified)`, bot ? 'direct messages on' : 'direct messages off (no bot token)', comms.oauthOn() ? 'sign in with Discord on' : 'sign in with Discord off', auto.autoNudge ? 'automatic reminders on' : 'automatic reminders off'];
+      return [bot || !auto.autoNudge ? 'ok' : 'warn', `${parts.join(' · ')}.`];
+    }),
     run('cron', 'Scheduled runs (GitHub workflow)', async () => {
       if (!process.env.CRON_SECRET) return ['fail', 'CRON_SECRET is not set, so reminders, closing and rollover only run when someone opens the TTT page.'];
       const [last] = await redis([['GET', CRON_LAST_KEY]]);
@@ -2055,7 +2062,7 @@ const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/ro
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
-  'GET /api/me/week', 'GET /api/me/discord', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+  'GET /api/me/week', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await assocRoute(req, body, parseRequestUrl(req).query);
@@ -2067,6 +2074,10 @@ async function handleAssoc(assocRoute, req, res){
 const comms = require('../lib/comms')({
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord,
   templates: req => commsTemplates.build(req),
+  nudges: now => commsTemplates.nudges(now),
+  siteUrl: SITE_URL,
+  signState: payload => signToken('discord-state', payload),
+  readState: token => { const sess = sessionFromRequest({ headers: { authorization: `Bearer ${token}` } }); return sess && sess.role === 'discord-state' ? sess : null; },
   namesFor: async zwids => {
     const out = {};
     try {
@@ -2095,6 +2106,12 @@ const commsTemplates = require('../lib/comms-templates')({
     return { open: true, title: data.week.title, zwids: (last || []).filter(k => /^\d+$/.test(k) && !have.has(k) && active.has(k)) };
   },
 });
+// Discord sends a rider back here after "Sign in with Discord"; we link the account and return them to the page.
+async function handleDiscordCallback(req, res){
+  const outcome = await comms.callback(parseRequestUrl(req).query).catch(() => 'failed');
+  res.writeHead(302, { Location: `/#discord=${outcome}`, 'Cache-Control': 'no-store' });
+  res.end();
+}
 async function handleComms(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2115,7 +2132,7 @@ const myweek = require('../lib/myweek')({
 });
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2187,6 +2204,8 @@ async function route(req, res){
 
   const myWeekRoute = myweek.routes[`${req.method} ${pathname}`];
   if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req));
+
+  if (pathname === '/api/discord/callback' && req.method === 'GET') return handleDiscordCallback(req, res);
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
