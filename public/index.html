@@ -876,14 +876,14 @@ const waNames=list=>list.filter(Boolean).map(waT).join(', ');
 function waLadderText(m){
   const route=m.route&&(m.route.name||m.route.km||m.route.minutes)?[m.route.name,m.route.km?m.route.km+' km':'',m.route.minutes?'about '+m.route.minutes+' min':''].filter(Boolean).join(' · '):'';
   const five=(m.lineupInfo||[]).map(r=>r.name+(r.cat?' ('+r.cat+')':''));
-  return [`🪜 *Ladder: CRYO-GEN v ${waT(m.opponent)}*`, m.at?`🗓️ ${ladderWhen(m.at)}`:'🗓️ Date and time to be agreed', route&&`🗺️ ${route}`,
+  return [`🪜 *Ladder: ${waT(m.teamName||'CRYO-GEN')} v ${waT(m.opponent)}*`, m.at?`🗓️ ${ladderWhen(m.at)}`:'🗓️ Date and time to be agreed', route&&`🗺️ ${route}`,
     five.length?`*Our five:* ${waNames(five)}`:(m.upcoming?'Looking for riders: can you ride? Tell the staff.':''), m.result?`${m.result.won?'🏆 Won':'Lost'} ${m.result.ourPoints}–${m.result.theirPoints}`:'',
     'The private event link is on the dashboard for the line-up.', waSite()].filter(Boolean).join('\n');
 }
 function waDrsText(st){
   const s=drs.season||{}, roles=st.roles||{}, names=Object.fromEntries((drs.squad||[]).map(r=>[r.zwid,r.name]));
   const sc=Object.keys(roles).filter(z=>roles[z]==='scorer'&&names[z]).map(z=>names[z]), sp=Object.keys(roles).filter(z=>roles[z]==='support'&&names[z]).map(z=>names[z]);
-  return [`🏜️ *DIRT Series: Stage ${st.n} · ${drs.types[st.type]||st.type}${st.route?' · '+waT(st.route):''}*`, `🗓️ ${drsWhen(st.startMs)}${s.slot?' · '+s.slot:''}`, st.km?`📏 ${st.km} km`:'',
+  return [`🏜️ *DIRT Series${drs.teams&&drs.teams.length>1?' ('+waT(drs.team.name)+')':''}: Stage ${st.n} · ${drs.types[st.type]||st.type}${st.route?' · '+waT(st.route):''}*`, `🗓️ ${drsWhen(st.startMs)}${s.slot?' · '+s.slot:''}`, st.km?`📏 ${st.km} km`:'',
     sc.length?`🎯 *Scoring ${s.scorers||4}:* ${waNames(sc)}`:'', sc.length?`🛡️ *Support:* ${sp.length?waNames(sp):'—'}`:'', st.tactics?`💡 ${st.tactics}`:'',
     st.result?`🏆 Team ${st.result.teamPoints} pts`:'', 'The private event link is on the dashboard for the squad.'].filter(Boolean).join('\n');
 }
@@ -1880,21 +1880,48 @@ function renderTtt(){
 }
 
 // ── Zwift Club Ladder (5v5 head-to-head, ZwiftRacing.app vELO ranks) ───────────────────────────
-let ladder=null, ladderErr='', ladderForm=null, ladderBuild=null, ladderResult=null, ladderOpen=new Set();
+let ladderTeam='', ladder=null, ladderErr='', ladderForm=null, ladderBuild=null, ladderResult=null, ladderOpen=new Set();
 async function loadLadder(){
   try{
-    const r=await fetch('/api/ladder',{headers:tttHeaders()});
+    const r=await fetch('/api/ladder'+(ladderTeam?'?team='+encodeURIComponent(ladderTeam):''),{headers:tttHeaders()});
     if(r.status===401){ ladder=null; ladderErr='signin'; }
+    else if(r.status===404&&ladderTeam){ ladderTeam=''; return loadLadder(); }   // the team was removed
     else if(!r.ok){ ladder=null; ladderErr='Could not load the ladder.'; }
-    else { ladder=await r.json(); ladderErr=''; }
+    else { ladder=await r.json(); ladderTeam=ladder.team.id; ladderErr=''; }
   }catch(e){ ladder=null; ladderErr='Could not reach the server.'; }
   renderLadder();
 }
 async function ladderPost(path,body){
-  let res,d; try{ res=await fetch('/api/ladder/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body||{})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  let res,d; try{ res=await fetch('/api/ladder/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify({ team:ladderTeam, ...(body||{}) })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
-  if(d.matches) ladder=d;
+  if(d.matches){ ladder=d; ladderTeam=d.team.id; }
   renderLadder(); return d;
+}
+
+// ── Teams inside the Ladder and the DIRT Series (several teams each; staff manage them all) ──────────────
+function teamBar(kind){
+  const v=kind==='ladder'?ladder:drs; if(!v||!v.teams) return '';
+  const staff=v.staff, cur=v.team.id, max=v.limits.teams;
+  if(v.teams.length<2&&!staff) return '';
+  const small=t=>kind==='ladder'?`${t.riders} rider${t.riders===1?'':'s'}${t.played?` · ${t.won}-${t.lost}`:''}`:`${t.riders} rider${t.riders===1?'':'s'}${t.division?' · '+t.division:''}${t.played?` · ${t.teamPoints} pts`:''}`;
+  const chip=t=>`<button onclick="teamPick('${kind}','${esc(t.id)}')" style="padding:6px 12px;font-size:12px;border-radius:99px;cursor:pointer;text-align:left;border:1px solid ${t.id===cur?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.14)'};background:${t.id===cur?'rgba(0,212,255,0.14)':'rgba(255,255,255,0.04)'};color:${t.id===cur?'#00D4FF':'#e5e7eb'}"><b>${esc(t.name)}</b> <span style="color:#6b7280;font-size:11px">${esc(small(t))}</span></button>`;
+  const ctl='padding:5px 10px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.14)';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px">${v.teams.map(chip).join('')}
+    ${staff?`${v.teams.length<max?`<button onclick="teamAdd('${kind}')" style="${ctl}">＋ Add a team</button>`:''}<button onclick="teamRename('${kind}')" style="${ctl}" title="Rename this team">✏️ Rename</button>${v.teams.length>1?`<button onclick="teamRemove('${kind}')" style="${ctl}" title="Remove this team">🗑 Remove</button>`:''}`:''}</div>`;
+}
+function teamPick(kind,id){ if(kind==='ladder'){ ladderTeam=id; ladderOpen.clear(); loadLadder(); } else { drsTeam=id; drsOpen.clear(); loadDrs(); } }
+async function teamAdd(kind){
+  const name=prompt(kind==='ladder'?'Name of the new ladder team:':'Name of the new DIRT team:'); if(!name||!name.trim()) return;
+  if(kind==='ladder') await ladderPost('team',{ id:undefined, name:name.trim() }); else await drsPost('team',{ id:undefined, name:name.trim() });
+}
+async function teamRename(kind){
+  const v=kind==='ladder'?ladder:drs, name=prompt('New name for '+v.team.name+':',v.team.name); if(!name||!name.trim()||name.trim()===v.team.name) return;
+  if(kind==='ladder') await ladderPost('team',{ id:v.team.id, name:name.trim() }); else await drsPost('team',{ id:v.team.id, name:name.trim() });
+}
+async function teamRemove(kind){
+  const v=kind==='ladder'?ladder:drs;
+  if(kind==='ladder'){ if(confirm('Remove '+v.team.name+' with its roster, matches and results? This cannot be undone.')) await ladderPost('team-remove',{ id:v.team.id, force:true }); }
+  else { const t=prompt('Remove '+v.team.name+' with its season, squad and calendar? The season is archived first.\n\nType REMOVE to confirm.'); if(t==='REMOVE') await drsPost('team-remove',{ id:v.team.id, confirm:'REMOVE' }); }
 }
 const ladderStaff=()=>!!(ladder&&ladder.staff);
 const ladderRank=c=>ladder.ranks.indexOf(c);
@@ -1921,7 +1948,7 @@ function ladderMatchCard(m,open){
   const result=m.result?`<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:${m.result.won?'rgba(16,185,129,0.1)':'rgba(248,113,113,0.1)'};font-size:14px;font-weight:800">${m.result.won?'🏆 Won':'Lost'} ${m.result.ourPoints}–${m.result.theirPoints}</div>`:'';
   return `<details class="card" ${open?'open':''} ontoggle="ladderToggle('${esc(m.id)}',this.open)" style="padding:0;margin-bottom:10px">
     <summary style="cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
-      <span style="font-size:15px;font-weight:800;flex:1;min-width:160px">CRYO-GEN v ${esc(m.opponent)}</span>
+      <span style="font-size:15px;font-weight:800;flex:1;min-width:160px">${esc(m.teamName||'CRYO-GEN')} v ${esc(m.opponent)}</span>
       ${m.at?`<span style="font-size:12px;color:#9ca3af">${esc(new Date(m.at).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}${m.upcoming?' · '+esc(ladderEta(m.at)):''}</span>`:''}
       <span style="font-size:11px;font-weight:700;color:${status[1]}">${status[0]}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
     <div style="padding:0 14px 14px">
@@ -1929,7 +1956,7 @@ function ladderMatchCard(m,open){
       ${route?`<div style="font-size:13px;margin-top:4px">🗺️ ${esc(route)}</div>`:''}
       <div style="margin-top:4px">${link}</div>
       ${m.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(m.notes)}</div>`:''}
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${result}
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${(m.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:4px 0">⚠️ At the same time as another team: ${m.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+' v '+esc(c.opponent)+')').join(', ')}</div>`:''}${result}
       ${m.upcoming?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you ride? <span style="font-weight:400;text-transform:none;color:#9ca3af">${m.counts.yes} yes · ${m.counts.maybe} maybe · ${m.counts.no} no</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:'<div style="font-size:12px;color:#6b7280">Only riders on the ladder roster answer. Ask the captains to add you.</div>'}`:''}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('ladder-'+m.id,waLadderText(m),'Share')}
@@ -2050,7 +2077,7 @@ function renderLadder(){
   if(!ladder){ return; }
   const staff=ladderStaff(), rec=ladder.record, up=ladder.matches.filter(m=>m.upcoming).sort((a,b)=>(a.at||9e15)-(b.at||9e15)), past=ladder.matches.filter(m=>!m.upcoming);
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder</h2>
+  el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
     ${staff?`<button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button>`:''}</div>
     ${ladderFormCard()}
@@ -2062,20 +2089,21 @@ function renderLadder(){
 async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
 
 // ── DIRT Racing Series (DRS): squad of eight, fixed calendar, best four score, vELO buffer ─────────
-let drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
+let drsTeam='', drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
 async function loadDrs(){
   try{
-    const r=await fetch('/api/drs',{headers:tttHeaders()});
+    const r=await fetch('/api/drs'+(drsTeam?'?team='+encodeURIComponent(drsTeam):''),{headers:tttHeaders()});
     if(r.status===401){ drs=null; drsErr='signin'; }
+    else if(r.status===404&&drsTeam){ drsTeam=''; return loadDrs(); }   // the team was removed
     else if(!r.ok){ drs=null; drsErr='Could not load the series.'; }
-    else { drs=await r.json(); drsErr=''; }
+    else { drs=await r.json(); drsTeam=drs.team.id; drsErr=''; }
   }catch(e){ drs=null; drsErr='Could not reach the server.'; }
   renderDrs();
 }
 async function drsPost(path,body){
-  let res,d; try{ res=await fetch('/api/drs/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body||{})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
+  let res,d; try{ res=await fetch('/api/drs/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify({ team:drsTeam, ...(body||{}) })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
-  if(d.staff!==undefined) drs=d;
+  if(d.staff!==undefined){ drs=d; drsTeam=d.team.id; }
   renderDrs(); return d;
 }
 const drsStaff=()=>!!(drs&&drs.staff);
@@ -2131,6 +2159,7 @@ function drsStageCard(st,open){
     <div style="padding:0 14px 14px"><div style="font-size:13px"><b>${esc(drsWhen(st.startMs))}</b> <span style="color:#6b7280">· ${esc(s.slot||'squad slot')}</span></div><div style="margin-top:4px">${link}</div>${lock}
       ${st.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(st.notes)}</div>`:''}
       <div style="font-size:12px;color:#d1d5db;margin-top:8px">💡 ${esc(st.tactics)} No PowerUps: pure racecraft and drafting.</div>
+      ${(st.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⚠️ At the same time as another team's stage: ${st.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+', stage '+esc(c.stage)+')').join(', ')}</div>`:''}
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
       ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>esc(names[z])).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>esc(names[z])).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
@@ -2219,10 +2248,10 @@ function renderDrs(){
   if(drsErr){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#FBBF24">${esc(drsErr)}</div>`; return; }
   if(!drs) return;
   const staff=drsStaff(), s=drs.season, rec=drs.record;
-  if(!s){ el.innerHTML=`<h2 style="font-size:20px;font-weight:900;margin-bottom:10px">🏜️ DIRT Racing Series</h2>${staff?drsSetupCard():'<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">The DIRT Racing Series has not been set up yet.</div>'}${drsHelpCard()}`; return; }
+  if(!s){ el.innerHTML=`${teamBar('drs')}<h2 style="font-size:20px;font-weight:900;margin-bottom:10px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>${staff?drsSetupCard():'<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">The DIRT Racing Series has not been set up yet.</div>'}${drsHelpCard()}`; return; }
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)', sec=btn.replace('rgba(0,212,255,0.12)','rgba(255,255,255,0.05)').replace('#00D4FF','#e5e7eb').replace('rgba(0,212,255,0.4)','rgba(255,255,255,0.18)');
   const up=drs.stages.filter(x=>x.upcoming), past=drs.stages.filter(x=>!x.upcoming);
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🏜️ DIRT Racing Series</h2>
+  el.innerHTML=`${teamBar('drs')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">${esc(s.name)} · ${esc(s.division)} · ${esc(s.slot||'squad slot')} ${esc(s.time)} (${esc(s.tz)})${rec.played?` · ${rec.played} stage${rec.played===1?'':'s'}, ${rec.teamPoints} team points`:''}</p></div>
     ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="drsSetup=!drsSetup;renderDrs()" style="${sec}">⚙️ Season</button><button onclick="drsStageOpen('new')" style="${btn}">+ Add a stage</button></div>`:''}</div>
     ${staff&&drsSetup?drsSetupCard():''}${drsStageForm_()}${drsSquadCard()}

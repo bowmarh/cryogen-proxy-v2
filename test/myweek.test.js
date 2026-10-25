@@ -85,7 +85,7 @@ test('a rider on the Ladder sees the match with what to answer, and the line-up 
   assert.equal(m.status, 200);
   const item = async () => (await mine(t)).body.items.find(i => i.kind === 'Ladder');
   assert.equal((await item()).state, 'todo');
-  assert.equal((await item()).title, 'vs Team Rocket');
+  assert.equal((await item()).title, 'CRYO-GEN v Team Rocket');
   assert.equal((await item()).timed, true);
   const id = m.body.matches[0].id;
   await app.post('/api/ladder/availability', { match: id, status: 'yes' }, { token: t });
