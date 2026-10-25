@@ -2047,6 +2047,7 @@ const assoc = require('../lib/assoc')({
   },
   inClub: async zwid => { try { return (await fetchRoster()).riders.some(r => String(r.riderId) === String(zwid)); } catch (e) { return false; } },
   setWpTier: zwid => wpSaveMember(zwid, { tier: 'full' }),
+  discordLinked: zwid => comms.linkedVerified(zwid),
 });
 // What a signed-in associate may call: the weekly TTT and ZRL sign-up, the other race sign-ups and the social-ride RSVPs, plus what the pages
 // read and their own upgrade journey. Everything else answers "for full members".
@@ -2054,7 +2055,7 @@ const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/ro
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
-  'GET /api/me/week', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+  'GET /api/me/week', 'GET /api/me/discord', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await assocRoute(req, body, parseRequestUrl(req).query);
@@ -2064,7 +2065,8 @@ async function handleAssoc(assocRoute, req, res){
 
 // Staff messages to Discord (lib/comms.js): everyone in the club channel, or chosen members by DM (with a bot) or @mention.
 const comms = require('../lib/comms')({
-  redis, HttpError, text, requireRole, roleFromRequest, discord,
+  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord,
+  templates: req => commsTemplates.build(req),
   namesFor: async zwids => {
     const out = {};
     try {
@@ -2075,10 +2077,28 @@ const comms = require('../lib/comms')({
     return Object.fromEntries(zwids.map(z => [z, out[z] || z]));
   },
 });
+// The ready-made reminders in Comms (lib/comms-templates.js), worked out from the live data.
+const activeMembers = async () => {
+  const { riders, members } = await fetchRoster();
+  const db = members && uniqueMembers(members);
+  return db ? db.filter(m => m.status === 'active').map(m => String(m.zwift_id)) : riders.map(r => String(r.riderId));
+};
+const commsTemplates = require('../lib/comms-templates')({
+  zrl, ladder, drs, activeMembers, siteUrl: SITE_URL,
+  assocList: req => assoc.routes['GET /api/assoc/list'](req),
+  reach: async () => { const [ids, s] = await Promise.all([activeMembers(), comms.stats()]); return { members: ids.length, ...s }; },
+  tttCandidates: async () => {
+    const data = await loadTtt();
+    if (!data.week || !data.week.open) return { open: false };
+    const [last] = await redis([['HKEYS', TTT_KEYS.last]]);
+    const have = new Set(data.signups.map(s => s.zwid).filter(Boolean)), active = new Set(await activeMembers());
+    return { open: true, title: data.week.title, zwids: (last || []).filter(k => /^\d+$/.test(k) && !have.has(k) && active.has(k)) };
+  },
+});
 async function handleComms(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
-  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, { audience: body.audience, count: Array.isArray(body.zwids) ? body.zwids.length : undefined }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  if (req.method === 'POST' && !parseRequestUrl(req).pathname.startsWith('/api/me/')) await zrl.logChange(req, parseRequestUrl(req).pathname, { audience: body.audience, count: Array.isArray(body.zwids) ? body.zwids.length : undefined }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result);
 }
 
