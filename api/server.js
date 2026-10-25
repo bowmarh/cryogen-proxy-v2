@@ -1535,9 +1535,8 @@ const MEMBER_FIELDS = {
 };
 const MEMBER_VIEW_KEYS = ['zwift_id', 'name', 'status', 'tier', 'offboard_discord', 'offboard_fb', 'offboard_zp'];
 
-async function handleMemberUpdate(req, res, zwiftId){
-  requireRole(req, ['admin', 'mod']);
-  const body = await readJSONBody(req);
+// The fields staff may change on a member record, checked against what each may hold.
+function memberChanges(body){
   const changes = {};
   if (body.tier === 'half') body.tier = 'associate';
   for (const [k, allowed] of Object.entries(MEMBER_FIELDS)){
@@ -1546,6 +1545,63 @@ async function handleMemberUpdate(req, res, zwiftId){
     changes[k] = String(body[k]);
   }
   if (!Object.keys(changes).length) throw new HttpError(400, 'nothing to change');
+  return changes;
+}
+
+// Staff change the same fields on many members at once (tier, status, off-boarding ticks). The member list is read once, the records are
+// saved a few at a time, and each is checked afterwards from WordPress's own reply or a re-read, as for a single save. Anything that
+// could not be saved is listed by Zwift ID with the reason; running out of time reports the rest as not attempted.
+const BULK_MEMBERS_MAX = 100;
+async function handleMemberBulk(req, res){
+  requireRole(req, ['admin', 'mod']);
+  const body = await readJSONBody(req);
+  const zwids = [...new Set((Array.isArray(body.zwids) ? body.zwids : []).map(String))];
+  if (!zwids.length) throw new HttpError(400, 'Pick at least one member.');
+  if (zwids.length > BULK_MEMBERS_MAX) throw new HttpError(400, `Change at most ${BULK_MEMBERS_MAX} members at a time.`);
+  if (!zwids.every(z => /^\d+$/.test(z))) throw new HttpError(400, 'Zwift IDs are numbers only.');
+  const changes = memberChanges(body.changes && typeof body.changes === 'object' ? { ...body.changes } : {});
+  const auth = wpAuth();
+  if (!auth) throw new HttpError(503, 'WordPress member records are not configured on the server.');
+  const started = Date.now();
+  const byId = new Map(uniqueMembers(await wpGet('/members', auth)).map(m => [String(m.zwift_id), m]));
+  const results = [], echoed = new Map();
+  const todo = zwids.filter(z => { if (byId.has(z)) return true; results.push({ zwid: z, ok: false, error: 'no member record in WordPress' }); return false; });
+  for (let i = 0; i < todo.length; i += 5){
+    if (Date.now() - started > 7000){ for (const z of todo.slice(i)) results.push({ zwid: z, ok: false, error: 'not attempted (out of time): select these again and re-run' }); break; }
+    await Promise.all(todo.slice(i, i + 5).map(async z => {
+      try {
+        const rec = byId.get(z);
+        const r = await fetch(`${WP_API}/members/${encodeURIComponent(rec.id ?? z)}`, {
+          method: 'PATCH',
+          headers: { 'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(auth).toString('base64')}` },
+          body: JSON.stringify(changes),
+        });
+        const text = await r.text();
+        if (!r.ok) throw new Error(`WordPress refused the change (${r.status})`);
+        try { echoed.set(z, JSON.parse(text) || {}); } catch (e) { /* not JSON */ }
+        results.push({ zwid: z, ok: true });
+      } catch (e) { results.push({ zwid: z, ok: false, error: e.message }); }
+    }));
+  }
+  rosterCache = null;
+  if (results.some(r => r.ok)){
+    const after = new Map(uniqueMembers(await wpGet('/members', auth)).map(m => [String(m.zwift_id), m]));
+    for (const r of results) {
+      if (!r.ok) continue;
+      const missed = Object.keys(changes).filter(k => String(after.get(r.zwid)?.[k]) !== changes[k] && String((echoed.get(r.zwid) || {})[k]) !== changes[k]);
+      if (missed.length){ r.ok = false; r.error = `WordPress did not keep the change (${missed.join(', ')})`; }
+    }
+  }
+  const order = new Map(zwids.map((z, i) => [z, i]));
+  results.sort((a, b) => order.get(a.zwid) - order.get(b.zwid));
+  await zrl.logChange(req, '/api/members/bulk', { changes, count: zwids.length, saved: results.filter(r => r.ok).length }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, { changes, results, saved: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length });
+}
+
+async function handleMemberUpdate(req, res, zwiftId){
+  requireRole(req, ['admin', 'mod']);
+  const body = await readJSONBody(req);
+  const changes = memberChanges(body);
   const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
     ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
   if (!auth) throw new HttpError(503, 'WordPress member records are not configured on the server.');
@@ -2075,6 +2131,7 @@ async function route(req, res){
     return sendJSON(res, 200, { checked: new Date().toISOString(), checks: await healthChecks() });
   }
   const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
+  if (pathname === '/api/members/bulk' && req.method === 'POST') return handleMemberBulk(req, res);
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
 
