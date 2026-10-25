@@ -25,7 +25,7 @@ test('a Discord ID is saved, cleared and checked', async () => {
   assert.equal((await post('link', { zwid: '1002', discordId: 'not-an-id' })).status, 400);
   assert.equal((await post('link', { zwid: 'abc', discordId: D1 })).status, 400);
   assert.equal((await post('link', { zwid: '1002', discordId: D1 })).status, 200);
-  assert.equal((await app.get('/api/comms', { token: admin })).body.links['1002'], D1);
+  assert.deepEqual((await app.get('/api/comms', { token: admin })).body.links['1002'], { id: D1, self: false, verified: true, dm: true });
   assert.equal((await post('link', { zwid: '1002', discordId: '' })).status, 200);
   assert.deepEqual((await app.get('/api/comms', { token: admin })).body.links, {});
 });

@@ -740,7 +740,9 @@ function renderUpgrade(){
   <div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><b>${d.done} of ${d.total} done</b><span style="color:#9ca3af">${pct}%</span></div><div style="height:8px;border-radius:99px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:#00D4FF"></div></div>
   <div style="margin-top:10px">${d.items.map(row).join('')}</div>
   <div style="margin-top:14px">${action}</div>${assocMsg?`<div style="margin-top:10px;font-size:13px;color:#f87171">${esc(assocMsg)}</div>`:''}</div>
-  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Sign up for the TTT →</button><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('rides',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>/Social Rides/.test(b.textContent)))">Find a ride →</button></div>`;
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Sign up for the TTT →</button><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('rides',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>/Social Rides/.test(b.textContent)))">Find a ride →</button></div>
+  <div class="discord-slot" style="margin-top:14px"></div>`;
+  fillDiscordSlots();
 }
 async function assocDiscord(joined){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/discord',{joined}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
 async function assocRequest(){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/request',{}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
@@ -846,8 +848,47 @@ function renderWeek(){
 }
 
 
+
+// ── My Discord (riders): save your Discord ID, confirm it with a code, switch club messages on or off ──
+let myDiscord=null, myDiscordMsg='';
+async function dcCall(method,path,body){
+  const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+async function fillDiscordSlots(){
+  if(!document.querySelector('.discord-slot')) return;
+  if(!myDiscord){ try{ myDiscord=await dcCall('GET','/api/me/discord'); }catch(e){ return; } }
+  renderDiscordSlots();
+}
+function renderDiscordSlots(){
+  const d=myDiscord; if(!d) return;
+  const inp='background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:8px 12px;color:white;font-size:13px';
+  const btn='padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(88,101,242,0.18);color:#a5b4fc;border:1px solid rgba(88,101,242,0.5)';
+  const ghost='padding:6px 12px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)';
+  let body;
+  if(!d.linked) body=`<div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Add your Discord ID so the club can message you directly: reminders, line-ups and results. ${d.canVerify?'We send a code to your Discord to confirm it is you. ':''}You can switch messages off whenever you like.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="dc-id" inputmode="numeric" placeholder="Your Discord user ID (17 to 19 digits)" style="${inp};flex:1;min-width:220px"/><button onclick="dcSave()" style="${btn}">Save</button></div>
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#6b7280">Where do I find my Discord ID?</summary><ol style="font-size:12px;color:#9ca3af;margin:6px 0 0 18px;padding:0"><li>In Discord open <b>User Settings → Advanced</b> and turn on <b>Developer Mode</b>.</li><li>Right-click your own name anywhere and choose <b>Copy User ID</b>.</li><li>Paste it here. It is only digits, not your username.</li></ol></details>`;
+  else if(!d.verified&&d.canVerify) body=`<div style="font-size:13px;color:#FBBF24;margin-bottom:8px">⏳ We sent a 6-digit code to your Discord (ID ${esc(d.id)}). Enter it to finish.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="dc-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="${inp};width:150px"/><button onclick="dcVerify()" style="${btn}">Confirm</button><button onclick="dcResend()" style="${ghost}">Send a new code</button><button onclick="dcRemove()" style="${ghost}">Wrong ID? Remove</button></div>
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">No message? Check you are in the CRYO-GEN Discord server and that “Allow direct messages from server members” is on.</div>`;
+  else body=`<div style="font-size:13px;color:#10B981;margin-bottom:8px">${d.verified?'✅ Your Discord is linked.':'✅ Saved.'} <span style="color:#6b7280">(ID ${esc(d.id)})</span></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" ${d.dm?'checked':''} onchange="dcPrefs(this.checked)"/> Let the club message me on Discord</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${d.verified&&d.canVerify?`<button onclick="dcTest()" style="${btn}">Send me a test message</button>`:''}<button onclick="dcRemove()" style="${ghost}">Remove my Discord ID</button></div>`;
+  document.querySelectorAll('.discord-slot').forEach(el=>{ el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">💬 Discord messages</div>${body}${myDiscordMsg?`<div style="font-size:12px;margin-top:8px;color:${myDiscordMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(myDiscordMsg)}</div>`:''}</div>`; });
+}
+async function dcAct(fn,okMsg){ myDiscordMsg=''; try{ await fn(); if(okMsg) myDiscordMsg='✓ '+okMsg; }catch(e){ myDiscordMsg=e.message; } try{ myDiscord=await dcCall('GET','/api/me/discord'); }catch(e){ /* keep what we have */ } renderDiscordSlots(); }
+function dcSave(){ const v=document.getElementById('dc-id').value.trim(); return dcAct(async()=>{ const r=await dcCall('POST','/api/me/discord',{ discordId:v }); myDiscordMsg=r.needsCode?'✓ Code sent. Check your Discord messages.':''; },''); }
+function dcResend(){ return dcAct(async()=>{ await dcCall('POST','/api/me/discord',{ discordId:myDiscord.id }); },'A new code is on its way.'); }
+function dcVerify(){ const c=document.getElementById('dc-code').value.trim(); return dcAct(()=>dcCall('POST','/api/me/discord/verify',{ code:c }),'Linked. Thank you!'); }
+function dcPrefs(on){ return dcAct(()=>dcCall('POST','/api/me/discord/prefs',{ dm:on }),on?'The club can message you.':'The club will not message you on Discord.'); }
+function dcTest(){ return dcAct(()=>dcCall('POST','/api/me/discord/test',{}),'Sent. Check your Discord.'); }
+function dcRemove(){ if(!confirm('Remove your Discord ID?')) return; return dcAct(()=>dcCall('POST','/api/me/discord/remove',{}),'Removed.'); }
+
 // ── Comms (staff): a message to Discord for everyone, or for chosen members ───────────────
-let commsData=null, commsErr='', commsAudience='all', commsSel=new Set(), commsQ='', commsMsg='', commsPing=false, commsResult=null, commsBusy=false;
+let commsData=null, commsTpl=[], commsVars={}, commsTemplate='', commsErr='', commsAudience='all', commsSel=new Set(), commsQ='', commsMsg='', commsPing=false, commsResult=null, commsBusy=false;
 async function commsCall(method,path,body){
   const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
   const d=await r.json().catch(()=>({}));
@@ -858,6 +899,7 @@ async function loadComms(){
   const el=document.getElementById('comms-content'); if(!el) return;
   try{ commsData=await commsCall('GET','/api/comms'); commsErr=''; }catch(e){ commsErr=e.message; }
   renderComms();
+  try{ commsTpl=(await commsCall('GET','/api/comms/templates')).templates; renderComms(); }catch(e){ /* the page works without the templates */ }
 }
 function commsFromMembers(){
   commsAudience='members'; commsSel=new Set(mSel); commsResult=null;
@@ -872,11 +914,12 @@ function renderComms(){
   const people=commsPeople(), q=commsQ.trim().toLowerCase();
   const inp='background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px';
   const aud=(id,label,sub)=>`<label style="flex:1;min-width:180px;cursor:pointer;padding:10px 14px;border-radius:10px;border:1px solid ${commsAudience===id?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.14)'};background:${commsAudience===id?'rgba(0,212,255,0.1)':'rgba(255,255,255,0.03)'}"><input type="radio" name="comms-aud" ${commsAudience===id?'checked':''} onchange="commsSetAudience('${id}')" style="margin-right:8px"/><b>${label}</b><div style="font-size:11px;color:#9ca3af;margin:2px 0 0 22px">${sub}</div></label>`;
-  const row=m=>{ const linked=d.links[m.id]; return `<div data-s="${esc((m.name+' '+m.id).toLowerCase())}" style="display:${!q||(m.name+' '+m.id).toLowerCase().includes(q)?'flex':'none'};gap:8px;align-items:center;padding:6px 8px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><input type="checkbox" ${commsSel.has(m.id)?'checked':''} onchange="commsToggle('${esc(m.id)}',this.checked)"/><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>${linked?'<span style="font-size:11px;color:#10B981">✅ Discord ID saved</span>':'<span style="font-size:11px;color:#FBBF24">no Discord ID</span>'}<button data-id="${esc(m.id)}" onclick="commsLink(this.dataset.id)" style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.14);border-radius:6px">${linked?'Change':'Add ID'}</button></div>`; };
+  const row=m=>{ const linked=d.links[m.id], st=!linked?'':linked.dm===false?'<span style="font-size:11px;color:#f87171">opted out</span>':linked.verified?'<span style="font-size:11px;color:#10B981">✅ Discord linked</span>':'<span style="font-size:11px;color:#FBBF24">⏳ own ID, not verified</span>'; return `<div data-s="${esc((m.name+' '+m.id).toLowerCase())}" style="display:${!q||(m.name+' '+m.id).toLowerCase().includes(q)?'flex':'none'};gap:8px;align-items:center;padding:6px 8px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><input type="checkbox" ${commsSel.has(m.id)?'checked':''} onchange="commsToggle('${esc(m.id)}',this.checked)"/><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>${linked?st:'<span style="font-size:11px;color:#FBBF24">no Discord ID</span>'}<button data-id="${esc(m.id)}" onclick="commsLink(this.dataset.id)" style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.14);border-radius:6px">${linked?'Change':'Add ID'}</button></div>`; };
   const logRows=d.log.length?d.log.map(l=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 8px;font-size:12px;white-space:nowrap;color:#9ca3af">${esc(new Date(l.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</td><td style="padding:6px 8px;font-size:12px">${l.audience==='all'?'Everyone'+(l.ping?' (@everyone)':''):esc(l.count+' member'+(l.count===1?'':'s'))}${l.audience==='members'?` <span style="color:#6b7280">${l.via==='dm'?'DM':'mention'}</span>`:''}</td><td style="padding:6px 8px;font-size:12px;color:#d1d5db">${esc(l.text)}</td><td style="padding:6px 8px;font-size:12px;color:${l.failed?'#FBBF24':'#10B981'};white-space:nowrap">${l.failed?l.ok+' sent, '+l.failed+' not':'sent'}</td></tr>`).join(''):`<tr><td colspan="4" style="padding:10px;font-size:13px;color:#6b7280">Nothing sent yet.</td></tr>`;
   const result=commsResult?`<div class="card" style="padding:12px 14px;margin-top:12px;border-color:${commsResult.failed?'rgba(251,191,36,0.4)':'rgba(16,185,129,0.4)'}"><div style="font-weight:700;color:${commsResult.failed?'#FBBF24':'#10B981'}">${commsResult.audience==='all'?'✅ Sent to the club channel.':`${commsResult.sent} sent${commsResult.failed?`, ${commsResult.failed} not`:''} (${commsResult.via==='dm'?'direct messages':'mentioned in the club channel'})`}</div>${(commsResult.results||[]).filter(r=>!r.ok).map(r=>`<div style="font-size:12px;color:#9ca3af;margin-top:3px">• ${esc(r.name)}: ${esc(r.error||'not sent')}</div>`).join('')}</div>`:'';
   el.innerHTML=`<div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">💬 Comms</h2><p style="font-size:13px;color:#6b7280">Send a message to Discord: everyone in the club channel, or chosen members.</p></div>
   <div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:12px;color:#9ca3af">${d.channel?'✅ Club channel is set.':'⚠️ No club Discord channel is set (DISCORD_WEBHOOK_PUBLIC), so nothing can be posted there.'} ${d.dm?'✅ Direct messages are on: members get a private DM.':'ℹ️ Direct messages are off. Members are <b>@mentioned in the club channel</b> instead, so everyone in the channel sees the message. To send private DMs, add <b>DISCORD_BOT_TOKEN</b> in Vercel.'}</div>
+  ${commsTemplatesHtml(d)}
   <div class="card" style="padding:16px"><label class="lbl">Who gets it</label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${aud('all','Everyone','One post in the club channel')}${aud('members','Chosen members',d.dm?'A private DM each':'An @mention in the channel')}</div>
     ${commsAudience==='members'?`<input id="comms-q" placeholder="Search members…" value="${esc(commsQ)}" oninput="commsSearch(this.value)" style="${inp};width:100%;margin-bottom:6px"/>
@@ -892,10 +935,27 @@ function renderComms(){
   const lst=document.getElementById('comms-list'); if(lst) lst.scrollTop=listScroll;
   commsRefreshBits();
 }
+
+function commsTemplatesHtml(d){
+  const reach=d.stats?`<span style="color:#6b7280;font-size:12px;font-weight:400"> · ${d.stats.linked} member${d.stats.linked===1?' has':'s have'} a Discord ID saved (${d.stats.verified} verified)</span>`:'';
+  if(!commsTpl.length) return `<div style="font-size:12px;color:#6b7280;margin-bottom:12px">Ready-made reminders${reach}</div>`;
+  const card=t=>{ const n=t.audience==='all'?null:t.recipients.length; const none=n===0;
+    return `<button onclick="commsUseTemplate('${esc(t.id)}')" ${none?'disabled':''} style="text-align:left;padding:10px 12px;border-radius:10px;cursor:${none?'default':'pointer'};opacity:${none?.55:1};border:1px solid ${commsTemplate===t.id?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.14)'};background:${commsTemplate===t.id?'rgba(0,212,255,0.1)':'rgba(255,255,255,0.03)'};color:#e5e7eb"><div style="font-weight:700;font-size:13px">${esc(t.title)}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(t.hint)}</div><div style="font-size:12px;margin-top:4px;color:${none?'#6b7280':'#00D4FF'}">${n===null?'To the club channel':none?'Nobody to remind right now':n+' member'+(n===1?'':'s')}</div></button>`; };
+  return `<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Ready-made reminders${reach}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">${commsTpl.map(card).join('')}</div></div>`;
+}
+function commsUseTemplate(id){
+  const t=commsTpl.find(x=>x.id===id); if(!t) return;
+  commsTemplate=id; commsResult=null; commsMsg=t.text; waStore['comms-msg']=t.text; commsPing=false;
+  if(t.audience==='all'){ commsAudience='all'; commsSel=new Set(); commsVars={}; }
+  else{ commsAudience='members'; commsSel=new Set(t.recipients.map(r=>r.zwid)); commsVars=Object.fromEntries(t.recipients.filter(r=>r.vars).map(r=>[r.zwid,r.vars])); commsNames=Object.fromEntries(t.recipients.map(r=>[r.zwid,r.name])); }
+  renderComms();
+  if(t.note) waToast(t.note);
+}
+let commsNames={};
 function commsRefreshBits(){
   const cnt=document.getElementById('comms-count'); if(cnt&&commsData) cnt.textContent=commsMsg.length+' / '+commsData.limits.text;
   const sel=document.getElementById('comms-sel');
-  if(sel){ const names=new Map(commsPeople().map(m=>[m.id,m.name])); const list=[...commsSel]; sel.innerHTML=list.length?`<b style="color:#e5e7eb">${list.length} selected</b>${list.length>commsData.limits.members?` <span style="color:#f87171">(at most ${commsData.limits.members} at a time)</span>`:''}: ${list.slice(0,12).map(id=>esc(names.get(id)||id)).join(', ')}${list.length>12?' and '+(list.length-12)+' more':''} <a href="#" onclick="commsSel.clear();renderComms();return false" style="color:#00D4FF;margin-left:6px">clear</a>`:'Nobody picked yet.'; }
+  if(sel){ const names=new Map([...Object.entries(commsNames),...commsPeople().map(m=>[m.id,m.name])]); const list=[...commsSel]; sel.innerHTML=list.length?`<b style="color:#e5e7eb">${list.length} selected</b>${list.length>commsData.limits.members?` <span style="color:#f87171">(at most ${commsData.limits.members} at a time)</span>`:''}: ${list.slice(0,12).map(id=>esc(names.get(id)||id)).join(', ')}${list.length>12?' and '+(list.length-12)+' more':''} <a href="#" onclick="commsSel.clear();renderComms();return false" style="color:#00D4FF;margin-left:6px">clear</a>${(()=>{ const miss=list.filter(id=>!(commsData.links||{})[id]).length; return miss?`<div style="color:#FBBF24;margin-top:4px">${miss} of them ${miss===1?'has':'have'} no Discord ID yet, so ${miss===1?'will':'will'} be skipped.</div>`:''; })()}`:'Nobody picked yet.'; }
   const b=document.getElementById('comms-send'); if(b) b.textContent=commsBusy?'Sending…':(commsAudience==='all'?'Send to everyone':'Send to '+(commsSel.size||'…')+' member'+(commsSel.size===1?'':'s'));
 }
 function commsSetAudience(a){ commsAudience=a; commsResult=null; renderComms(); }
@@ -903,9 +963,9 @@ function commsToggle(id,on){ if(on) commsSel.add(id); else commsSel.delete(id); 
 function commsSearch(v){ commsQ=v; const q=v.trim().toLowerCase(); document.querySelectorAll('#comms-list [data-s]').forEach(r=>{ r.style.display=!q||r.dataset.s.includes(q)?'flex':'none'; }); }
 function commsInput(v){ commsMsg=v; waStore['comms-msg']=v; commsRefreshBits(); }
 async function commsLink(id){
-  const cur=(commsData.links||{})[id]||'';
+  const cur=((commsData.links||{})[id]||{}).id||'';
   const v=prompt('Discord user ID for this member (17 to 19 digits). In Discord turn on Developer Mode, right-click the member, Copy User ID.\n\nLeave empty to remove it.',cur); if(v===null) return;
-  try{ const r=await commsCall('POST','/api/comms/link',{ zwid:id, discordId:v.trim() }); if(r.discordId) commsData.links[id]=r.discordId; else delete commsData.links[id]; }catch(e){ alert(e.message); }
+  try{ const r=await commsCall('POST','/api/comms/link',{ zwid:id, discordId:v.trim() }); if(r.discordId) commsData.links[id]={ id:r.discordId, self:false, verified:true, dm:true }; else delete commsData.links[id]; }catch(e){ alert(e.message); }
   renderComms();
 }
 async function commsSend(){
@@ -916,12 +976,12 @@ async function commsSend(){
   if(!confirm('Send this to '+where+'?\n\n'+message.slice(0,300))) return;
   commsBusy=true; renderComms();
   try{
-    commsResult=await commsCall('POST','/api/comms/send',{ audience:all?'all':'members', zwids:ids, message, pingEveryone:all&&commsPing });
-    if(!commsResult.failed){ commsMsg=''; waStore['comms-msg']=''; commsPing=false; if(!all) commsSel.clear(); }
+    commsResult=await commsCall('POST','/api/comms/send',{ audience:all?'all':'members', zwids:ids, message, pingEveryone:all&&commsPing, vars:commsVars, template:commsTemplate });
+    if(!commsResult.failed){ commsMsg=''; waStore['comms-msg']=''; commsPing=false; commsTemplate=''; commsVars={}; if(!all) commsSel.clear(); }
     else commsSel=new Set((commsResult.results||[]).filter(r=>!r.ok).map(r=>r.zwid));   // the ones that did not get it stay picked
   }catch(e){ commsBusy=false; alert('Not sent: '+e.message); renderComms(); return; }
   commsBusy=false;
-  try{ commsData=await commsCall('GET','/api/comms'); }catch(e){ /* the log refreshes next time */ }
+  try{ commsData=await commsCall('GET','/api/comms'); commsTpl=(await commsCall('GET','/api/comms/templates')).templates; }catch(e){ /* the log refreshes next time */ }
   renderComms();
 }
 
@@ -2507,8 +2567,10 @@ function renderProfile(){
         </div>`).join('')}
       </div>
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
-    </div>`:''}`
+    </div>`:''}
+    <div class="discord-slot" style="margin-top:16px"></div>`
   ;
+  fillDiscordSlots();
   loadMySeason();
   loadMyTtt();
   loadMyZrl();
