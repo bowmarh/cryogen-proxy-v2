@@ -24,7 +24,7 @@ test('a valid link signs the rider in as themselves, with the roster name', asyn
   const session = /#sso=(.+)$/.exec(r.location)[1];
   const me = await app.get('/api/me', { token: session });
   assert.equal(me.status, 200);
-  assert.deepEqual(me.body, { zwid: '1002', name: 'Rider 2', tier: 'full', status: 'active' }); // last duplicate record wins
+  assert.deepEqual(me.body, { zwid: '1002', name: 'Rider 2', tier: 'full', status: 'active', associate: false }); // last duplicate record wins
 });
 
 test('each link works once', async () => {

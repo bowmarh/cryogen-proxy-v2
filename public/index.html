@@ -160,6 +160,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" onclick="showTab('drs',this)">🏜️ DIRT Series</button>
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
+      <button class="navbtn" id="nav-upgrade" style="display:none" onclick="showTab('upgrade',this)">⬆️ Become a member</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
@@ -281,6 +282,7 @@ table{width:100%;border-collapse:collapse}
 
   <div id="page-members" class="page">
     <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
+   <div id="assoc-panel"></div>
    <div id="offboarding-panel"></div>   
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
@@ -298,6 +300,10 @@ table{width:100%;border-collapse:collapse}
         <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
       </div>
     </div></div>
+  </div>
+
+  <div id="page-upgrade" class="page">
+    <div id="upgrade-content"></div>
   </div>
 
   <div id="page-profile" class="page">
@@ -652,25 +658,100 @@ async function ssoLogin(token){
     me=await res.json();
     if(!res.ok) throw new Error(me.error||('HTTP '+res.status));
   }catch(e){ sessionStorage.removeItem('token'); showSsoError('Sign-in failed: '+e.message); return; }
-  const rider=riders.find(x=>String(x.id)===me.zwid);
+  let rider=riders.find(x=>String(x.id)===me.zwid);
+  if(me.associate){   // signed in with a cryogen.team account but not a full member yet: a limited view and a route to full membership
+    rider=rider||{id:me.zwid,name:me.name||'New rider',cat:'',zraCat:'',active:true,associate:true};
+    sessionStorage.setItem('assoc','1');
+  } else sessionStorage.removeItem('assoc');
   if(!rider){ sessionStorage.removeItem('token'); showSsoError('Your Zwift ID ('+me.zwid+') is not on the club roster yet. Ask a moderator.'); return; }
   sessionStorage.setItem('memberRider',JSON.stringify(rider));
   sessionStorage.setItem('memberName',me.name||'');   // RSVPs are stored under this name, which can differ from the roster's
   sessionStorage.setItem('sso','1');
   memberRider=rider;
   launchApp('member');
+  if(me.associate) showTab('upgrade',document.getElementById('nav-upgrade'));
+}
+
+
+// ── Associate members: the upgrade page and the staff pipeline ──────────────────────────
+let assocData=null, assocMsg='';
+async function assocCall(method,path,body){
+  const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+async function loadUpgrade(){
+  const el=document.getElementById('upgrade-content'); if(!el) return;
+  try{ assocData=await assocCall('GET','/api/assoc/status'); }catch(e){ el.innerHTML=`<div class="card" style="padding:20px;color:#f87171">${esc(e.message)}</div>`; return; }
+  renderUpgrade();
+}
+function renderUpgrade(){
+  const el=document.getElementById('upgrade-content'); const d=assocData; if(!el||!d) return;
+  if(!d.associate){ el.innerHTML='<div class="card" style="padding:24px"><h2 style="font-size:20px;font-weight:900">You are a full member 🎉</h2><p style="color:#9ca3af;margin-top:8px">Sign in again to see everything.</p><button class="btn-cyan" style="width:auto;padding:8px 16px;margin-top:12px" onclick="location.reload()">Reload</button></div>'; return; }
+  const pct=Math.round(d.done/d.total*100), rq=d.request;
+  const row=i=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="flex:none;font-size:18px">${i.done?'✅':'⬜'}</div><div style="flex:1"><div style="font-weight:700;color:#e5e7eb">${esc(i.label)}</div><div style="font-size:12px;color:#9ca3af">${esc(i.detail)}</div></div>${i.self?`<button onclick="assocDiscord(${!i.done})" style="padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">${i.done?'Undo':'I have joined'}</button>`:''}</div>`;
+  let action;
+  if(rq&&rq.status==='pending') action=`<div style="padding:12px;border-radius:8px;background:rgba(251,191,36,0.1);color:#FBBF24;font-size:13px">⏳ Your request is with the club. A moderator will review it and be in touch.</div>`;
+  else if(d.complete) action=`${rq&&rq.status==='declined'?`<div style="padding:12px;border-radius:8px;background:rgba(239,68,68,0.1);color:#f87171;font-size:13px;margin-bottom:10px">Last time: ${esc(rq.note||'not this time')}</div>`:''}<button class="btn-cyan" style="width:auto;padding:10px 18px" onclick="assocRequest()">Request full membership</button>`;
+  else action=`<div style="font-size:13px;color:#9ca3af">Finish the checklist and you can ask to become a full member.${rq&&rq.status==='declined'?` Last time: ${esc(rq.note||'not this time')}.`:''}</div>`;
+  el.innerHTML=`<div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Become a full member</h2><p style="font-size:13px;color:#6b7280">Welcome, ${esc(d.name||'rider')}. You can sign up for the weekly TTT and ZRL, register for races and join social rides. Full members also get ride cover, the Ladder, the DIRT Series, season stats and their profile.</p></div>
+  <div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><b>${d.done} of ${d.total} done</b><span style="color:#9ca3af">${pct}%</span></div><div style="height:8px;border-radius:99px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:#00D4FF"></div></div>
+  <div style="margin-top:10px">${d.items.map(row).join('')}</div>
+  <div style="margin-top:14px">${action}</div>${assocMsg?`<div style="margin-top:10px;font-size:13px;color:#f87171">${esc(assocMsg)}</div>`:''}</div>
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Sign up for the TTT →</button><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('rides',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>/Social Rides/.test(b.textContent)))">Find a ride →</button></div>`;
+}
+async function assocDiscord(joined){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/discord',{joined}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
+async function assocRequest(){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/request',{}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
+
+let assocList=null, assocErr='';
+async function loadAssocPanel(){
+  const el=document.getElementById('assoc-panel'); if(!el) return;
+  if(role!=='admin'&&role!=='mod'){ el.innerHTML=''; return; }
+  try{ assocList=await assocCall('GET','/api/assoc/list'); assocErr=''; }catch(e){ assocErr=e.message; }
+  renderAssocPanel();
+}
+function renderAssocPanel(){
+  const el=document.getElementById('assoc-panel'); if(!el) return;
+  if(assocErr){ el.innerHTML=`<div class="card" style="padding:12px;margin-bottom:16px;color:#f87171;font-size:13px">Associates: ${esc(assocErr)}</div>`; return; }
+  const rows=(assocList&&assocList.rows)||[];
+  const pend=rows.filter(r=>r.request&&r.request.status==='pending').length;
+  const line=r=>{
+    const rq=r.request, pending=rq&&rq.status==='pending';
+    const st=pending?`<span style="color:#FBBF24">⏳ asked ${esc(new Date(rq.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))}</span>`:rq&&rq.status==='declined'?'<span style="color:#f87171">declined</span>':r.complete?'<span style="color:#10B981">ready to ask</span>':'';
+    return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:13px"><div style="flex:1;min-width:160px"><b>${esc(r.name)}</b> <span style="color:#9ca3af">· ${r.done}/${r.total} · ${r.rsvps} rides · ${r.days} days</span> ${st}</div><button onclick="assocApprove('${esc(r.zwid)}')" style="padding:5px 10px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:6px;color:#10B981;font-size:12px">Approve</button>${pending?`<button onclick="assocDecline('${esc(r.zwid)}')" style="padding:5px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;color:#f87171;font-size:12px">Decline</button>`:''}</div>`;
+  };
+  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:4px">🆙 Associates <span style="font-size:12px;font-weight:600;color:#9ca3af">${rows.length} in the pipeline${pend?` · ${pend} request${pend===1?'':'s'} waiting`:''}${assocList&&assocList.upgraded?` · ${assocList.upgraded} upgraded so far`:''}</span></div>${rows.length?rows.map(line).join(''):'<div style="font-size:13px;color:#9ca3af">No associates yet. They appear after they sign in with their cryogen.team account without being a full member.</div>'}</div>`;
+}
+async function assocApprove(zwid){
+  if(!confirm('Make this rider a full member?')) return;
+  try{ const d=await assocCall('POST','/api/assoc/approve',{zwid}); if(d.wordpress==='failed') alert('Approved here, but WordPress could not be updated. Set their tier to full in WordPress too.'); }catch(e){ alert(e.message); }
+  loadAssocPanel();
+}
+async function assocDecline(zwid){
+  const note=prompt('A short note for the rider (optional):'); if(note===null) return;
+  try{ await assocCall('POST','/api/assoc/decline',{zwid,note}); }catch(e){ alert(e.message); }
+  loadAssocPanel();
 }
 
 // ── Role Setup ─────────────────────────────────────────────
+function isAssoc(){ return role==='member' && sessionStorage.getItem('assoc')==='1'; }
 function setupRole(){
   const badges={admin:{text:'Administrator',bg:'rgba(239,68,68,0.15)',color:'#f87171'},mod:{text:'Moderator',bg:'rgba(251,191,36,0.12)',color:'#FBBF24'},member:{text:'Member',bg:'rgba(0,212,255,0.1)',color:'#00D4FF'}};
-  const b=badges[role];
+  const assoc=isAssoc();
+  const b=assoc?{text:'Associate',bg:'rgba(168,85,247,0.15)',color:'#c084fc'}:badges[role];
   const rb=document.getElementById('role-badge');
   rb.textContent=b.text; rb.style.background=b.bg; rb.style.color=b.color;
   if(role==='admin'){document.getElementById('nav-admin-btn').style.display='flex'; healthDotStart();}
   if(role==='member'){
-    document.getElementById('nav-profile').style.display='flex';
+    document.getElementById('nav-profile').style.display=assoc?'none':'flex';
     document.getElementById('new-ride-btn').style.display='none';
+  }
+  if(assoc){   // associates see the weekly TTT, ZRL and race sign-ups, the social rides and their own upgrade page
+    for(const b of document.querySelectorAll('#main-nav .navbtn')){
+      if(/Racing|TTT Season|Ladder|DIRT Series|Members/.test(b.textContent)) b.style.display='none';
+    }
+    document.getElementById('nav-upgrade').style.display='flex';
   }
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
 }
@@ -684,13 +765,14 @@ function showTab(id,btn){
   if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
-  if(id==='rides'){ renderRidesTabs(); loadCover(); }
+  if(id==='rides'){ renderRidesTabs(); if(!isAssoc()) loadCover(); }
   if(id==='ttt')loadTtt();
   if(id==='season')loadSeason();
   if(id==='zrl')loadZrl();
   if(id==='ladder')loadLadder();
   if(id==='drs')loadDrs();
-  if(id==='members')renderMembers(); 
+  if(id==='members'){ renderMembers(); loadAssocPanel(); }
+  if(id==='upgrade')loadUpgrade();
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -925,7 +1007,7 @@ function renderRacing(){
 
 // ── Members ────────────────────────────────────────────────
 function renderMembers(){
-  renderOffboarding(); 
+  renderOffboarding(); if(assocList||assocErr) renderAssocPanel();
   const data=riders.length?riders:MOCK;
   const search=(document.getElementById('m-search')||{value:''}).value.toLowerCase();
   const cat=(document.getElementById('m-cat')||{value:'All'}).value;
@@ -3369,7 +3451,8 @@ function renderRidesTabs(){
   const el=document.getElementById('rides-tabs'); if(!el) return;
   const urgent=coverUrgent();
   const t=(id,l,badge)=>`<button onclick="ridesTabGo('${id}')" style="padding:7px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${ridesTab===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${ridesTab===id?'rgba(0,212,255,0.12)':'rgba(255,255,255,0.04)'};color:${ridesTab===id?'#00D4FF':'#e5e7eb'}">${l}${badge?` <span style="font-size:11px;margin-left:4px;padding:1px 7px;border-radius:99px;background:rgba(251,191,36,0.18);color:#FBBF24">${badge}</span>`:''}</button>`;
-  el.innerHTML=t('cover','🧭 Ride cover',urgent||'')+t('cal','🗓️ Calendar','')+t('rsvp','📋 RSVP rides','');
+  if(isAssoc()&&ridesTab==='cover') ridesTab='rsvp';   // ride cover is for full members
+  el.innerHTML=(isAssoc()?'':t('cover','🧭 Ride cover',urgent||'')+t('cal','🗓️ Calendar',''))+t('rsvp','📋 RSVP rides','');
   for(const [id,sec] of [['cover','rides-sec-cover'],['cal','rides-sec-cal'],['rsvp','rides-sec-rsvp']]){ const d=document.getElementById(sec); if(d) d.style.display=ridesTab===id?'block':'none'; }
   const f=document.getElementById('zh-frame'); if(f&&ridesTab==='cal'&&!f.src) f.src=f.dataset.src;   // the calendar loads only when someone opens it
   const nb=document.getElementById('new-ride-btn'); if(nb) nb.style.display=(ridesTab==='rsvp'&&role!=='member')?'inline-block':'none';
