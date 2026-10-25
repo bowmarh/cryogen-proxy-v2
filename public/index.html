@@ -741,8 +741,9 @@ function renderUpgrade(){
   <div style="margin-top:10px">${d.items.map(row).join('')}</div>
   <div style="margin-top:14px">${action}</div>${assocMsg?`<div style="margin-top:10px;font-size:13px;color:#f87171">${esc(assocMsg)}</div>`:''}</div>
   <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Sign up for the TTT →</button><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('rides',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>/Social Rides/.test(b.textContent)))">Find a ride →</button></div>
-  <div class="discord-slot" style="margin-top:14px"></div>`;
-  fillDiscordSlots();
+  <div class="discord-slot" style="margin-top:14px"></div>
+  <div class="cal-slot" style="margin-top:14px"></div>`;
+  fillDiscordSlots(); fillCalSlots();
 }
 async function assocDiscord(joined){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/discord',{joined}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
 async function assocRequest(){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/request',{}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
@@ -886,6 +887,29 @@ function renderDiscordSlots(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${d.verified&&d.canVerify?`<button onclick="dcTest()" style="${btn}">Send me a test message</button>`:''}<button onclick="dcRemove()" style="${ghost}">Remove my Discord ID</button></div>`;
   document.querySelectorAll('.discord-slot').forEach(el=>{ el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">💬 Discord messages</div>${body}${myDiscordMsg?`<div style="font-size:12px;margin-top:8px;color:${myDiscordMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(myDiscordMsg)}</div>`:''}</div>`; });
 }
+let myCal=null, myCalMsg='';
+async function fillCalSlots(){
+  if(!document.querySelector('.cal-slot')) return;
+  if(!myCal){ try{ myCal=await dcCall('GET','/api/me/calendar'); }catch(e){ return; } }
+  renderCalSlots();
+}
+function renderCalSlots(){
+  const c=myCal; if(!c) return;
+  const btn='padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
+  const ghost='padding:6px 12px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)';
+  const body=!c.on?`<div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Put your races and rides in your own calendar (Google, Apple or Outlook). It updates by itself: your next ${c.windowDays/7} weeks, with the things waiting for your answer marked ❓.</div><button onclick="calAct('POST',{},'Calendar link created.')" style="${btn}">Create my calendar link</button>`
+    :`<div style="font-size:13px;color:#10B981;margin-bottom:8px">✅ Your calendar link is ready. Add it once and it stays up to date.</div>
+    <input readonly value="${esc(c.url)}" onclick="this.select()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:8px 12px;color:white;font-size:12px"/>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button onclick="calCopy()" style="${btn}">📋 Copy link</button><a href="${esc(c.url.replace(/^https?:/,'webcal:'))}" style="${btn};text-decoration:none">Add to my calendar</a><button onclick="if(confirm('Make a new link? The old one stops working.'))calAct('POST',{reset:true},'New link created. Add it to your calendar again.')" style="${ghost}">New link</button><button onclick="if(confirm('Switch the calendar off? The link stops working.'))calAct('POST/remove',{},'Calendar switched off.')" style="${ghost}">Switch off</button></div>
+    <div style="font-size:11px;color:#6b7280;margin-top:8px">Keep the link to yourself: anyone who has it can see your schedule. In Google Calendar choose Other calendars → From URL and paste it.</div>`;
+  document.querySelectorAll('.cal-slot').forEach(el=>{ el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">📅 My calendar</div>${body}${myCalMsg?`<div style="font-size:12px;margin-top:8px;color:${myCalMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(myCalMsg)}</div>`:''}</div>`; });
+}
+async function calAct(how,body,okMsg){
+  myCalMsg='';
+  try{ myCal=await dcCall('POST',how==='POST/remove'?'/api/me/calendar/remove':'/api/me/calendar',body); if(!myCal.on) myCal={ on:false, url:null, windowDays:28 }; myCalMsg='✓ '+okMsg; }catch(e){ myCalMsg=e.message; }
+  renderCalSlots();
+}
+async function calCopy(){ try{ await navigator.clipboard.writeText(myCal.url); myCalMsg='✓ Link copied.'; }catch(e){ myCalMsg='Select the link and copy it.'; } renderCalSlots(); }
 async function dcAct(fn,okMsg){ myDiscordMsg=''; try{ await fn(); if(okMsg) myDiscordMsg='✓ '+okMsg; }catch(e){ myDiscordMsg=e.message; } try{ myDiscord=await dcCall('GET','/api/me/discord'); }catch(e){ /* keep what we have */ } renderDiscordSlots(); }
 function dcSave(){ const v=document.getElementById('dc-id').value.trim(); return dcAct(async()=>{ const r=await dcCall('POST','/api/me/discord',{ discordId:v }); myDiscordMsg=r.needsCode?'✓ Code sent. Check your Discord messages.':''; },''); }
 function dcResend(){ return dcAct(async()=>{ await dcCall('POST','/api/me/discord',{ discordId:myDiscord.id }); },'A new code is on its way.'); }
@@ -1049,6 +1073,15 @@ function waDrsText(st){
   return [`🏜️ *DIRT Series${drs.teams&&drs.teams.length>1?' ('+waT(drs.team.name)+')':''}: Stage ${st.n} · ${drs.types[st.type]||st.type}${st.route?' · '+waT(st.route):''}*`, `🗓️ ${drsWhen(st.startMs)}${s.slot?' · '+s.slot:''}`, st.km?`📏 ${st.km} km`:'',
     sc.length?`🎯 *Scoring ${s.scorers||4}:* ${waNames(sc)}`:'', sc.length?`🛡️ *Support:* ${sp.length?waNames(sp):'—'}`:'', st.tactics?`💡 ${st.tactics}`:'',
     st.result?`🏆 Team ${st.result.teamPoints} pts`:'', 'The private event link is on the dashboard for the squad.'].filter(Boolean).join('\n');
+}
+function waLadderResultText(m){
+  const r=m.result, pos=r.positions||{}, rows=(m.lineupInfo||[]).filter(x=>pos[x.zwid]).sort((a,b)=>pos[a.zwid]-pos[b.zwid]);
+  return [`${r.won?'🏆':'🏁'} *Ladder result: ${waT(m.teamName||'CRYO-GEN')} v ${waT(m.opponent)}*`, `${r.won?'We won':'They won this one'}, ${r.ourPoints} to ${r.theirPoints}.`, rows.map(x=>ordinal(pos[x.zwid])+' '+waT(x.name)).join('\n'), waSite()].filter(Boolean).join('\n');
+}
+function waDrsResultText(st){
+  const names=Object.fromEntries((drs.squad||[]).map(r=>[r.zwid,r.name])), rs=st.result.riders||{}, sc=new Set(st.result.scorers||[]);
+  const rows=Object.keys(rs).filter(z=>rs[z].pos).sort((a,b)=>rs[a].pos-rs[b].pos);
+  return [`🏁 *DIRT Series${drs.teams&&drs.teams.length>1?' ('+waT(drs.team.name)+')':''}: Stage ${st.n} result*`, `Team ${st.result.teamPoints} pts`, rows.map(z=>(sc.has(z)?'⭐ ':'')+'P'+rs[z].pos+' '+waT(names[z]||z)+(rs[z].pts?' · '+rs[z].pts+' pts':'')).join('\n'), '⭐ = points counted', waSite()].filter(Boolean).join('\n');
 }
 function waRideText(ride,count,max){
   return [`🚴 *${waT(ride.title)}*`, `🗓️ ${new Date(ride.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}${ride.time?' · '+ride.time:''}`,
@@ -2127,6 +2160,7 @@ function ladderMatchCard(m,open){
         ${waBtn('ladder-'+m.id,waLadderText(m),'Share')}
         ${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
         ${m.lineup&&m.lineup.length===L.lineup&&m.status!=='cancelled'?`<button onclick="ladderResultOpen('${esc(m.id)}')" style="${btn}">🏆 ${m.result?'Edit':'Enter'} result</button>`:''}
+        ${m.result?`<button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('ladder-res-'+m.id,waLadderResultText(m),'Share result')}`:''}
         <button onclick="ladderFormOpen('${esc(m.id)}')" style="${btn}">✏️ Edit</button>
         ${m.status!=='cancelled'&&m.status!=='played'?`<button onclick="if(confirm('Cancel this challenge?'))ladderPost('status',{id:'${esc(m.id)}',status:'cancelled'})" style="${btn}">Cancel</button>`:''}
         <button onclick="if(confirm('Delete this match and its answers for good?'))ladderPost('match-remove',{id:'${esc(m.id)}'})" style="${btn}">Delete</button></div>
@@ -2182,7 +2216,7 @@ function ladderResultTotal(){
 }
 async function ladderResultSave(id){
   const positions={}; document.querySelectorAll('[data-pos]').forEach(i=>{ positions[i.dataset.pos]=parseInt(i.value,10); });
-  if(await ladderPost('result',{ match:id, positions })) ladderResult=null, renderLadder();
+  if(await ladderPost('result',{ match:id, positions })){ ladderResult=null; renderLadder(); if(confirm('Result saved. Post it to Discord now?')) ladderPost('post',{ match:id, kind:'result' }).then(r=>r&&alert('Result posted to Discord.')); }
 }
 function ladderFormOpen(id){
   const m=id==='new'?null:ladder.matches.find(x=>x.id===id);
@@ -2330,7 +2364,7 @@ function drsStageCard(st,open){
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
         ${up?`<button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
-        <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button><button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
+        <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
         <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
       ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}${drsResult&&drsResult.stage===st.id?drsResultForm(st):''}`:''}</div></details>`;
 }
@@ -2355,7 +2389,7 @@ function drsResultForm(st){
 }
 async function drsResultSave(id){
   const results={}; document.querySelectorAll('[data-dpos]').forEach(i=>{ const z=i.dataset.dpos, pts=document.querySelector(`[data-dpts="${CSS.escape(z)}"]`).value; if(i.value||pts) results[z]={ pos:i.value, pts }; });
-  if(await drsPost('result',{ stage:id, results })) drsResult=null, renderDrs();
+  if(await drsPost('result',{ stage:id, results })){ drsResult=null; renderDrs(); if(confirm('Result saved. Post it to Discord now?')) drsPost('post',{ stage:id, kind:'result' }).then(r=>r&&alert('Result posted to Discord.')); }
 }
 function drsStageOpen(id){
   const st=id==='new'?null:drs.stages.find(x=>x.id===id);
@@ -2586,9 +2620,10 @@ function renderProfile(){
       </div>
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}
-    <div class="discord-slot" style="margin-top:16px"></div>`
+    <div class="discord-slot" style="margin-top:16px"></div>
+    <div class="cal-slot" style="margin-top:16px"></div>`
   ;
-  fillDiscordSlots();
+  fillDiscordSlots(); fillCalSlots();
   loadMySeason();
   loadMyTtt();
   loadMyZrl();

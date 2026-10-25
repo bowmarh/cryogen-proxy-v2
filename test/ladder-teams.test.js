@@ -104,3 +104,21 @@ test('the message names the team, and the health row reports every team', async 
   const row = (await app.get('/api/health', { token: admin })).body.checks.find(c => c.id === 'ladder');
   assert.match(row.detail, /2 teams/);
 });
+
+test('a played match can be posted as a result: the score and our five in finishing order', async () => {
+  for (const i of [0, 1, 2, 3, 4]) await post('roster', { zwid: ID(i) });
+  const when = inHours(30);
+  const m = (await post('match', { opponent: 'Rocket', challenger: 'us', ...when, eventLink: 'https://zwift.example/r' })).body.matches[0];
+  assert.equal((await post('post', { match: m.id, kind: 'result' })).status, 409, 'no line-up or result yet');
+  await post('lineup', { match: m.id, zwids: [0, 1, 2, 3, 4].map(ID) });
+  assert.equal((await post('post', { match: m.id, kind: 'result' })).status, 409, 'enter the result first');
+  assert.equal((await post('result', { match: m.id, positions: { [ID(0)]: 2, [ID(1)]: 1, [ID(2)]: 4, [ID(3)]: 3, [ID(4)]: 6 } })).status, 200);
+  app.world.discord.length = 0;
+  assert.equal((await post('post', { match: m.id, kind: 'result' })).status, 200);
+  const msg = app.world.discord.find(p => p.channel === 'ladder' || p.channel === 'public').body.content;
+  assert.match(msg, /Ladder result: CRYO-GEN v Rocket/);
+  assert.match(msg, /We won/);
+  assert.ok(msg.indexOf('Lad 1') < msg.indexOf('Lad 0') && msg.indexOf('Lad 0') < msg.indexOf('Lad 3'), 'in finishing order');
+  assert.equal((await post('post', { match: m.id, kind: 'result' })).status, 429, 'not twice in a row');
+  assert.equal((await post('post', { match: m.id, kind: 'result' }, null)).status, 401);
+});
