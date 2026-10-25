@@ -819,6 +819,93 @@ function renderWeek(){
   <div class="card" style="padding:14px 16px"><div style="font-weight:800">Coming up</div>${coming}</div>`;
 }
 
+// ── Share to WhatsApp (staff) ───────────────────────────────────────────────────────────
+// WhatsApp has no way to post into a Community for us, so each message is built here and staff send it: "WhatsApp" opens WhatsApp with the text
+// ready (pick the Community or group), "Copy" puts it on the clipboard. Private Zwift event links are never put in these messages.
+const waStore={}, WA_URL_MAX=1900;
+const waDay=ms=>new Date(ms).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})+' UK';
+const waSite=()=>location.origin;
+function waBtn(key,text,label){
+  key=String(key).replace(/[^a-z0-9_-]/gi,'_'); waStore[key]=text;
+  const b='padding:5px 12px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid rgba(37,211,102,0.45);background:rgba(37,211,102,0.1);color:#25D366';
+  return `<span style="display:inline-flex;gap:4px"><button type="button" onclick="event.stopPropagation();waShare('${key}')" title="Opens WhatsApp with this message ready. Pick the Community or group." style="${b}">💬 ${esc(label||'WhatsApp')}</button><button type="button" onclick="event.stopPropagation();waCopy('${key}')" style="${b};border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e5e7eb">📋 Copy</button></span>`;
+}
+function waToast(msg){
+  let t=document.getElementById('wa-toast');
+  if(!t){ t=document.createElement('div'); t.id='wa-toast'; t.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f1623;border:1px solid rgba(37,211,102,0.5);color:#e5e7eb;padding:10px 16px;border-radius:10px;font-size:13px;z-index:300;max-width:90vw'; document.body.appendChild(t); }
+  t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.display='none'; },3500);
+}
+async function waCopy(k,quiet){
+  const text=waStore[k]||''; let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }catch(e){
+    const ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+    try{ ok=document.execCommand('copy'); }catch(e2){ /* nothing more to try */ } ta.remove();
+  }
+  if(!quiet) waToast(ok?'Copied. Paste it into WhatsApp.':'Could not copy. Select the text and copy it by hand.');
+  return ok;
+}
+async function waShare(k){
+  const text=waStore[k]||''; const url='https://wa.me/?text='+encodeURIComponent(text);
+  if(url.length>WA_URL_MAX){ const ok=await waCopy(k,true); waToast(ok?'That message is too long to open directly, so it is copied. Paste it into WhatsApp.':'That message is too long to open directly.'); return; }
+  window.open(url,'_blank','noopener');
+}
+// Names and titles go into the message as plain text: line breaks and WhatsApp's own formatting characters are taken out so a name cannot bend the layout.
+const waT=v=>String(v==null?'':v).replace(/[\r\n]+/g,' ').replace(/[*_~`]/g,'').trim();
+const waNames=list=>list.filter(Boolean).map(waT).join(', ');
+function waLadderText(m){
+  const route=m.route&&(m.route.name||m.route.km||m.route.minutes)?[m.route.name,m.route.km?m.route.km+' km':'',m.route.minutes?'about '+m.route.minutes+' min':''].filter(Boolean).join(' · '):'';
+  const five=(m.lineupInfo||[]).map(r=>r.name+(r.cat?' ('+r.cat+')':''));
+  return [`🪜 *Ladder: CRYO-GEN v ${waT(m.opponent)}*`, m.at?`🗓️ ${ladderWhen(m.at)}`:'🗓️ Date and time to be agreed', route&&`🗺️ ${route}`,
+    five.length?`*Our five:* ${waNames(five)}`:(m.upcoming?'Looking for riders: can you ride? Tell the staff.':''), m.result?`${m.result.won?'🏆 Won':'Lost'} ${m.result.ourPoints}–${m.result.theirPoints}`:'',
+    'The private event link is on the dashboard for the line-up.', waSite()].filter(Boolean).join('\n');
+}
+function waDrsText(st){
+  const s=drs.season||{}, roles=st.roles||{}, names=Object.fromEntries((drs.squad||[]).map(r=>[r.zwid,r.name]));
+  const sc=Object.keys(roles).filter(z=>roles[z]==='scorer'&&names[z]).map(z=>names[z]), sp=Object.keys(roles).filter(z=>roles[z]==='support'&&names[z]).map(z=>names[z]);
+  return [`🏜️ *DIRT Series: Stage ${st.n} · ${drs.types[st.type]||st.type}${st.route?' · '+waT(st.route):''}*`, `🗓️ ${drsWhen(st.startMs)}${s.slot?' · '+s.slot:''}`, st.km?`📏 ${st.km} km`:'',
+    sc.length?`🎯 *Scoring ${s.scorers||4}:* ${waNames(sc)}`:'', sc.length?`🛡️ *Support:* ${sp.length?waNames(sp):'—'}`:'', st.tactics?`💡 ${st.tactics}`:'',
+    st.result?`🏆 Team ${st.result.teamPoints} pts`:'', 'The private event link is on the dashboard for the squad.'].filter(Boolean).join('\n');
+}
+function waRideText(ride,count,max){
+  return [`🚴 *${waT(ride.title)}*`, `🗓️ ${new Date(ride.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}${ride.time?' · '+ride.time:''}`,
+    [ride.route&&'📍 '+waT(ride.route), ride.dist&&'📏 '+waT(ride.dist), ride.pace&&'⚡ '+waT(ride.pace)].filter(Boolean).join('  '), waT(ride.desc), `👥 ${count}${max?'/'+max:''} signed up`,
+    safeUrl(ride.link)?`Zwift event: ${safeUrl(ride.link)}`:'', `RSVP: ${waSite()}`].filter(Boolean).join('\n');
+}
+function waCoverText(){
+  if(!cover) return '';
+  const horizon=Date.now()+14*86400000, lines=[];
+  for(const s of cover.series) for(const o of s.occurrences){
+    if(o.cancelled||o.startMs>horizon||o.startMs<Date.now()-3*3600000) continue;
+    const need=(o.gaps||[]).filter(g=>g==='leader'||g==='sweeper'); if(!need.length) continue;
+    lines.push(`• ${new Date(o.startMs).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:s.zone||'Europe/London'})}: ${waT(s.title)}${s.pace?' ('+waT(s.pace)+')':''} needs ${need.join(' and ')}`);
+  }
+  return lines.length?`🚴 *Ride cover needed (next 2 weeks)*\n${lines.slice(0,20).join('\n')}\nApproved leaders and sweepers can offer at ${waSite()}`:'';
+}
+function waTttText(d,open){
+  const w=d.week;
+  if(open) return [`🏁 *${waT(w.title)}: sign-ups are open*`, w.closesAt?`Closes ${waDay(Date.parse(w.closesAt))}`:'', `Sign up: ${waSite()}`].filter(Boolean).join('\n');
+  const by={}; d.signups.forEach(s=>(d.assign[tttKey(s.name)]||[]).forEach(id=>(by[id]=by[id]||[]).push(s.name)));
+  const teams=w.teams.filter(t=>(by[t.id]||[]).length);
+  return [`🏁 *${waT(w.title)}: teams*${w.published?'':' (not published yet)'}`, ...teams.map(t=>`\n*${waT(t.name)}*${t.level?' ('+t.level+')':''}\n${waNames(by[t.id].sort())}`), `\n${waSite()}`].join('\n');
+}
+function waZrlTeamText(t,riders,r){
+  const zone=((r.regions||[]).find(z=>z.id===t.region)||{}).name||t.region;
+  const list=[...riders].sort((a,b)=>(b.captain-a.captain)||a.name.localeCompare(b.name)).map(x=>(x.zwid&&x.zwid===t.captain?'⭐ ':'')+waT(x.name)+(x.commit==='reserve'?' (reserve)':''));
+  return [`🚀 *ZRL ${waT(r.name)}: ${waT(t.name)}*`, [t.division,t.grade,t.league].filter(Boolean).join(' · '), `🌍 ${zone}${t.slot?' · 🕒 '+t.slot:''}`, t.captain?`Captain: ${waT(t.captainName||t.captain)}`:'', list.length?`*Riders:* ${waNames(list)}`:'', waSite()].filter(Boolean).join('\n');
+}
+function waZrlAllText(d,st){
+  const r=d.round, teams=r.teams.filter(t=>(st.by[t.id]||[]).length);
+  return [`🚀 *ZRL ${waT(r.name)}: teams*${r.published?'':' (not published yet)'}`, ...teams.map(t=>'\n'+waZrlTeamText(t,st.by[t.id],r).split('\n').slice(0,-1).join('\n')), `\n${waSite()}`].join('\n');
+}
+function waZrlOpenText(r){
+  return [`🚀 *ZRL ${waT(r.name)}: sign-ups are open*`, `${r.weeks} race${r.weeks===1?'':'s'} from ${r.start}`, r.closesAt?`Sign-ups close ${waDay(Date.parse(r.closesAt))}`:'', `Sign up on the dashboard: ${waSite()}`].filter(Boolean).join('\n');
+}
+function waZrlLineupText(teamId,w,riders){
+  const t=((zrlData&&zrlData.round&&zrlData.round.teams)||[]).find(x=>x.id===teamId)||{name:teamId};
+  const names=(w.lineup||[]).map(z=>(riders.find(x=>x.zwid===z)||{}).name).filter(Boolean);
+  return [`🏁 *${waT(t.name)}: race ${w.i+1} line-up*`, `🗓️ ${seasonDay(w.date)}${t.slot?' · '+t.slot:''}`, names.length?`*Riding:* ${waNames(names)}`:'Line-up not picked yet', waSite()].filter(Boolean).join('\n');
+}
+
 // ── Role Setup ─────────────────────────────────────────────
 // A section label shows only when at least one button under it does (riders and associates see fewer tabs).
 function updateNavGroups(){
@@ -1657,6 +1744,7 @@ function tttStaffPanel(d){
         <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
         ${w.open?`<button onclick="tttRecruit()" class="tab">📣 Ask for riders</button>`:''}
         <button onclick="tttExport('lineups')" class="tab">⬇ Line-ups (CSV)</button>
+        ${waBtn('ttt-teams',waTttText(d,false),'Share teams')}${w.open?waBtn('ttt-open',waTttText(d,true),'Share sign-up call'):''}
         <button onclick="tttNewWeek()" class="tab">➕ Start next week</button>
       </div></details>
   </div>`;
@@ -1780,6 +1868,7 @@ function ladderMatchCard(m,open){
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${result}
       ${m.upcoming?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you ride? <span style="font-weight:400;text-transform:none;color:#9ca3af">${m.counts.yes} yes · ${m.counts.maybe} maybe · ${m.counts.no} no</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:'<div style="font-size:12px;color:#6b7280">Only riders on the ladder roster answer. Ask the captains to add you.</div>'}`:''}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        ${waBtn('ladder-'+m.id,waLadderText(m),'Share')}
         ${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
         ${m.lineup&&m.lineup.length===L.lineup&&m.status!=='cancelled'?`<button onclick="ladderResultOpen('${esc(m.id)}')" style="${btn}">🏆 ${m.result?'Edit':'Enter'} result</button>`:''}
         <button onclick="ladderFormOpen('${esc(m.id)}')" style="${btn}">✏️ Edit</button>
@@ -1981,6 +2070,7 @@ function drsStageCard(st,open){
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
       ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>esc(names[z])).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>esc(names[z])).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
         ${up?`<button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
         <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button><button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
         <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
@@ -2104,6 +2194,7 @@ function renderRides(){
           <div style="font-size:13px;font-weight:700">${new Date(ride.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>
           <div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(ride.time)}</div>
           ${safeUrl(ride.link)?`<a href="${safeUrl(ride.link)}" target="_blank" rel="noopener" style="font-size:11px;color:#00D4FF;display:block;margin-top:4px">Zwift Event →</a>`:''}
+          ${(role==='admin'||role==='mod')?`<div style="margin-top:6px">${waBtn('ride-'+ride.id,waRideText(ride,att.length,max),'Share')}</div>`:''}
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:11px;color:#6b7280">
@@ -2668,6 +2759,7 @@ function zrlTeamsTab(d,st){
       ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}</div>`;
   };
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">${r.teams.some(t=>(st.by[t.id]||[]).length)?waBtn('zrl-all',waZrlAllText(d,st),'Share all teams'):''}${r.open?waBtn('zrl-open',waZrlOpenText(r),'Share sign-up call'):''}</div>
     ${zrlGrowthCard(d,st)}${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
     ${shown.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${shown.map(tile).join('')}</div>`:`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${r.teams.length?'No teams match this filter.':'No teams yet. Import the team board from the Setup tab.'}</div>`}`;
 }
@@ -2686,6 +2778,7 @@ function zrlTeamDetail(d,st){
   return `<div id="zrl-team-detail" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.4)">
     <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:16px;font-weight:800">${esc(t.name)}</div>
       <div style="font-size:12px;color:#6b7280">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'')}</div></div>
+      ${waBtn('zrl-team-'+t.id,waZrlTeamText(t,riders,r),'Share team')}
       <button onclick="zrlWtrlMark('${esc(t.id)}',${!t.wtrlRegistered})" style="${btn}">${t.wtrlRegistered?'✅ On WTRL (undo)':'☐ Mark registered on WTRL'}</button> <button onclick="zrlOpenTeam('${esc(t.id)}')" style="${btn}">✕ Close</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
       <div>${lbl('Time zone')}<select class="inp" onchange="zrlTeamZone('${esc(t.id)}',this.value)" style="width:auto">${r.regions.map(z=>`<option value="${esc(z.id)}" ${t.region===z.id?'selected':''}>${esc(z.name)}</option>`).join('')}</select></div>
@@ -2814,7 +2907,7 @@ function zrlLineupHtml(t,racing){
     ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);padding:6px 0;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#6b7280">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${esc(r.name)}</td>
         <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}','${esc(t.id)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
-      <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
+      <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
       <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
 }
 async function zrlWeeklyLoad(){
@@ -3711,6 +3804,7 @@ function coverStaffPanel(){
   const lbl=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">${x}</div>`;
   return `<details class="card" style="padding:12px 16px;margin-top:6px"><summary style="cursor:pointer;font-size:13px;font-weight:800">⚙️ Manage ride cover (staff)</summary>
     <div style="font-size:12px;color:#9ca3af;margin-top:6px">${cover.webhook?'✅ Call-outs go to your WhatsApp webhook, and to Discord if it does not answer.':'Call-outs go to Discord. To send them to WhatsApp, set <b>RIDE_COVER_WEBHOOK_URL</b> in Vercel (a Zapier or Make catch-hook that posts to WhatsApp), or use the buttons below to send by hand.'}</div>
+    ${waCoverText()?`<div style="margin-top:8px">${waBtn('cover-callout',waCoverText(),'Share cover call-out')}</div>`:''}
     ${lbl('Weekly rides')}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <input id="cv-title" class="inp" style="padding:6px 8px;font-size:12px;width:170px" placeholder="Ride name" maxlength="80" value="${esc(e.title||'')}"/>
