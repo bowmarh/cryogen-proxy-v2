@@ -2062,7 +2062,7 @@ const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/ro
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
-  'GET /api/me/week', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+  'GET /api/me/week', 'GET /api/me/calendar', 'POST /api/me/calendar', 'POST /api/me/calendar/remove', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await assocRoute(req, body, parseRequestUrl(req).query);
@@ -2131,8 +2131,18 @@ const myweek = require('../lib/myweek')({
   isAssociate: member => Promise.resolve(member.assoc === true && assoc.stillAssociate(member.zwid)),
 });
 
+// The rider's private calendar feed (lib/calendar.js): their next four weeks as a subscribable .ics.
+const calendar = require('../lib/calendar')({
+  redis, HttpError, memberFromRequest, myweek, siteUrl: SITE_URL,
+  signMember: m => signToken('member', { zwid: m.zwid, name: m.name, ...(m.assoc ? { assoc: true } : {}) }),
+});
+async function handleCalendar(route, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  sendJSON(res, 200, await route(req, body));
+}
+
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2206,6 +2216,15 @@ async function route(req, res){
   if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req));
 
   if (pathname === '/api/discord/callback' && req.method === 'GET') return handleDiscordCallback(req, res);
+
+  const calFeed = /^\/api\/cal\/([A-Za-z0-9_-]+)\.ics$/.exec(pathname);
+  if (calFeed && req.method === 'GET'){
+    const ics = await calendar.feed(calFeed[1]);
+    res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="cryogen.ics"', 'Cache-Control': 'private, max-age=900', 'Content-Length': Buffer.byteLength(ics) });
+    return res.end(ics);
+  }
+  const calRoute = calendar.routes[`${req.method} ${pathname}`];
+  if (calRoute) return handleCalendar(calRoute, req, res);
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);

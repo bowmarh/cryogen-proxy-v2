@@ -97,3 +97,18 @@ test('resetting or removing one team leaves the others', async () => {
   assert.deepEqual(gone.body.teams.map(t => t.id), ['main']);
   assert.equal((await post('team-remove', { id: 'main', confirm: 'REMOVE' })).status, 409, 'keep one');
 });
+
+test('a played stage can be posted as a result: the team points and who scored', async () => {
+  await post('season', SEASON);
+  for (const i of [0, 1, 2, 3, 4]) await post('squad', { zwid: ID(i), force: true });
+  const st = await teamStage('main', { date: inHours(100).date });
+  assert.equal((await post('post', { stage: st.id, kind: 'result' })).status, 409, 'enter the result first');
+  await post('result', { stage: st.id, results: { [ID(0)]: { pos: 1, pts: 25 }, [ID(1)]: { pos: 2, pts: 20 }, [ID(2)]: { pos: 3, pts: 16 }, [ID(3)]: { pos: 4, pts: 12 }, [ID(4)]: { pos: 9, pts: 3 } } });
+  app.world.discord.length = 0;
+  assert.equal((await post('post', { stage: st.id, kind: 'result' })).status, 200);
+  const msg = app.world.discord.find(p => p.channel === 'drs' || p.channel === 'public').body.content;
+  assert.match(msg, /DRS stage 1 result/);
+  assert.match(msg, /73 team points/);
+  assert.match(msg, /⭐ P1  Dirt 0 · 25 pts/);
+  assert.match(msg, /• P9  Dirt 4/, 'the fifth did not score');
+});
