@@ -25,7 +25,7 @@ test('who is an associate: not in the roster and no record, a tier or pending re
   assert.equal((await meOf(await nora())).associate, true, 'not in the club roster, no member record');
   assert.equal((await meOf(await app.memberSession('1002', { name: 'Rider Two' }))).associate, false, 'a full member');
   world.members.push({ id: 51, zwift_id: '5552', name: 'Tier Tina', status: 'active', tier: 'associate' });
-  world.members.push({ id: 52, zwift_id: '5553', name: 'Pending Pete', status: 'pending', tier: 'half' });
+  world.members.push({ id: 52, zwift_id: '5553', name: 'Pending Pete', status: 'pending', tier: 'full' });
   world.members.push({ id: 53, zwift_id: '5554', name: 'Full Fred', status: 'active', tier: 'full' });
   for (const [z, n, want] of [['5552', 'Tier Tina', true], ['5553', 'Pending Pete', true], ['5554', 'Full Fred', false]]) {
     assert.equal((await meOf(await app.memberSession(z, { name: n, associate: true }))).associate, want, n);
@@ -148,4 +148,19 @@ test('a declined request keeps the note, and the weekly digest nudges staff abou
   assert.equal(JSON.parse(app.world.db['cg:assoc:requests']['5551']).note, 'Come back after two more rides');
   assert.equal((await status(t)).request.status, 'declined');
   assert.equal((await row()).status, 'ok');
+});
+
+test('half and associate are one membership: a record still saying half is an associate, in the roster, /api/me and the gate', async () => {
+  world.members.push({ id: 62, zwift_id: '5562', name: 'Half Hana', status: 'active', tier: 'half', offboard_discord: '0', offboard_fb: '0', offboard_zp: '0' });
+  const t = await app.memberSession('5562', { name: 'Half Hana' });
+  const me = (await app.get('/api/me', { token: t })).body;
+  assert.equal(me.associate, true);
+  assert.equal(me.tier, 'associate', 'shown as associate, never half');
+  assert.equal((await app.call('GET', '/api/cover', { token: t })).status, 403, 'limited like any associate');
+  const roster = (await app.get('/api/roster', { token: admin })).body.members.find(m => m.zwift_id === '5562');
+  assert.equal(roster.tier, 'associate');
+  // staff choosing the old "half" value saves associate
+  const r = await app.post('/api/members/5562', { tier: 'half' }, { token: admin });
+  assert.equal(r.status, 200);
+  assert.deepEqual(app.world.patches.map(p => p.body), [{ tier: 'associate' }]);
 });

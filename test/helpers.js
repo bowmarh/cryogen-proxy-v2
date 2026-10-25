@@ -53,10 +53,10 @@ function defaultMembers() {
   const m = (id, zwift_id, name, status, tier) => ({ id, zwift_id, name, status, tier, offboard_discord: '0', offboard_fb: '0', offboard_zp: '0' });
   return [
     m(1, '1000', 'Rick DB', 'active', 'full'),
-    m(2, '1001', 'Rider One', 'left', 'half'),
-    m(3, '1002', 'Rider Two (old)', 'active', 'half'),
+    m(2, '1001', 'Rider One', 'left', 'full'),
+    m(3, '1002', 'Rider Two (old)', 'active', 'full'),
     m(4, '1002', 'Rider Two', 'active', 'full'), // duplicate: the last record wins
-    m(5, 'TBD', 'No Id Yet', 'active', 'half'),  // placeholder: ignored
+    m(5, 'TBD', 'No Id Yet', 'active', 'full'),  // placeholder: ignored
   ];
 }
 

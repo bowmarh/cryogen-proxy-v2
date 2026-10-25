@@ -37,9 +37,9 @@ test('member records: one per Zwift ID (last wins), placeholders dropped, public
 });
 
 test('only staff can change member records', async () => {
-  assert.equal((await patch('1000', { tier: 'half' }, null)).status, 401);
-  assert.equal((await patch('1000', { tier: 'half' }, await app.memberSession('1002'))).status, 401);
-  assert.equal((await patch('1000', { tier: 'half' }, mod)).status, 200);
+  assert.equal((await patch('1000', { tier: 'associate' }, null)).status, 401);
+  assert.equal((await patch('1000', { tier: 'associate' }, await app.memberSession('1002'))).status, 401);
+  assert.equal((await patch('1000', { tier: 'associate' }, mod)).status, 200);
 });
 
 test('values are validated and unknown fields are never forwarded to WordPress', async () => {
@@ -49,8 +49,8 @@ test('values are validated and unknown fields are never forwarded to WordPress',
   assert.equal((await patch('1000', { offboard_fb: 'yes' })).status, 400);
   assert.equal((await patch('1000', {})).status, 400, 'nothing to change');
   assert.equal((await patch('1000', { name: 'Hacker', role: 'administrator' })).status, 400, 'only the known fields count');
-  assert.equal((await patch('424242', { tier: 'half' })).status, 404, 'no record for that Zwift ID');
-  assert.equal((await patch('abc', { tier: 'half' })).status, 404, 'the route only takes numeric IDs');
+  assert.equal((await patch('424242', { tier: 'associate' })).status, 404, 'no record for that Zwift ID');
+  assert.equal((await patch('abc', { tier: 'associate' })).status, 404, 'the route only takes numeric IDs');
   assert.equal(world.patches.length, 0, 'nothing reached WordPress');
   const ok = await patch('1000', { tier: 'full', name: 'ignored' });
   assert.equal(ok.status, 200);
@@ -59,11 +59,11 @@ test('values are validated and unknown fields are never forwarded to WordPress',
 
 test('a save goes to the record the page shows, and the roster updates straight away', async () => {
   world.patches.length = 0;
-  const r = await patch('1002', { tier: 'half' });
+  const r = await patch('1002', { tier: 'associate' });
   assert.equal(r.status, 200);
   assert.equal(world.patches.at(-1).id, '4', 'the last duplicate record, not the first');
-  assert.equal(r.body.member.tier, 'half');
-  assert.equal((await members()).find(m => m.zwift_id === '1002').tier, 'half', 'no stale cache');
+  assert.equal(r.body.member.tier, 'associate');
+  assert.equal((await members()).find(m => m.zwift_id === '1002').tier, 'associate', 'no stale cache');
 });
 
 test('status and off-boarding steps save too', async () => {
@@ -89,9 +89,9 @@ test('a field WordPress quietly ignores is reported as not saved', async () => {
 test('a cached member list does not make a saved change look failed (the stale-read bug)', async () => {
   world.staleMembers = JSON.parse(JSON.stringify(world.members)); // GET keeps returning old data
   try {
-    const r = await patch('1000', { tier: 'half' });
+    const r = await patch('1000', { tier: 'associate' });
     assert.equal(r.status, 200, 'WordPress echoed tier, so it counts as saved');
-    assert.equal(r.body.member.tier, 'half');
+    assert.equal(r.body.member.tier, 'associate');
   } finally { world.staleMembers = null; world.members.find(m => m.id === 1).tier = 'full'; }
 });
 
@@ -105,7 +105,7 @@ test('member reads ask WordPress for an uncached copy', async () => {
 test('WordPress refusing the change is reported with its reason', async () => {
   world.patchStatus = 403; world.patchMessage = 'You must be an admin';
   try {
-    const r = await patch('1000', { tier: 'half' });
+    const r = await patch('1000', { tier: 'associate' });
     assert.equal(r.status, 502);
     assert.match(r.body.error, /403/);
     assert.match(r.body.error, /You must be an admin/);
