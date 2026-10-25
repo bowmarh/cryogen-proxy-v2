@@ -173,6 +173,7 @@ table{width:100%;border-collapse:collapse}
   <div style="max-width:980px;margin:0 auto">
 
   <div id="page-dashboard" class="page active">
+    <div id="myweek-card"></div>
     <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
     <p style="font-size:13px;color:#6b7280;margin-bottom:20px">ZwiftPower · ZwiftRacing.app</p>
     <div class="stat4">
@@ -561,6 +562,7 @@ function launchApp(r){
   loadTttSummary();
   installBarMaybe();
   if(r==='admin'||r==='mod') showTab('week',document.getElementById('nav-week'));   // staff start on This week
+  if(r==='member') loadMyWeek();
 }
 // Phone install: Android and desktop Chrome offer a real Install button; iPhones get the Share > Add to Home Screen steps. Shown once, after sign-in.
 let installEvent=null;
@@ -740,6 +742,35 @@ async function assocDecline(zwid){
   loadAssocPanel();
 }
 
+
+
+// ── My week (riders): your own next seven days ──────────────────────────────────────────
+let myWeek=null;
+async function loadMyWeek(){
+  const el=document.getElementById('myweek-card'); if(!el||role!=='member') return;
+  try{
+    const r=await fetch('/api/me/week',{headers:tttHeaders()}); if(!r.ok) return;
+    myWeek=await r.json(); renderMyWeek();
+  }catch(e){ /* the dashboard works without it */ }
+}
+async function myWeekAvail(week,status){
+  try{
+    const r=await fetch('/api/zrl/availability',{method:'POST',headers:tttHeaders(),body:JSON.stringify({week,status})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save your answer.'); return; }
+  }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  zrlReady=null; loadMyWeek();
+}
+function renderMyWeek(){
+  const el=document.getElementById('myweek-card'); const d=myWeek; if(!el||!d) return;
+  if(!d.items.length){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">📅 My week</div><div style="font-size:13px;color:#9ca3af;margin-top:4px">Nothing planned for you in the next ${d.windowDays} days. <a href="#" onclick="weekGo('rides');return false" style="color:#00D4FF">Find a ride →</a></div></div>`; return; }
+  const col={in:'#10B981',todo:'#FBBF24',info:'#9ca3af',out:'#6b7280'}, ico={in:'✅',todo:'🟡',info:'⚪',out:'➖'};
+  const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+  const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
+  const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:'Europe/London'}):u.date; (days[k]=days[k]||[]).push(u); });
+  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
+  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
+  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
+}
 
 // ── This week (staff): what needs attention and what is coming up ───────────────────────
 let weekData=null, weekErr='';
@@ -3692,6 +3723,7 @@ if(role && !ssoToken){
   loadShared();
   loadTttSummary();
   if(role==='admin'||role==='mod') loadWeek();
+  if(role==='member') loadMyWeek();
 }
 </script>
 </body>

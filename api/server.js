@@ -1993,7 +1993,7 @@ const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/ro
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
-  'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+  'GET /api/me/week', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await assocRoute(req, body, parseRequestUrl(req).query);
@@ -2005,6 +2005,12 @@ async function handleAssoc(assocRoute, req, res){
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
   assocList: req => assoc.routes['GET /api/assoc/list'](req),
+});
+
+// The rider's "My week" card (lib/myweek.js): their own next seven days.
+const myweek = require('../lib/myweek')({
+  memberFromRequest, HttpError, loadTtt, myTttStatus, loadState, zrl, cover, ladder, drs,
+  isAssociate: member => Promise.resolve(member.assoc === true && assoc.stillAssociate(member.zwid)),
 });
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
@@ -2076,6 +2082,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const myWeekRoute = myweek.routes[`${req.method} ${pathname}`];
+  if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req));
 
   const weekRoute = week.routes[`${req.method} ${pathname}`];
   if (weekRoute) return sendJSON(res, 200, await weekRoute(req));
