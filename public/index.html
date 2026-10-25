@@ -24,6 +24,7 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
 }
 @media(max-width:900px){
   #sidebar>div:first-child,#sidebar>div:last-child{display:none!important}
+  .navgroup{display:none!important}
   #sidebar nav{display:flex!important;flex-direction:row!important;padding:4px 8px!important;gap:2px!important;flex:1!important;overflow-x:auto!important;align-items:center!important;height:100%!important}
   .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:36px!important}
   .stat4{grid-template-columns:1fr 1fr!important;gap:8px!important}
@@ -57,6 +58,7 @@ table{width:100%;border-collapse:collapse}
 .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
 .cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
 .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.navgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#4b5563;padding:12px 12px 4px}
 .navbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:#6b7280;text-align:left;font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap}
 .navbtn.active{border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:#00D4FF}
 .navbtn:hover:not(.active){background:rgba(255,255,255,0.03);color:#9ca3af}
@@ -152,17 +154,20 @@ table{width:100%;border-collapse:collapse}
     <nav style="flex:1;padding:8px" id="main-nav">
       <button class="navbtn" id="nav-week" style="display:none" onclick="showTab('week',this)">📌 This week <span id="week-badge" style="display:none;font-size:10px;font-weight:700;margin-left:4px;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.2);color:#FBBF24"></span></button>
       <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
-      <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
-      <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
-      <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
-      <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
-      <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
-      <button class="navbtn" onclick="showTab('ladder',this)">🪜 Ladder</button>
-      <button class="navbtn" onclick="showTab('drs',this)">🏜️ DIRT Series</button>
-      <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
-      <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-upgrade" style="display:none" onclick="showTab('upgrade',this)">⬆️ Become a member</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
+      <div class="navgroup">Racing</div>
+      <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
+      <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
+      <button class="navbtn" onclick="showTab('ttt',this)">🏁 TTT Week</button>
+      <button class="navbtn" onclick="showTab('season',this)">📈 TTT Season</button>
+      <button class="navbtn" onclick="showTab('ladder',this)">🪜 Ladder</button>
+      <button class="navbtn" onclick="showTab('drs',this)">🏜️ DIRT Series</button>
+      <div class="navgroup">Rides</div>
+      <button class="navbtn" id="nav-events" onclick="showTab('events',this)">📅 Events & Sign-Up</button>
+      <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
+      <div class="navgroup">Club</div>
+      <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
       <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex';loadHealth();loadBackups()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
@@ -813,6 +818,17 @@ function renderWeek(){
 }
 
 // ── Role Setup ─────────────────────────────────────────────
+// A section label shows only when at least one button under it does (riders and associates see fewer tabs).
+function updateNavGroups(){
+  const nav=document.getElementById('main-nav'); if(!nav) return;
+  let label=null, shown=0;
+  const close=()=>{ if(label) label.style.display=shown?'':'none'; };
+  for(const el of nav.children){
+    if(el.classList.contains('navgroup')){ close(); label=el; shown=0; }
+    else if(el.style.display!=='none') shown++;
+  }
+  close();
+}
 function isAssoc(){ return role==='member' && sessionStorage.getItem('assoc')==='1'; }
 function setupRole(){
   const badges={admin:{text:'Administrator',bg:'rgba(239,68,68,0.15)',color:'#f87171'},mod:{text:'Moderator',bg:'rgba(251,191,36,0.12)',color:'#FBBF24'},member:{text:'Member',bg:'rgba(0,212,255,0.1)',color:'#00D4FF'}};
@@ -833,6 +849,7 @@ function setupRole(){
   }
   if(role==='admin'||role==='mod') document.getElementById('nav-week').style.display='flex';
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
+  updateNavGroups();
 }
 
 // ── Navigation ─────────────────────────────────────────────
