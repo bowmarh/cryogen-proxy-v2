@@ -179,6 +179,12 @@ function installFetch(world) {
       return world.hookFail ? json({}, 500) : json({ ok: true });
     }
     if (u.host === 'cal.test') return new Response(world.ical || '', { status: world.icalStatus || 200 });   // an iCal feed
+    if (u.host === 'discord.com') {   // the Discord bot API: world.dms collects direct messages; world.dmFail is a set of user ids whose DMs are closed
+      const m = /\/channels\/dm-(\d+)\/messages$/.exec(u.pathname);
+      if (u.pathname.endsWith('/users/@me/channels')) { const id = JSON.parse(opts.body).recipient_id; return json(world.dmFail && world.dmFail.has(id) ? { code: 50007 } : { id: `dm-${id}` }, world.dmFail && world.dmFail.has(id) ? 403 : 200); }
+      if (m) { (world.dms = world.dms || []).push({ userId: m[1], body: JSON.parse(opts.body), auth: (opts.headers || {}).Authorization }); return json({ id: 'msg' }); }
+      return json({}, 404);
+    }
     if (u.host === 'discord.test') {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body

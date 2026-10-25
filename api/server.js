@@ -440,6 +440,7 @@ const DISCORD_HOOKS = {
   'ladder-admin': ['DISCORD_WEBHOOK_LADDER_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
   drs: ['DISCORD_WEBHOOK_DRS', 'DISCORD_WEBHOOK_PUBLIC'],
   'drs-admin': ['DISCORD_WEBHOOK_DRS_ADMIN', 'DISCORD_WEBHOOK_ADMIN'],
+  comms: ['DISCORD_WEBHOOK_COMMS', 'DISCORD_WEBHOOK_PUBLIC'],
 };
 const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
 
@@ -2061,6 +2062,26 @@ async function handleAssoc(assocRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// Staff messages to Discord (lib/comms.js): everyone in the club channel, or chosen members by DM (with a bot) or @mention.
+const comms = require('../lib/comms')({
+  redis, HttpError, text, requireRole, roleFromRequest, discord,
+  namesFor: async zwids => {
+    const out = {};
+    try {
+      const { riders, members } = await fetchRoster();
+      for (const r of riders) out[String(r.riderId)] = r.name;
+      for (const m of uniqueMembers(members || [])) out[String(m.zwift_id)] = m.name || out[String(m.zwift_id)];
+    } catch (e) { /* ids are shown instead */ }
+    return Object.fromEntries(zwids.map(z => [z, out[z] || z]));
+  },
+});
+async function handleComms(route, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await route(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, { audience: body.audience, count: Array.isArray(body.zwids) ? body.zwids.length : undefined }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
@@ -2146,6 +2167,9 @@ async function route(req, res){
 
   const myWeekRoute = myweek.routes[`${req.method} ${pathname}`];
   if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req));
+
+  const commsRoute = comms.routes[`${req.method} ${pathname}`];
+  if (commsRoute) return handleComms(commsRoute, req, res);
 
   const weekRoute = week.routes[`${req.method} ${pathname}`];
   if (weekRoute) return sendJSON(res, 200, await weekRoute(req));

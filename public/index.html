@@ -167,6 +167,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <div class="navgroup">Club</div>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
+      <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
       <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="openAdmin()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
@@ -308,6 +309,10 @@ table{width:100%;border-collapse:collapse}
         <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
       </div>
     </div></div>
+  </div>
+
+  <div id="page-comms" class="page">
+    <div id="comms-content"></div>
   </div>
 
   <div id="page-week" class="page">
@@ -840,6 +845,86 @@ function renderWeek(){
   <div class="card" style="padding:14px 16px"><div style="font-weight:800">Coming up</div>${coming}</div>`;
 }
 
+
+// ── Comms (staff): a message to Discord for everyone, or for chosen members ───────────────
+let commsData=null, commsErr='', commsAudience='all', commsSel=new Set(), commsQ='', commsMsg='', commsPing=false, commsResult=null, commsBusy=false;
+async function commsCall(method,path,body){
+  const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+async function loadComms(){
+  const el=document.getElementById('comms-content'); if(!el) return;
+  try{ commsData=await commsCall('GET','/api/comms'); commsErr=''; }catch(e){ commsErr=e.message; }
+  renderComms();
+}
+function commsFromMembers(){
+  commsAudience='members'; commsSel=new Set(mSel); commsResult=null;
+  showTab('comms',document.getElementById('nav-comms'));
+}
+function commsPeople(){ return [...riders,...wpOnly].filter(m=>m.id!==undefined&&m.id!==null).map(m=>({ id:String(m.id), name:m.name||String(m.id) })).sort((a,b)=>a.name.localeCompare(b.name)); }
+function renderComms(){
+  const el=document.getElementById('comms-content'); if(!el) return;
+  if(commsErr&&!commsData){ el.innerHTML=`<div class="card" style="padding:20px;color:#f87171">${esc(commsErr)}</div>`; return; }
+  const d=commsData; if(!d) return;
+  const listScroll=(document.getElementById('comms-list')||{}).scrollTop||0;
+  const people=commsPeople(), q=commsQ.trim().toLowerCase();
+  const inp='background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px';
+  const aud=(id,label,sub)=>`<label style="flex:1;min-width:180px;cursor:pointer;padding:10px 14px;border-radius:10px;border:1px solid ${commsAudience===id?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.14)'};background:${commsAudience===id?'rgba(0,212,255,0.1)':'rgba(255,255,255,0.03)'}"><input type="radio" name="comms-aud" ${commsAudience===id?'checked':''} onchange="commsSetAudience('${id}')" style="margin-right:8px"/><b>${label}</b><div style="font-size:11px;color:#9ca3af;margin:2px 0 0 22px">${sub}</div></label>`;
+  const row=m=>{ const linked=d.links[m.id]; return `<div data-s="${esc((m.name+' '+m.id).toLowerCase())}" style="display:${!q||(m.name+' '+m.id).toLowerCase().includes(q)?'flex':'none'};gap:8px;align-items:center;padding:6px 8px;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><input type="checkbox" ${commsSel.has(m.id)?'checked':''} onchange="commsToggle('${esc(m.id)}',this.checked)"/><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>${linked?'<span style="font-size:11px;color:#10B981">✅ Discord ID saved</span>':'<span style="font-size:11px;color:#FBBF24">no Discord ID</span>'}<button data-id="${esc(m.id)}" onclick="commsLink(this.dataset.id)" style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.14);border-radius:6px">${linked?'Change':'Add ID'}</button></div>`; };
+  const logRows=d.log.length?d.log.map(l=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 8px;font-size:12px;white-space:nowrap;color:#9ca3af">${esc(new Date(l.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</td><td style="padding:6px 8px;font-size:12px">${l.audience==='all'?'Everyone'+(l.ping?' (@everyone)':''):esc(l.count+' member'+(l.count===1?'':'s'))}${l.audience==='members'?` <span style="color:#6b7280">${l.via==='dm'?'DM':'mention'}</span>`:''}</td><td style="padding:6px 8px;font-size:12px;color:#d1d5db">${esc(l.text)}</td><td style="padding:6px 8px;font-size:12px;color:${l.failed?'#FBBF24':'#10B981'};white-space:nowrap">${l.failed?l.ok+' sent, '+l.failed+' not':'sent'}</td></tr>`).join(''):`<tr><td colspan="4" style="padding:10px;font-size:13px;color:#6b7280">Nothing sent yet.</td></tr>`;
+  const result=commsResult?`<div class="card" style="padding:12px 14px;margin-top:12px;border-color:${commsResult.failed?'rgba(251,191,36,0.4)':'rgba(16,185,129,0.4)'}"><div style="font-weight:700;color:${commsResult.failed?'#FBBF24':'#10B981'}">${commsResult.audience==='all'?'✅ Sent to the club channel.':`${commsResult.sent} sent${commsResult.failed?`, ${commsResult.failed} not`:''} (${commsResult.via==='dm'?'direct messages':'mentioned in the club channel'})`}</div>${(commsResult.results||[]).filter(r=>!r.ok).map(r=>`<div style="font-size:12px;color:#9ca3af;margin-top:3px">• ${esc(r.name)}: ${esc(r.error||'not sent')}</div>`).join('')}</div>`:'';
+  el.innerHTML=`<div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">💬 Comms</h2><p style="font-size:13px;color:#6b7280">Send a message to Discord: everyone in the club channel, or chosen members.</p></div>
+  <div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:12px;color:#9ca3af">${d.channel?'✅ Club channel is set.':'⚠️ No club Discord channel is set (DISCORD_WEBHOOK_PUBLIC), so nothing can be posted there.'} ${d.dm?'✅ Direct messages are on: members get a private DM.':'ℹ️ Direct messages are off. Members are <b>@mentioned in the club channel</b> instead, so everyone in the channel sees the message. To send private DMs, add <b>DISCORD_BOT_TOKEN</b> in Vercel.'}</div>
+  <div class="card" style="padding:16px"><label class="lbl">Who gets it</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${aud('all','Everyone','One post in the club channel')}${aud('members','Chosen members',d.dm?'A private DM each':'An @mention in the channel')}</div>
+    ${commsAudience==='members'?`<input id="comms-q" placeholder="Search members…" value="${esc(commsQ)}" oninput="commsSearch(this.value)" style="${inp};width:100%;margin-bottom:6px"/>
+      <div id="comms-list" style="max-height:240px;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-radius:8px">${people.map(row).join('')||'<div style="padding:10px;font-size:13px;color:#6b7280">No members loaded yet.</div>'}</div>
+      <div id="comms-sel" style="font-size:12px;color:#9ca3af;margin:8px 0 14px"></div>`:''}
+    <label class="lbl">Message <span id="comms-count" style="float:right;font-weight:400;text-transform:none"></span></label>
+    <textarea id="comms-msg" maxlength="${d.limits.text}" oninput="commsInput(this.value)" placeholder="Write your message…" style="${inp};width:100%;min-height:110px;resize:vertical;font-family:inherit">${esc(commsMsg)}</textarea>
+    <div style="font-size:11px;color:#6b7280;margin-top:4px">It is signed “— CRYO-GEN staff”. Typed @mentions do not ping anyone.</div>
+    ${commsAudience==='all'&&d.canPingEveryone?`<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" ${commsPing?'checked':''} onchange="commsPing=this.checked"/> Notify everyone (@everyone) <span style="color:#6b7280;font-size:11px">administrators only</span></label>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px"><button id="comms-send" onclick="commsSend()" ${commsBusy?'disabled':''} class="btn-cyan" style="width:auto;padding:10px 20px">Send</button>${waBtn('comms-msg',commsMsg,'Copy for WhatsApp')}</div>
+    ${result}</div>
+  <div class="card" style="padding:14px 16px;margin-top:16px;overflow-x:auto"><div style="font-weight:800;margin-bottom:6px">Recently sent</div><table style="width:100%;border-collapse:collapse"><tbody>${logRows}</tbody></table></div>`;
+  const lst=document.getElementById('comms-list'); if(lst) lst.scrollTop=listScroll;
+  commsRefreshBits();
+}
+function commsRefreshBits(){
+  const cnt=document.getElementById('comms-count'); if(cnt&&commsData) cnt.textContent=commsMsg.length+' / '+commsData.limits.text;
+  const sel=document.getElementById('comms-sel');
+  if(sel){ const names=new Map(commsPeople().map(m=>[m.id,m.name])); const list=[...commsSel]; sel.innerHTML=list.length?`<b style="color:#e5e7eb">${list.length} selected</b>${list.length>commsData.limits.members?` <span style="color:#f87171">(at most ${commsData.limits.members} at a time)</span>`:''}: ${list.slice(0,12).map(id=>esc(names.get(id)||id)).join(', ')}${list.length>12?' and '+(list.length-12)+' more':''} <a href="#" onclick="commsSel.clear();renderComms();return false" style="color:#00D4FF;margin-left:6px">clear</a>`:'Nobody picked yet.'; }
+  const b=document.getElementById('comms-send'); if(b) b.textContent=commsBusy?'Sending…':(commsAudience==='all'?'Send to everyone':'Send to '+(commsSel.size||'…')+' member'+(commsSel.size===1?'':'s'));
+}
+function commsSetAudience(a){ commsAudience=a; commsResult=null; renderComms(); }
+function commsToggle(id,on){ if(on) commsSel.add(id); else commsSel.delete(id); commsRefreshBits(); }
+function commsSearch(v){ commsQ=v; const q=v.trim().toLowerCase(); document.querySelectorAll('#comms-list [data-s]').forEach(r=>{ r.style.display=!q||r.dataset.s.includes(q)?'flex':'none'; }); }
+function commsInput(v){ commsMsg=v; waStore['comms-msg']=v; commsRefreshBits(); }
+async function commsLink(id){
+  const cur=(commsData.links||{})[id]||'';
+  const v=prompt('Discord user ID for this member (17 to 19 digits). In Discord turn on Developer Mode, right-click the member, Copy User ID.\n\nLeave empty to remove it.',cur); if(v===null) return;
+  try{ const r=await commsCall('POST','/api/comms/link',{ zwid:id, discordId:v.trim() }); if(r.discordId) commsData.links[id]=r.discordId; else delete commsData.links[id]; }catch(e){ alert(e.message); }
+  renderComms();
+}
+async function commsSend(){
+  const message=commsMsg.trim(); if(!message){ alert('Write a message first.'); return; }
+  const all=commsAudience==='all', ids=[...commsSel];
+  if(!all&&!ids.length){ alert('Pick at least one member.'); return; }
+  const where=all?'everyone in the club channel'+(commsPing?' and notify @everyone':''):ids.length+' member'+(ids.length===1?'':'s')+(commsData.dm?' by direct message':', mentioned in the club channel');
+  if(!confirm('Send this to '+where+'?\n\n'+message.slice(0,300))) return;
+  commsBusy=true; renderComms();
+  try{
+    commsResult=await commsCall('POST','/api/comms/send',{ audience:all?'all':'members', zwids:ids, message, pingEveryone:all&&commsPing });
+    if(!commsResult.failed){ commsMsg=''; waStore['comms-msg']=''; commsPing=false; if(!all) commsSel.clear(); }
+    else commsSel=new Set((commsResult.results||[]).filter(r=>!r.ok).map(r=>r.zwid));   // the ones that did not get it stay picked
+  }catch(e){ commsBusy=false; alert('Not sent: '+e.message); renderComms(); return; }
+  commsBusy=false;
+  try{ commsData=await commsCall('GET','/api/comms'); }catch(e){ /* the log refreshes next time */ }
+  renderComms();
+}
+
 // ── Share to WhatsApp (staff) ───────────────────────────────────────────────────────────
 // WhatsApp has no way to post into a Community for us, so each message is built here and staff send it: "WhatsApp" opens WhatsApp with the text
 // ready (pick the Community or group), "Copy" puts it on the clipboard. Private Zwift event links are never put in these messages.
@@ -957,7 +1042,7 @@ function setupRole(){
     }
     document.getElementById('nav-upgrade').style.display='flex';
   }
-  if(role==='admin'||role==='mod') document.getElementById('nav-week').style.display='flex';
+  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; }
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
 }
@@ -980,6 +1065,7 @@ function showTab(id,btn){
   if(id==='members'){ renderMembers(); loadAssocPanel(); }
   if(id==='upgrade')loadUpgrade();
   if(id==='week')loadWeek();
+  if(id==='comms')loadComms();
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -1045,6 +1131,7 @@ function renderBulkBar(){
     <select id="mb-tier" style="${sel}"><option value="">Tier: no change</option><option value="full">Set to Full</option><option value="associate">Set to Associate</option></select>
     <select id="mb-status" style="${sel}"><option value="">Status: no change</option><option value="active">Set to Active</option><option value="suspended">Suspend</option><option value="left">Offboard (left)</option></select>
     <button onclick="mBulkApply()" ${mBulkBusy?'disabled':''} style="padding:6px 14px;font-size:12px;font-weight:700;background:#06b6d4;color:#000;border:none;border-radius:6px">${mBulkBusy?'Saving…':'Apply to '+mSel.size}</button>
+    <button onclick="commsFromMembers()" style="padding:6px 12px;font-size:12px;background:rgba(88,101,242,0.15);color:#a5b4fc;border:1px solid rgba(88,101,242,0.45);border-radius:6px">💬 Message them</button>
     <button onclick="mSelClear()" style="padding:6px 10px;font-size:12px;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);border-radius:6px">Clear</button></div>`;
 }
 async function mBulkApply(){
@@ -2088,7 +2175,7 @@ function renderLadder(){
 }
 async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
 
-// ── DIRT Racing Series (DRS): squad of eight, fixed calendar, best four score, vELO buffer ─────────
+// ── DIRT Racing Series (DRS): squad of up to ten, fixed calendar, best four score, vELO buffer ─────────
 let drsTeam='', drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
 async function loadDrs(){
   try{
@@ -2222,7 +2309,7 @@ function drsSetupCard(){
       ${lab('Time slot name')}<input id="dz-slot" ${inp}width:140px" maxlength="60" placeholder="Tuesday EU" value="${esc(s.slot||'')}"/></label>
       ${lab('Start time')}<input id="dz-time" ${inp}width:80px" maxlength="5" placeholder="19:30" value="${esc(s.time||'19:30')}"/></label>
       ${lab('Time zone')}<input id="dz-tz" ${inp}width:140px" placeholder="Europe/London" value="${esc(s.tz||'Europe/London')}"/></label></div>
-    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||8}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||10}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
     <div style="display:flex;gap:6px"><button onclick="drsSetupSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save</button>${drs.season?`<button onclick="drsSetup=false;renderDrs()" style="${btn}">Close</button>`:''}</div></div>`;
 }
 async function drsSetupSave(){
@@ -2235,7 +2322,7 @@ async function drsCalendarPaste(){
 }
 function drsHelpCard(){
   return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">❓ How the DIRT Racing Series works</summary><ol style="font-size:13px;color:#d1d5db;margin:8px 0 0 18px;padding:0;line-height:1.7">
-    <li><b>Squad:</b> up to eight riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
+    <li><b>Squad:</b> up to ten riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
     <li><b>Calendar:</b> a fixed run of Tuesday stages (scratch, points, individual time trial and team time trial), all in the squad's time slot for the season.</li>
     <li><b>Lock:</b> the squad must be final in the DRS portal 24 hours before a stage, so Race Control can run its checks. You get a reminder, and the stage card shows the lock time.</li>
     <li><b>Race:</b> all eight can race but only the best four finishers score. Name the scoring four; the rest ride support. No PowerUps.</li>

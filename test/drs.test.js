@@ -1,5 +1,5 @@
 'use strict';
-// DIRT Racing Series: a squad of eight in a vELO division, a fixed calendar, only the best four finishers score, the 35-point buffer above the
+// DIRT Racing Series: a squad of ten in a vELO division, a fixed calendar, only the best four finishers score, the 35-point buffer above the
 // division threshold, and the reminders before the 24-hour lock.
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -46,10 +46,10 @@ test('the season is validated and the cap is the threshold plus the buffer', asy
   assert.equal((await post('season', { ...SEASON, time: '7pm' })).status, 400);
   assert.equal((await post('season', { ...SEASON, tz: 'Mars/Base' })).status, 400);
   const s = (await post('season', SEASON)).body.season;
-  assert.deepEqual([s.threshold, s.buffer, s.cap, s.squadMax, s.scorers, s.alertWithin, s.spikeLimit], [1500, 35, 1535, 8, 4, 10, 50]);
+  assert.deepEqual([s.threshold, s.buffer, s.cap, s.squadMax, s.scorers, s.alertWithin, s.spikeLimit], [1500, 35, 1535, 10, 4, 10, 50]);
 });
 
-test('the squad holds eight, and a rider above the threshold cannot be nominated before their first race ', async () => {
+test('the squad holds ten, and a rider above the threshold cannot be nominated before their first race ', async () => {
   await post('season', SEASON);
   for (const i of [0, 1, 2, 7, 8, 9]) assert.equal((await post('squad', { zwid: ID(i) })).status, 200);
   const over = await post('squad', { zwid: ID(5) });
@@ -58,9 +58,10 @@ test('the squad holds eight, and a rider above the threshold cannot be nominated
   assert.equal((await post('squad', { zwid: ID(5), force: true })).status, 200, 'staff can force it');
   assert.equal((await post('squad', { zwid: ID(3), force: true })).status, 200);
   assert.equal((await post('squad', { zwid: ID(1) })).status, 200, 'already in: nothing changes');
+  for (const i of [4, 6]) assert.equal((await post('squad', { zwid: ID(i), force: true })).status, 200);   // now ten
   const full = await post('squad', { zwid: ID(10), name: 'Nobody' });
   assert.equal(full.status, 409);
-  assert.match(full.body.error, /full \(8 riders\)/);
+  assert.match(full.body.error, /full \(10 riders\)/);
   assert.equal((await post('squad', { zwid: '999999' })).status, 404, 'unknown riders are refused before the size check');
   await post('squad', { zwid: ID(9), remove: true });
   assert.equal((await post('squad', { zwid: 'x' })).status, 400);
