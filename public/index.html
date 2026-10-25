@@ -33,8 +33,7 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   .brand-bar img{width:34px!important;height:34px!important}
   table{font-size:12px!important}
   td,th{padding:7px 8px!important;font-size:11px!important}
-  .modal{margin:8px!important;max-height:92vh!important;overflow-y:auto!important}
-  .modal-body{max-height:65vh!important;overflow-y:auto!important}
+  .modal{margin:8px!important;max-height:calc(100vh - 16px)!important}
   #role-display span:first-child{display:none!important}
 }
 @media(max-width:480px){
@@ -50,10 +49,10 @@ td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:white;
 table{width:100%;border-collapse:collapse}
 .page{display:none}.page.active{display:block}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
-.modal{background:#0d1322;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:440px}
-.modal-head{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px}
-.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
-.modal-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
+.modal{background:#0d1322;border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:440px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden}
+.modal-head{flex:none;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px}
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;flex:1 1 auto}
+.modal-foot{flex:none;padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
 .btn-cyan{padding:10px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;width:100%;font-size:14px}
 .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
 .cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
@@ -170,7 +169,7 @@ table{width:100%;border-collapse:collapse}
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
-      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="document.getElementById('adminModal').style.display='flex';loadHealth();loadBackups()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
+      <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="openAdmin()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
     </div>
   </aside>
 
@@ -299,6 +298,7 @@ table{width:100%;border-collapse:collapse}
       <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
       <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'#00D4FF':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
     </div>
+    <div id="m-bulkbar"></div>
     <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
       </tr></thead><tbody id="members-body"></tbody></table></div>
     <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
@@ -328,7 +328,7 @@ table{width:100%;border-collapse:collapse}
 
 <div id="adminModal" class="modal-bg" style="display:none">
   <div class="modal">
-    <div class="modal-head">⚙️ Admin <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:#6b7280;font-size:20px">×</button></div>
+    <div class="modal-head">⚙️ Admin <button onclick="closeAdmin()" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:0 4px;cursor:pointer">×</button></div>
     <div class="modal-body">
       <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
       <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
@@ -355,7 +355,7 @@ table{width:100%;border-collapse:collapse}
         <button onclick="if(confirm('Clear ALL event sign-ups?')){sharedWrite('/api/signups/clear').then(ok=>{if(ok)document.getElementById('adminModal').style.display='none'})}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
       </div>
     </div>
-    <div class="modal-foot"><button class="btn-cyan" onclick="document.getElementById('adminModal').style.display='none'">Close</button></div>
+    <div class="modal-foot"><button class="btn-cyan" onclick="closeAdmin()">Close</button></div>
   </div>
 </div>
 
@@ -639,9 +639,25 @@ async function backupRestore(id){
 }
 
 // ── System health (admin) ──────────────────────────────────
-async function loadHealth(){
+let healthTimer=null;
+function openAdmin(){
+  document.getElementById('adminModal').style.display='flex';
+  loadHealth(); loadBackups();
+  if(healthTimer) clearInterval(healthTimer);
+  healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
+    const m=document.getElementById('adminModal');
+    if(!m||m.style.display==='none'){ clearInterval(healthTimer); healthTimer=null; return; }
+    if(document.visibilityState==='visible') loadHealth(true);
+  },30000);
+}
+function closeAdmin(){
+  document.getElementById('adminModal').style.display='none';
+  if(healthTimer){ clearInterval(healthTimer); healthTimer=null; }
+}
+// Problems first and open; the checks that are fine are folded away so the panel stays short.
+async function loadHealth(quiet){
   const el=document.getElementById('health-panel'); if(!el) return;
-  el.innerHTML='Checking…';
+  if(!quiet||!el.dataset.loaded) el.innerHTML='Checking…';
   try{
     const res=await fetch('/api/health',{headers:tttHeaders()});
     const d=await res.json();
@@ -649,8 +665,13 @@ async function loadHealth(){
     const icon={ok:'✅',warn:'⚠️',fail:'❌',info:'ℹ️'};
     healthDotSet(d.checks);
     const count=k=>d.checks.filter(c=>c.status===k).length;
-    el.innerHTML=`<div style="margin-bottom:8px;color:#9ca3af">${count('fail')?`<b style="color:#f87171">${count('fail')} failing</b> · `:''}${count('warn')?`<b style="color:#FBBF24">${count('warn')} to look at</b> · `:''}${count('ok')} OK · checked ${esc(new Date(d.checked).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</div>`+
-      d.checks.map(c=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[c.status]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(c.label)}</div><div style="color:${c.status==='fail'?'#f87171':c.status==='warn'?'#FBBF24':'#9ca3af'}">${esc(c.detail)}</div></div></div>`).join('');
+    const row=c=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[c.status]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(c.label)}</div><div style="color:${c.status==='fail'?'#f87171':c.status==='warn'?'#FBBF24':'#9ca3af'}">${esc(c.detail)}</div></div></div>`;
+    const bad=d.checks.filter(c=>c.status==='fail'||c.status==='warn').sort((a,b)=>(a.status==='fail'?0:1)-(b.status==='fail'?0:1)), fine=d.checks.filter(c=>c.status!=='fail'&&c.status!=='warn');
+    const wasOpen=!!(el.querySelector('details')&&el.querySelector('details').open);
+    el.dataset.loaded='1';
+    el.innerHTML=`<div style="margin-bottom:8px;color:#9ca3af">${count('fail')?`<b style="color:#f87171">${count('fail')} failing</b> · `:''}${count('warn')?`<b style="color:#FBBF24">${count('warn')} to look at</b> · `:''}${count('ok')} OK · checked ${esc(new Date(d.checked).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</div>`
+      +bad.map(row).join('')
+      +(fine.length?`<details ${wasOpen||!bad.length?'open':''} style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.05)"><summary style="cursor:pointer;padding:6px 0;color:#9ca3af">${fine.length} check${fine.length===1?'':'s'} fine</summary>${fine.map(row).join('')}</details>`:'');
   }catch(e){ el.innerHTML=`<span style="color:#f87171">Could not run the checks: ${esc(e.message)}</span>`; }
 }
 
@@ -922,6 +943,43 @@ async function loadLive() {
   }
 }
 
+
+// ── Members: change many at once (staff) ───────────────────────────────────────────────
+let mSel=new Set(), mFilteredIds=[], mBulkBusy=false;
+function mSelect(id,on){ if(on) mSel.add(String(id)); else mSel.delete(String(id)); renderMembers(); }
+function mSelectAll(on){ mFilteredIds.forEach(id=>{ if(on) mSel.add(id); else mSel.delete(id); }); renderMembers(); }
+function mSelClear(){ mSel.clear(); renderMembers(); }
+function renderBulkBar(){
+  const el=document.getElementById('m-bulkbar'); if(!el) return;
+  if(!(role==='admin'||role==='mod')||!mSel.size){ el.innerHTML=''; return; }
+  const sel='padding:6px 8px;font-size:12px;background:#0f1623;color:white;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
+  el.innerHTML=`<div class="card" style="padding:10px 14px;margin-bottom:12px;border-color:rgba(0,212,255,0.35);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b style="color:#00D4FF">${mSel.size} selected</b>
+    <select id="mb-tier" style="${sel}"><option value="">Tier: no change</option><option value="full">Set to Full</option><option value="associate">Set to Associate</option></select>
+    <select id="mb-status" style="${sel}"><option value="">Status: no change</option><option value="active">Set to Active</option><option value="suspended">Suspend</option><option value="left">Offboard (left)</option></select>
+    <button onclick="mBulkApply()" ${mBulkBusy?'disabled':''} style="padding:6px 14px;font-size:12px;font-weight:700;background:#06b6d4;color:#000;border:none;border-radius:6px">${mBulkBusy?'Saving…':'Apply to '+mSel.size}</button>
+    <button onclick="mSelClear()" style="padding:6px 10px;font-size:12px;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);border-radius:6px">Clear</button></div>`;
+}
+async function mBulkApply(){
+  const changes={}, tier=document.getElementById('mb-tier').value, status=document.getElementById('mb-status').value;
+  if(tier) changes.tier=tier; if(status) changes.status=status;
+  if(!Object.keys(changes).length){ alert('Choose a tier or a status to apply.'); return; }
+  const ids=[...mSel], what=[tier&&'tier → '+tier, status&&'status → '+status].filter(Boolean).join(' and ');
+  if(!confirm(`Change ${what} for ${ids.length} member${ids.length===1?'':'s'}?${status==='left'?'\n\nOffboarding marks them as having left the club.':''}`)) return;
+  mBulkBusy=true; renderBulkBar();
+  let d;
+  try{
+    const r=await fetch('/api/members/bulk',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zwids:ids, changes })});
+    d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  }catch(e){ mBulkBusy=false; renderBulkBar(); alert('Not saved: '+e.message); return; }
+  mBulkBusy=false;
+  const done=new Set(d.results.filter(x=>x.ok).map(x=>x.zwid));
+  for(const rec of [...riders,...wpOnly]) if(done.has(String(rec.id))) applyMemberRecord(rec,changes);
+  done.forEach(id=>mSel.delete(id));   // what failed stays selected so it can be tried again
+  renderMembers();
+  if(d.failed) alert(`Saved ${d.saved}. ${d.failed} could not be saved:\n`+d.results.filter(x=>!x.ok).slice(0,15).map(x=>`• ${x.zwid}: ${x.error}`).join('\n')+(d.failed>15?`\n…and ${d.failed-15} more`:'')+'\n\nThey are still selected.');
+}
+
 // ── Action Functions (Tier Toggle & Off-boarding) ──────────
 async function changeTier(id, tier) {
   if (!await saveMember(id, { tier })) renderMembers();
@@ -1127,6 +1185,7 @@ function renderMembers(){
     (!mActive||m.active)
   );
   
+  mFilteredIds=filtered.map(m=>String(m.id));
   const sorted=sortData(filtered,mSort);
   const PER=15, total=Math.ceil(sorted.length/PER)||1;
   if(mPage>total)mPage=1;
@@ -1134,8 +1193,12 @@ function renderMembers(){
   document.getElementById('members-sub').textContent=`Showing ${filtered.length}${riders.length?' of '+(riders.length+wpOnly.length)+' members'+(wpOnly.length?` (${wpOnly.length} in WordPress but not in the Zwift club)`:''):' (mock data)'}`;
   document.getElementById('m-page-info').textContent=`Page ${mPage} of ${total}`;
   updateSortArrows('m',mSort);
+  renderBulkBar();
+  renderBulkBar();
   
+  const staffM=(role === 'admin' || role === 'mod');
   document.getElementById('members-table-head').innerHTML = `
+      ${staffM?`<th style="width:28px"><input type="checkbox" title="Select everyone who matches the filters" ${mFilteredIds.length&&mFilteredIds.every(id=>mSel.has(id))?'checked':''} onchange="mSelectAll(this.checked)"/></th>`:''}
       <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
       <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
       <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
@@ -1160,6 +1223,7 @@ function renderMembers(){
     if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#EF4444'; }
     
     return`<tr style="${isMe?'background:rgba(0,212,255,0.05)':''}">
+      ${staffM?`<td style="width:28px"><input type="checkbox" ${mSel.has(String(m.id))?'checked':''} onchange="mSelect('${esc(String(m.id))}',this.checked)"/></td>`:''}
       <td style="white-space:nowrap">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}${m.tier==='associate'?' <span class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc;font-size:9px">Associate</span>':''}</td>
       <td style="color:#6b7280;font-size:12px">${m.cc.toUpperCase()}</td>
       <td>${catB(m.cat)}</td>
