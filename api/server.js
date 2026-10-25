@@ -2001,6 +2001,12 @@ async function handleAssoc(assocRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
+const week = require('../lib/week')({
+  requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
+  assocList: req => assoc.routes['GET /api/assoc/list'](req),
+});
+
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
 const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS });
 async function handleBackup(route, req, res){
@@ -2070,6 +2076,9 @@ async function route(req, res){
 
   const zrlRoute = zrl.routes[`${req.method} ${pathname}`];
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
+
+  const weekRoute = week.routes[`${req.method} ${pathname}`];
+  if (weekRoute) return sendJSON(res, 200, await weekRoute(req));
 
   const assocRoute = assoc.routes[`${req.method} ${pathname}`];
   if (assocRoute) return handleAssoc(assocRoute, req, res);
