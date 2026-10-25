@@ -295,7 +295,7 @@ table{width:100%;border-collapse:collapse}
       <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
       <select id="m-cat" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
       <select id="m-ph" class="inp" style="width:120px" onchange="mPage=1;renderMembers()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
-      <select id="m-tier" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All tiers</option><option value="full">Full</option><option value="half">Half</option><option value="associate">Associate</option></select>
+      <select id="m-tier" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All tiers</option><option value="full">Full</option><option value="associate">Associate</option></select>
       <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
       <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'#00D4FF':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
     </div>
@@ -472,11 +472,11 @@ function applyMemberRecord(r, m) {
 }
 
 const MOCK=[
-  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"half",status:"active"},
+  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"associate",status:"active"},
   {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"half",status:"suspended"},
+  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"associate",status:"suspended"},
   {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"half",status:"active"},
+  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"associate",status:"active"},
 ];
 
 // ── Escaping (shared data is shown to other people) ─────────
@@ -900,7 +900,7 @@ async function loadLive() {
         zraCat: r.race?.current?.mixed?.category || '',
         ph: phClean(r.phenotype?.value),
         active: status === 'active',
-        tier: dbRecord.tier || 'half',
+        tier: dbRecord.tier || 'full',   // on the club roster with no member record: treated as a member, as the server does
         status,
         ob_discord: String(dbRecord.offboard_discord) === '1',
         ob_fb: String(dbRecord.offboard_fb) === '1',
@@ -911,7 +911,7 @@ async function loadLive() {
     const onRoster=new Set(d.riders.map(r=>String(r.riderId)));
     wpOnly=(d.members||[]).filter(m=>!onRoster.has(String(m.zwift_id))).map(m=>({
       id:/^\d+$/.test(String(m.zwift_id))?Number(m.zwift_id):m.zwift_id, name:m.name||String(m.zwift_id), cc:'', cat:'', ftp:0, wkg:0, velo:0, zraCat:'', ph:'',
-      active:m.status==='active', tier:m.tier||'half', status:m.status||'pending',
+      active:m.status==='active', tier:m.tier||'associate', status:m.status||'pending',
       ob_discord:String(m.offboard_discord)==='1', ob_fb:String(m.offboard_fb)==='1', ob_zp:String(m.offboard_zp)==='1', raw:null, noZwift:true }));
     setZRA('#10B981', `${haveDb ? 'Synced DB + Live' : 'Live roster'} · ${riders.length} riders ✓`);
     trackAffiliations(riders);
@@ -1185,7 +1185,6 @@ function renderMembers(){
           <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
             <select onchange="changeTier(${m.id}, this.value)" style="width:auto;padding:2px 4px;font-size:11px;background:#0f1623;color:white;border:1px solid rgba(255,255,255,0.1);border-radius:4px">
               <option value="associate" ${m.tier==='associate'?'selected':''}>Associate</option>
-              <option value="half" ${m.tier==='half'?'selected':''}>Half</option>
               <option value="full" ${m.tier==='full'?'selected':''}>Full</option>
             </select>
             ${m.status === 'active' ? `<button onclick="updateStatus(${m.id}, 'suspended', 7)" style="padding:4px 8px;font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:4px">Suspend</button>` : ''}
@@ -2191,7 +2190,7 @@ function renderProfile(){
           <span style="font-size:12px;color:#6b7280">${PH_EMOJI[r.ph]||'⭐'} ${r.ph}</span>
           <span style="font-size:12px;font-family:monospace;color:#00D4FF;font-weight:700">vELO ${r.velo}</span>
         </div>
-        <div style="margin-top:6px;font-size:12px;color:#6b7280">Membership: ${esc(r.tier==='full'?'Full':'Half')} · ${esc(r.status||'active')}${sessionStorage.getItem('sso')?' · <span style="color:#10B981">✓ signed in with cryogen.team</span>':''}</div>
+        <div style="margin-top:6px;font-size:12px;color:#6b7280">Membership: ${esc(r.tier==='full'?'Full':'Associate')} · ${esc(r.status||'active')}${sessionStorage.getItem('sso')?' · <span style="color:#10B981">✓ signed in with cryogen.team</span>':''}</div>
       </div>
     </div>
 

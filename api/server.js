@@ -1502,6 +1502,9 @@ async function fetchRoster(){
 
 // WordPress can hold several records for one Zwift ID (test entries, re-registrations).
 // Everything here uses the last one, so what the page shows is what a save changes.
+// "Half" and "associate" are the same membership: WordPress records still saying half are read as associate everywhere in the app.
+const normTier = t => (String(t || '').toLowerCase() === 'half' ? 'associate' : t);
+
 function uniqueMembers(list){
   const byId = new Map();
   for (const m of Array.isArray(list) ? list : []){
@@ -1516,7 +1519,7 @@ async function handleRoster(req, res){
   const staff = ['admin', 'mod'].includes(roleFromRequest(req));
   // Everyone sees name/status/tier; off-boarding progress is staff-only.
   const memberView = members && members.map(m => ({
-    zwift_id: m.zwift_id, name: m.name, status: m.status, tier: m.tier,
+    zwift_id: m.zwift_id, name: m.name, status: m.status, tier: normTier(m.tier),
     ...(staff ? { offboard_discord: m.offboard_discord, offboard_fb: m.offboard_fb, offboard_zp: m.offboard_zp } : {}),
   }));
   sendJSON(res, 200, { riders, members: memberView, membersError: staff ? membersError : undefined });
@@ -1524,7 +1527,7 @@ async function handleRoster(req, res){
 
 // Staff edits to a member record, saved to WordPress with the server's credentials.
 const MEMBER_FIELDS = {
-  tier: ['full', 'half', 'associate'],
+  tier: ['full', 'associate'],   // 'half' is accepted from older callers and saved as 'associate'
   status: ['active', 'suspended', 'left'],
   offboard_discord: ['0', '1'],
   offboard_fb: ['0', '1'],
@@ -1536,6 +1539,7 @@ async function handleMemberUpdate(req, res, zwiftId){
   requireRole(req, ['admin', 'mod']);
   const body = await readJSONBody(req);
   const changes = {};
+  if (body.tier === 'half') body.tier = 'associate';
   for (const [k, allowed] of Object.entries(MEMBER_FIELDS)){
     if (body[k] === undefined) continue;
     if (!allowed.includes(String(body[k]))) throw new HttpError(400, `invalid ${k}`);
@@ -1703,7 +1707,7 @@ async function handleMe(req, res){
   const { members } = await fetchRoster();
   const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === member.zwid);
   const associate = member.assoc && await assoc.stillAssociate(member.zwid);
-  sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && record.tier, status: record && record.status, associate: !!associate });
+  sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && normTier(record.tier), status: record && record.status, associate: !!associate });
 }
 
 // ── System health (admin) ──────────────────────────────────
