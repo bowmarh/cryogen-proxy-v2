@@ -1449,10 +1449,12 @@ function slimRider(r){
     zpCategory: r.zpCategory,
     zpFTP: r.zpFTP,
     club: r.club ? { name: r.club.name } : undefined,
-    power: pick(r.power, ['wkg5', 'wkg15', 'wkg30', 'wkg60', 'wkg120', 'wkg300', 'wkg1200']),
+    power: pick(r.power, ['wkg5', 'wkg15', 'wkg30', 'wkg60', 'wkg120', 'wkg300', 'wkg1200', 'w5', 'w60', 'w300', 'w1200', 'CP', 'AWC']),
     race: {
       ...pick(race, ['finishes', 'dnfs', 'wins', 'podiums']),
       current: race.current ? { rating: race.current.rating, mixed: race.current.mixed ? { category: race.current.mixed.category } : undefined } : undefined,
+      max30: race.max30 ? { rating: race.max30.rating } : undefined,
+      max90: race.max90 ? { rating: race.max90.rating } : undefined,
     },
     phenotype: r.phenotype ? { value: r.phenotype.value, scores: r.phenotype.scores } : undefined,
     handicaps: r.handicaps && r.handicaps.profile ? { profile: r.handicaps.profile } : undefined,
@@ -2119,6 +2121,15 @@ async function handleComms(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// The staff rider profile (lib/profile.js): teams across the club, Discord link, and staff notes and details.
+const profile = require('../lib/profile')({ redis, HttpError, requireRole, text, zrl, ladder, drs, comms });
+async function handleProfile(route, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await route(req, body, parseRequestUrl(req).query);
+  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, { zwid: body.zwid }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
@@ -2142,7 +2153,7 @@ async function handleCalendar(route, req, res){
 }
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2225,6 +2236,9 @@ async function route(req, res){
   }
   const calRoute = calendar.routes[`${req.method} ${pathname}`];
   if (calRoute) return handleCalendar(calRoute, req, res);
+
+  const profileRoute = profile.routes[`${req.method} ${pathname}`];
+  if (profileRoute) return handleProfile(profileRoute, req, res);
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
