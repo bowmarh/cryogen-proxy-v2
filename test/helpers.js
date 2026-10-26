@@ -181,6 +181,12 @@ function installFetch(world) {
     if (u.host === 'cal.test') return new Response(world.ical || '', { status: world.icalStatus || 200 });   // an iCal feed
     if (u.host === 'discord.com') {   // the Discord bot API: world.dms collects direct messages; world.dmFail is a set of user ids whose DMs are closed
       const m = /\/channels\/dm-(\d+)\/messages$/.exec(u.pathname);
+      if (/\/guilds\/\d+\/members$/.test(u.pathname)) {   // the server's member list: world.guildMembers (world.guildDenied answers 403, as when the Server Members Intent is off)
+        if (world.guildDenied) return json({ code: 50001 }, 403);
+        const after = u.searchParams.get('after') || '0', all = world.guildMembers || [];
+        const start = after === '0' ? 0 : all.findIndex(m => m.user.id === after) + 1;
+        return json(all.slice(start, start + Number(u.searchParams.get('limit') || 1000)));
+      }
       if (u.pathname.endsWith('/oauth2/token')) { (world.oauthCalls = world.oauthCalls || []).push(String(opts.body)); return world.oauthFail ? json({ error: 'invalid_grant' }, 400) : json({ access_token: 'user-token' }); }   // "Sign in with Discord"
       if (u.pathname === '/api/v10/users/@me') return (opts.headers || {}).Authorization === 'Bearer user-token' && world.oauthUser ? json(world.oauthUser) : json({}, 401);
       if (u.pathname.endsWith('/users/@me/channels')) { const id = JSON.parse(opts.body).recipient_id; return json(world.dmFail && world.dmFail.has(id) ? { code: 50007 } : { id: `dm-${id}` }, world.dmFail && world.dmFail.has(id) ? 403 : 200); }
