@@ -1361,6 +1361,68 @@ function rSortBy(col){
 }
 
 // ── Rider profile links ────────────────────────────────────
+
+// ── Staff rider profile: every stat the club has on one rider, their teams, and staff notes ──
+let rpId=null, rpData=null, rpMsg='';
+function profCatName(c){ return typeof c==='string'?c:(c&&c.name)||''; }
+function openRider(id){
+  rpId=String(id); rpData=null; rpMsg='';
+  let m=document.getElementById('riderModal');
+  if(!m){ m=document.createElement('div'); m.id='riderModal'; m.className='modal-bg'; m.onclick=e=>{ if(e.target===m) closeRider(); }; document.body.appendChild(m); }
+  m.style.display='flex'; renderRider();
+  fetch('/api/profile?zwid='+encodeURIComponent(rpId),{headers:tttHeaders()}).then(r=>r.json().then(d=>({ok:r.ok,d}))).then(({ok,d})=>{ rpData=ok?d:{error:d.error||'Could not load.'}; renderRider(); }).catch(()=>{ rpData={error:'Could not reach the server.'}; renderRider(); });
+}
+function closeRider(){ const m=document.getElementById('riderModal'); if(m) m.style.display='none'; rpId=null; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&rpId) closeRider(); });
+function renderRider(){
+  const m=document.getElementById('riderModal'); if(!m||!rpId) return;
+  const r=(typeof riders!=='undefined'?riders:[]).find(x=>String(x.id)===rpId), raw=(r&&r.raw)||{}, p=raw.power||{}, race=raw.race||{}, cur=race.current||{};
+  const tile=(label,val,sub)=>`<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.04);min-width:96px;flex:1"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">${label}</div><div style="font-size:18px;font-weight:800;margin-top:2px">${val}</div>${sub?`<div style="font-size:11px;color:#6b7280">${sub}</div>`:''}</div>`;
+  const h=t=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 6px">${t}</div>`;
+  const bar=(label,val,max,txt)=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;margin:3px 0"><span style="width:62px;color:#9ca3af">${label}</span><div style="flex:1;height:8px;background:rgba(255,255,255,0.07);border-radius:4px"><div style="height:8px;width:${max?Math.max(2,Math.round(val/max*100)):0}%;background:#00D4FF;border-radius:4px"></div></div><span style="width:74px;text-align:right;color:#e5e7eb">${txt}</span></div>`;
+  const wk=[['5s','wkg5'],['15s','wkg15'],['30s','wkg30'],['1m','wkg60'],['2m','wkg120'],['5m','wkg300'],['20m','wkg1200']].filter(([,k])=>p[k]);
+  const wmax=Math.max(0,...wk.map(([,k])=>p[k]));
+  const ftpKg=p.wkg1200?(p.wkg1200*0.95).toFixed(2):'', zmap=p.wkg300?Number(p.wkg300).toFixed(2):'';
+  const sc=(raw.phenotype&&raw.phenotype.scores)||{}, scE=Object.entries(sc).filter(([,v])=>typeof v==='number').sort((a,b)=>b[1]-a[1]), smax=Math.max(0,...scE.map(([,v])=>v));
+  const hp=(raw.handicaps&&raw.handicaps.profile)||{}, hpE=Object.entries(hp).filter(([,v])=>typeof v==='number');
+  const fin=race.finishes||0, dnf=race.dnfs||0, pct=(n,d)=>d?Math.round(n/d*100)+'%':'—';
+  const d=rpData&&!rpData.error?rpData:null, det=(d&&d.details)||{};
+  const inp='background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:7px 10px;color:white;font-size:13px;width:100%;box-sizing:border-box';
+  const nameOf=(r&&r.name)||(d&&d.details&&d.details.name)||('Rider '+rpId);
+  let teams='<div style="font-size:12px;color:#6b7280">Loading…</div>';
+  if(rpData&&rpData.error) teams=`<div style="font-size:12px;color:#f87171">${esc(rpData.error)}</div>`;
+  else if(d){
+    const t=d.teams||{}, line=(label,arr)=>`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">${label}</span>${arr&&arr.length?arr.map(x=>`<span style="display:inline-block;padding:1px 8px;margin:0 4px 2px 0;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;font-size:12px">${esc(x)}</span>`).join(''):'<span style="color:#4b5563">—</span>'}</div>`;
+    const z=t.zrl||{};
+    teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#6b7280;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#4b5563">Not linked</span>'}</div>`;
+  }
+  const detForm=d?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="lbl">Time zone / when they ride</label><input id="pf-tz" style="${inp}" maxlength="40" value="${esc(det.tz||'')}" placeholder="e.g. UK evenings"/></div>
+      <div><label class="lbl">Preferred team</label><input id="pf-pref" style="${inp}" maxlength="80" value="${esc(det.prefTeam||'')}"/></div>
+      <div><label class="lbl">Trainer</label><input id="pf-trainer" style="${inp}" maxlength="60" value="${esc(det.trainer||'')}" placeholder="e.g. Wahoo Kickr"/></div>
+      <div><label class="lbl">Bike</label><input id="pf-bike" style="${inp}" maxlength="60" value="${esc(det.bike||'')}"/></div></div>
+    <label class="lbl" style="margin-top:8px">Staff note</label><textarea id="pf-note" style="${inp};min-height:70px" maxlength="800">${esc(det.note||'')}</textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 18px" onclick="riderSave()">Save details</button><span style="font-size:11px;color:#6b7280">${det.at?'Last edited '+esc(new Date(det.at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))+(det.by?' by '+esc(det.by):''):'Staff only: riders never see these.'}</span>${rpMsg?`<span style="font-size:12px;color:${rpMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(rpMsg)}</span>`:''}</div>`:'';
+  m.innerHTML=`<div class="modal" style="max-width:640px"><div class="modal-head"><span>${r?toFlag(r.cc)+' ':''}${esc(nameOf)}${r&&r.tier==='associate'?' <span class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc;font-size:9px">Associate</span>':''}</span><button onclick="closeRider()" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:0 4px;cursor:pointer">×</button></div>
+    <div class="modal-body">${r?`<div style="margin-bottom:10px;font-size:12px;color:#9ca3af">${riderLinks(r)}<span style="margin-left:8px">${esc(r.status||'')}${r.tier?' · '+esc(r.tier):''}${raw.club&&raw.club.name?' · '+esc(raw.club.name):''}</span></div>`:`<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Not in the Zwift club roster, so there are no Zwift stats. Zwift ID ${esc(rpId)}.</div>`}
+    ${r?`<div style="display:flex;gap:8px;flex-wrap:wrap">${tile('Category',esc(r.cat||'—'),r.zraCat?esc(profCatName(r.zraCat))+' tier':'')}${tile('vELO',r.velo||'—',(race.max30&&race.max30.rating?'30d max '+Math.round(race.max30.rating):'')+(race.max90&&race.max90.rating?(race.max30&&race.max30.rating?' · ':'')+'90d max '+Math.round(race.max90.rating):''))}${tile('FTP',r.ftp?r.ftp+' W':'—',ftpKg?ftpKg+' w/kg (est.)':'')}${tile('zMAP',zmap?zmap+' w/kg':'—','5-minute power')}</div>
+    ${wk.length?h('Power curve (w/kg)')+wk.map(([l,k])=>bar(l,p[k],wmax,Number(p[k]).toFixed(2))).join(''):''}
+    ${scE.length?h('Rider type'+(raw.phenotype&&raw.phenotype.value?' · '+esc(raw.phenotype.value):''))+scE.slice(0,5).map(([k,v])=>bar(esc(k),v,smax,Math.round(v*10)/10)).join(''):''}
+    ${hpE.length?h('Courses')+`<div style="font-size:13px;color:#d1d5db">${hpE.map(([k,v])=>esc(k)+' '+Math.round(v*10)/10).join(' · ')}</div>`:''}
+    ${fin||race.wins||race.podiums?h('Race record')+`<div style="display:flex;gap:8px;flex-wrap:wrap">${tile('Races',fin,dnf?dnf+' DNF ('+pct(dnf,fin+dnf)+')':'')}${tile('Wins',race.wins||0,pct(race.wins||0,fin))}${tile('Podiums',race.podiums||0,pct(race.podiums||0,fin))}</div>`:''}`:''}
+    ${h('Teams and links')}${teams}
+    ${d?h('Staff notes and details')+detForm:''}</div></div>`;
+}
+async function riderSave(){
+  const g=id=>document.getElementById(id).value.trim(); let by=''; try{ by=localStorage.getItem('cgStaffName')||''; }catch(e){}
+  rpMsg='';
+  try{
+    const res=await fetch('/api/profile',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zwid:rpId, tz:g('pf-tz'), prefTeam:g('pf-pref'), trainer:g('pf-trainer'), bike:g('pf-bike'), note:g('pf-note'), by })});
+    const d=await res.json(); if(!res.ok) throw new Error(d.error||('Request failed ('+res.status+')'));
+    rpData={ ...rpData, details:d.details }; rpMsg='✓ Saved.';
+  }catch(e){ rpMsg=e.message; }
+  renderRider();
+}
 function riderLinks(m){
   if(!m.id||m.id<1) return m.name;
   const zra = `https://www.zwiftracing.app/riders/${encodeURIComponent(m.id)}`;
@@ -1509,7 +1571,7 @@ function renderMembers(){
     
     return`<tr style="${isMe?'background:rgba(0,212,255,0.05)':''}">
       ${staffM?`<td style="width:28px"><input type="checkbox" ${mSel.has(String(m.id))?'checked':''} onchange="mSelect('${esc(String(m.id))}',this.checked)"/></td>`:''}
-      <td style="white-space:nowrap">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}${m.tier==='associate'?' <span class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc;font-size:9px">Associate</span>':''}</td>
+      <td style="min-width:230px">${toFlag(m.cc)} ${isMe?`<strong style="color:#00D4FF">${riderLinks(m)} ★</strong>`:riderLinks(m)}${staffM?` <button title="Open this rider's profile" onclick="openRider('${esc(String(m.id))}')" style="padding:0 6px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">👤</button>`:''}${m.tier==='associate'?' <span class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc;font-size:9px">Associate</span>':''}</td>
       <td style="color:#6b7280;font-size:12px">${m.cc.toUpperCase()}</td>
       <td>${catB(m.cat)}</td>
       <td>${m.zraCat?`<span style="font-size:11px;color:${zraC};font-weight:700">${m.zraCat}</span>`:'-'}</td>
@@ -3170,7 +3232,7 @@ function zrlRidersTab(d,st){
   const shown=list.slice(0,zrlRiderLimit);
   const th='padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280';
   const reg=ids=>ids.map(id=>zrlZoneShort[id]||id).join(' · ');
-  const rows=shown.map(x=>`<tr data-s="${esc((x.name+' '+(x.zwid||'')+' '+(x.league||'')).toLowerCase())}" style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:8px 10px;font-size:13px;${x.in?'':'opacity:.55'}">${esc(x.name)}${x.captain?' ⭐':''}${x.in?'':' <span style="font-size:10px;color:#9ca3af">(not racing)</span>'} <button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;margin-left:4px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button></td>
+  const rows=shown.map(x=>`<tr data-s="${esc((x.name+' '+(x.zwid||'')+' '+(x.league||'')).toLowerCase())}" style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:8px 10px;font-size:13px;${x.in?'':'opacity:.55'}">${esc(x.name)}${x.captain?' ⭐':''}${x.in?'':' <span style="font-size:10px;color:#9ca3af">(not racing)</span>'} <button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;margin-left:4px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button>${x.zwid?` <button title="Open this rider's profile" data-zwid="${esc(x.zwid)}" onclick="openRider(this.dataset.zwid)" style="padding:0 6px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">👤</button>`:''}</td>
     <td style="padding:8px 10px;font-size:13px;white-space:nowrap">${esc(zrlRiderCat(x)||'—')}${x.cat&&zrlRiderCat(x)&&x.cat!==zrlRiderCat(x)?` <span title="Said ${esc(x.cat)} at sign-up" style="font-size:10px;color:#6b7280">(said ${esc(x.cat)})</span>`:''}${x.in&&zrlOverOn(x,d).length?zrlBadge('OVER','#f87171'):''}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>
     <td style="padding:8px 10px;text-align:center"><input type="checkbox" title="Eligible for a development team" ${x.devOk?'checked':''} onchange="zrlDevOkSet(this.dataset.key,this.checked)" data-key="${esc(x.key)}"/></td>
     <td style="padding:8px 10px;font-size:12px;color:#9ca3af;white-space:nowrap">${esc(zrlPower(x)||'—')}</td>
