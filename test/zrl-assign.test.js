@@ -107,3 +107,20 @@ test('manual moves: put a rider on a team, take them off, unknown rider or team 
   assert.equal((await move('4378027', '')).status, 200);
   assert.deepEqual((await view(admin)).assign, {});
 });
+
+test('a team holds at most ten racing riders: the eleventh is refused by assign and by the rider edit, a swap is fine', async () => {
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Alpha', region: 'eu' }, { name: 'CRYO-GEN Beta', region: 'eu' }] }, { token: admin });
+  const ids = Array.from({ length: 11 }, (_, i) => String(7000000 + i));
+  for (const [i, z] of ids.entries()) await join(`Rider ${i}`, z);
+  const move = (key, body = {}) => app.post('/api/zrl/assign', { key, ...body }, { token: admin });
+  for (const z of ids.slice(0, 10)) assert.equal((await move(z, { team: 'cryo-gen-alpha' })).status, 200);
+  const over = await move(ids[10], { team: 'cryo-gen-alpha' });
+  assert.equal(over.status, 409);
+  assert.match(over.body.error, /Alpha is full \(10\/10\)/);
+  assert.equal((await move(ids[10], { team: 'cryo-gen-alpha', add: true })).status, 409, 'adding a second team is held to it too');
+  assert.equal((await app.post('/api/zrl/signup-edit', { key: ids[10], team: 'cryo-gen-alpha' }, { token: admin })).status, 409, 'and so is the rider edit');
+  assert.equal((await move(ids[0], { team: 'cryo-gen-alpha' })).status, 200, 'a rider already on the team can be re-saved');
+  assert.equal((await move(ids[10], { team: 'cryo-gen-beta' })).status, 200, 'another team has room');
+  assert.equal((await move(ids[9], { team: '' })).status, 200);
+  assert.equal((await move(ids[10], { team: 'cryo-gen-alpha' })).status, 200, 'room again once someone leaves');
+});

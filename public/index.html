@@ -2828,9 +2828,10 @@ function zrlAssignRemove(key,team){ zrlPlan=null; zrlPost('/api/zrl/assign',{key
 function zrlTeamCell(x,r,d){
   const short=t=>esc(t.name.replace(/^CRYO-GEN\s+/,'')), on=((d.placements||{})[x.key])||[];
   const chip=id=>{ const t=r.teams.find(tt=>tt.id===id); return t?`<span style="display:inline-flex;gap:4px;align-items:center;padding:2px 8px;margin:0 4px 4px 0;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;font-size:12px">${short(t)}<button data-key="${esc(x.key)}" data-team="${esc(id)}" onclick="zrlAssignRemove(this.dataset.key,this.dataset.team)" title="Take off this team" style="background:none;border:none;color:#00D4FF;cursor:pointer;padding:0">×</button></span>`:''; };
-  const free=r.teams.filter(t=>!on.includes(t.id));
+  const free=r.teams.filter(t=>!on.includes(t.id)), fill=zrlFill(d), size=r.rosterSize;
+  const short2=t=>short(t)+' ('+(fill[t.id]||0)+'/'+size+')';
   const asks=(x.also||[]).filter(id=>!on.includes(id)).map(id=>r.teams.find(t=>t.id===id)).filter(Boolean);
-  return `${on.map(chip).join('')}<select class="inp" data-key="${esc(x.key)}" onchange="${on.length?'zrlAssignAdd':'zrlAssign'}(this.dataset.key,this.value)" style="width:auto;max-width:190px;font-size:12px"><option value="">${on.length?'+ add a team':'— no team —'}</option>${free.map(t=>`<option value="${esc(t.id)}">${short(t)}</option>`).join('')}</select>${asks.map(t=>`<div style="font-size:11px;color:#FBBF24;margin-top:3px">asks for ${short(t)} <button data-key="${esc(x.key)}" data-team="${esc(t.id)}" onclick="zrlAssignAdd(this.dataset.key,this.dataset.team)" style="background:none;border:none;color:#10B981;cursor:pointer;font-size:11px">✚ add</button></div>`).join('')}`;
+  return `${on.map(chip).join('')}<select class="inp" data-key="${esc(x.key)}" onchange="${on.length?'zrlAssignAdd':'zrlAssign'}(this.dataset.key,this.value)" style="width:auto;max-width:190px;font-size:12px"><option value="">${on.length?'+ add a team':'— no team —'}</option>${free.map(t=>`<option value="${esc(t.id)}" ${(fill[t.id]||0)>=size?'disabled':''}>${short2(t)}${(fill[t.id]||0)>=size?' full':''}</option>`).join('')}</select>${asks.map(t=>`<div style="font-size:11px;color:#FBBF24;margin-top:3px">asks for ${short(t)} ${(fill[t.id]||0)>=size?'(full)':`<button data-key="${esc(x.key)}" data-team="${esc(t.id)}" onclick="zrlAssignAdd(this.dataset.key,this.dataset.team)" style="background:none;border:none;color:#10B981;cursor:pointer;font-size:11px">✚ add</button>`}</div>`).join('')}`;
 }
 let zrlExport=null, zrlCopyId=0;
 const zrlCopies={};
@@ -2885,7 +2886,7 @@ function zrlEditorCard(d){
     <div style="margin-top:8px">${lbl('Time zones')}${d.round.regions.map(r=>`<label style="margin-right:14px;font-size:13px"><input type="checkbox" class="zed-region" value="${esc(r.id)}" ${(x.regions||[]).includes(r.id)?'checked':''}/> ${esc(r.name)}</label>`).join('')}
       <label style="font-size:13px"><input type="checkbox" id="zed-captain" ${x.captain?'checked':''}/> ⭐ happy to captain</label></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <div>${lbl(placedOn.length>1?'Teams':'Team')}${placedOn.length>1?`<div style="font-size:13px;padding:8px 0;max-width:260px">${placedOn.map(id=>esc((d.round.teams.find(t=>t.id===id)||{name:id}).name)).join(', ')}<div style="font-size:11px;color:#6b7280">Change these in the rider table.</div></div>`:`<select id="zed-team" class="inp" style="width:auto;max-width:220px"><option value="">— no team —</option>${d.round.teams.map(t=>`<option value="${esc(t.id)}" ${team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`}</div>
+      <div>${lbl(placedOn.length>1?'Teams':'Team')}${placedOn.length>1?`<div style="font-size:13px;padding:8px 0;max-width:260px">${placedOn.map(id=>esc((d.round.teams.find(t=>t.id===id)||{name:id}).name)).join(', ')}<div style="font-size:11px;color:#6b7280">Change these in the rider table.</div></div>`:`<select id="zed-team" class="inp" style="width:auto;max-width:260px"><option value="">— no team —</option>${d.round.teams.map(t=>{ const n=zrlFill(d)[t.id]||0, full=n>=d.round.rosterSize&&team!==t.id; return `<option value="${esc(t.id)}" ${team===t.id?'selected':''} ${full?'disabled':''}>${esc(t.name)} (${n}/${d.round.rosterSize})${full?' full':''}</option>`; }).join('')}</select>`}</div>
       <div>${lbl('Team they asked for')}<select id="zed-pref" class="inp" style="width:auto;max-width:220px"><option value="">—</option>${d.round.teams.map(t=>`<option value="${esc(t.id)}" ${x.preferred===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
       <div style="flex:1;min-width:200px">${lbl('Comments (staff only)')}<input id="zed-comments" class="inp" maxlength="300" value="${esc(x.comments||'')}"/></div></div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlEditSave()">Save</button>
@@ -2991,6 +2992,14 @@ function zrlTeamStats(d){
   const unplaced=d.signups.filter(x=>x.in&&!(d.assign||{})[x.key]);
   return { by, unplaced };
 }
+// Power numbers for a rider on the sign-up list, from the club roster: FTP in watts, FTP in w/kg (95% of the 20-minute w/kg) and zMAP in w/kg (the 5-minute w/kg).
+function zrlPower(x){
+  const r=x.zwid&&(typeof riders!=='undefined'?riders:[]).find(q=>String(q.id)===String(x.zwid)); if(!r) return '';
+  const p=r.raw&&r.raw.power||{}, ftpKg=p.wkg1200?(p.wkg1200*0.95).toFixed(2):'', zmap=p.wkg300?Number(p.wkg300).toFixed(2):'';
+  return [r.ftp?r.ftp+' W':'', ftpKg?ftpKg+' w/kg':'', zmap?'zMAP '+zmap:''].filter(Boolean).join(' · ');
+}
+// How many racing riders each team holds now, by team id.
+function zrlFill(d){ const n={}; d.signups.forEach(x=>{ if(x.in) (((d.placements||{})[x.key])||[]).forEach(t=>{ n[t]=(n[t]||0)+1; }); }); return n; }
 function zrlTeamIssues(t,riders,size){
   const out=[];
   if(riders.length&&!t.captain) out.push('no captain');
@@ -3084,10 +3093,10 @@ function zrlTeamDetail(d,st){
     <div style="margin-top:12px">${lbl('Riders ('+riders.length+'/'+r.rosterSize+')')}
       ${riders.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${riders.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 6px 6px 0">${esc(x.name)}${x.zwid===t.captain&&x.zwid?' <span title="Captain">👑</span>':''}${x.captain?' ⭐':''}${x.commit==='reserve'?' <span style="font-size:11px;color:#9ca3af">(reserve)</span>':''}
         ${spare(x)&&needs.length?`<div style="margin-top:4px"><select class="inp" data-key="${esc(x.key)}" onchange="if(this.value)zrlAssign(this.dataset.key,this.value)" style="width:auto;max-width:260px;font-size:11px"><option value="">⭐ Also volunteered: move to a team without a captain…</option>${needs.map(n=>`<option value="${esc(n.id)}">${esc(n.name)} (${esc(zoneName(n.region))})</option>`).join('')}</select></div>`:''}</td>
-        <td style="padding:6px;color:#9ca3af;width:36px">${esc(x.cat||'—')}</td><td style="padding:6px;color:#6b7280;width:50px">${esc(x.regions.map(g=>zrlZoneShort[g]||g).join('·'))}</td>
+        <td style="padding:6px;color:#9ca3af;width:36px">${esc(x.cat||'—')}</td><td style="padding:6px;color:#6b7280;width:50px">${esc(x.regions.map(g=>zrlZoneShort[g]||g).join('·'))}</td><td style="padding:6px;color:#9ca3af;font-size:12px;white-space:nowrap">${esc(zrlPower(x))}</td>
         <td style="padding:6px 0;text-align:right;white-space:nowrap"><button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button>
           <button title="Take off this team (back to unplaced)" data-key="${esc(x.key)}" onclick="zrlAssign(this.dataset.key,'')" style="padding:0 6px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">↩</button></td></tr>`).join('')}</table>`:'<div style="font-size:13px;color:#6b7280">No riders yet.</div>'}
-      <div style="margin-top:10px">${lbl('Add a rider who has no team')}<select class="inp" onchange="if(this.value)zrlAssign(this.value,'${esc(t.id)}')" style="width:auto;max-width:360px"><option value="">${free.length?'Choose a rider… ('+free.length+' unplaced)':'Nobody is unplaced'}</option>${free.map(x=>`<option value="${esc(x.key)}">${esc(x.name)}${x.cat?' ('+esc(x.cat)+')':''} · ${esc(x.regions.map(g=>zrlZoneShort[g]||g).join('·'))}${x.captain?' ⭐':''}${x.regions.includes(t.region)?'':' — other time zone'}</option>`).join('')}</select></div></div></div>`;
+      <div style="margin-top:10px">${lbl('Add a rider who has no team')}${riders.filter(x=>x.in!==false).length>=r.rosterSize?`<div style="font-size:13px;color:#FBBF24">This team is full (${riders.length}/${r.rosterSize}). Take a rider off it to add another.</div>`:`<select class="inp" onchange="if(this.value)zrlAssign(this.value,'${esc(t.id)}')" style="width:auto;max-width:520px"><option value="">${free.length?'Choose a rider… ('+free.length+' unplaced, '+riders.length+'/'+r.rosterSize+' on this team)':'Nobody is unplaced'}</option>${free.map(x=>`<option value="${esc(x.key)}">${esc(x.name)}${x.cat?' ('+esc(x.cat)+')':''} · ${esc(x.regions.map(g=>zrlZoneShort[g]||g).join('·'))}${zrlPower(x)?' · '+esc(zrlPower(x)):''}${x.captain?' ⭐':''}${x.regions.includes(t.region)?'':' — other time zone'}</option>`).join('')}</select>`}</div></div></div>`;
 }
 function zrlTeamSlot(id){ zrlPost('/api/zrl/team-slot',{ teams:[id], slot:document.getElementById('zrl-td-slot').value.trim() }); }
 function zrlTeamZone(id,region){
@@ -3133,12 +3142,13 @@ function zrlRidersTab(d,st){
   const reg=ids=>ids.map(id=>zrlZoneShort[id]||id).join(' · ');
   const rows=shown.map(x=>`<tr data-s="${esc((x.name+' '+(x.zwid||'')+' '+(x.league||'')).toLowerCase())}" style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:8px 10px;font-size:13px;${x.in?'':'opacity:.55'}">${esc(x.name)}${x.captain?' ⭐':''}${x.in?'':' <span style="font-size:10px;color:#9ca3af">(not racing)</span>'} <button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;margin-left:4px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button></td>
     <td style="padding:8px 10px;font-size:13px">${esc(x.cat||'—')}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>
+    <td style="padding:8px 10px;font-size:12px;color:#9ca3af;white-space:nowrap">${esc(zrlPower(x)||'—')}</td>
     <td style="padding:6px 10px">${zrlTeamCell(x,r,d)}</td>
     <td style="padding:8px 10px;font-size:12px;color:#9ca3af">${x.commit==='reserve'?'<b>Reserve</b> · ':''}${esc(x.league||'')}${x.prevTeam&&x.prevTeam!=='stay'?' · was '+esc(x.prevTeam):(x.prevTeam==='stay'?' · stays on previous team':'')}${x.comments?' · '+esc(x.comments):''}</td></tr>`).join('');
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${chip('unplaced','No team')}${chip('racing','All racing')}${chip('stars','⭐ Volunteers')}${chip('out','Not racing')}${chip('noid','No Zwift ID')}
       <input id="zrl-rsearch" class="inp" placeholder="Search name or ID…" oninput="zrlRiderSearch(this.value)" style="width:190px;margin-left:auto"/>
       <button onclick="zrlEditStart('new')" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;cursor:pointer">+ Add a rider</button></div>
-    ${list.length?`<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Cat</th><th style="${th}">Time zones</th><th style="${th}">Team</th><th style="${th}">Notes</th></tr></thead><tbody id="zrl-rbody">${rows}</tbody></table></div>
+    ${list.length?`<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Cat</th><th style="${th}">Time zones</th><th style="${th}">FTP · zMAP</th><th style="${th}">Team</th><th style="${th}">Notes</th></tr></thead><tbody id="zrl-rbody">${rows}</tbody></table></div>
       <div style="font-size:11px;color:#6b7280">Showing ${shown.length} of ${list.length}${list.length>shown.length?` · <button onclick="zrlRiderLimit=100000;renderZrl2()" style="background:none;border:none;color:#00D4FF;cursor:pointer;font-size:11px">show all</button>`:''}</div>`
       :`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${zrlRiderFilter==='unplaced'?'Everyone racing has a team. 🎉':'Nobody matches this filter.'}</div>`}${zrlCatCard()}`;
 }
