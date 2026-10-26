@@ -56,12 +56,12 @@ function parseRequestUrl(req){
   }
 }
 
-function readJSONBody(req){
+function readJSONBody(req, limit = 20000){
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', c => {
       body += c;
-      if (body.length > 20000){ reject(new HttpError(413, 'request too large')); req.destroy(); }
+      if (body.length > limit){ reject(new HttpError(413, 'request too large')); req.destroy(); }
     });
     req.on('end', () => {
       try { resolve(JSON.parse(body || '{}')); } catch (e) { reject(new HttpError(400, 'invalid JSON')); }
@@ -2123,8 +2123,12 @@ async function handleDiscordCallback(req, res){
   res.writeHead(302, { Location: `/#discord=${outcome}`, 'Cache-Control': 'no-store' });
   res.end();
 }
+// The Discord import posts whole member lists (a few hundred KB), so those two routes read a larger body, and only for staff.
+const COMMS_BIG_BODY = new Set(['/api/comms/import', '/api/comms/discord-match']);
 async function handleComms(route, req, res){
-  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const big = req.method === 'POST' && COMMS_BIG_BODY.has(parseRequestUrl(req).pathname);
+  if (big) requireRole(req, ['admin', 'mod']);
+  const body = req.method === 'POST' ? await readJSONBody(req, big ? 800000 : 20000) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
   if (req.method === 'POST' && !parseRequestUrl(req).pathname.startsWith('/api/me/')) await zrl.logChange(req, parseRequestUrl(req).pathname, { audience: body.audience, count: Array.isArray(body.zwids) ? body.zwids.length : undefined }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result);

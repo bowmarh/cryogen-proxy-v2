@@ -97,3 +97,25 @@ test('saving: confirmed pairings become staff links; a rider\'s own link is neve
   assert.equal((await save([])).status, 400);
   assert.equal((await app.post('/api/comms/import', { links: [{ zwid: '4001', discordId: '900000000000000001' }] })).status, 401);
 });
+
+test('a whole server fits: thousands of members to match and hundreds of links to save, staff only, in a few Redis trips', async () => {
+  const members = Array.from({ length: 3000 }, (_, i) => ({ id: String(500000000000000000n + BigInt(i)), name: `Member Number ${i}` }));
+  members.push({ id: '800000000000000777', name: 'Anna Berg' });
+  const m = await app.post('/api/comms/discord-match', { members }, A);
+  assert.equal(m.status, 200, 'a ~200 KB body is accepted for staff');
+  assert.equal(m.body.total, 3001);
+  const links = Array.from({ length: 600 }, (_, i) => ({ zwid: String(60000 + i), discordId: String(500000000000000000n + BigInt(i)), tag: `Member Number ${i}` }));
+  const r = await app.post('/api/comms/import', { links }, A);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.saved, r.body.skipped.length], [600, 0]);
+  assert.equal(Object.keys(app.world.db['cg:comms:discord']).length, 600);
+  // someone not signed in is refused before any body is read
+  assert.equal((await app.post('/api/comms/import', { links: links.slice(0, 5) }, {})).status, 401);
+  assert.equal((await app.post('/api/comms/discord-match', { members: members.slice(0, 5) }, {})).status, 401);
+});
+
+test('one Discord member chosen for two riders is saved once', async () => {
+  const r = await app.post('/api/comms/import', { links: [{ zwid: '4001', discordId: '900000000000000001' }, { zwid: '4002', discordId: '900000000000000001' }] }, A);
+  assert.equal(r.body.saved, 1);
+  assert.match(r.body.skipped[0].reason, /another rider/);
+});
