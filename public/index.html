@@ -1690,6 +1690,7 @@ function tttRider(s){
 function tttHeaders(){
   const h={'Content-Type':'application/json'};
   const t=sessionStorage.getItem('token'); if(t)h['Authorization']='Bearer '+t;
+  try{ const n=localStorage.getItem('cgStaffName'); if(n) h['X-Staff-Name']=encodeURIComponent(n).slice(0,120); }catch(e){}
   return h;
 }
 async function loadTtt(){
@@ -2984,7 +2985,7 @@ async function zrlImportApply(){
 
 // ── Staff view: team tiles, riders, setup, WTRL list ───────
 let zrlStaffTab=(()=>{ try{ return sessionStorage.getItem('zrlTab')||'teams'; }catch(e){ return 'teams'; } })();
-let zrlOpenTeamId=null, zrlTeamFilter='all', zrlRiderFilter='unplaced', zrlRiderLimit=40;
+let zrlOpenTeamId=null, zrlTeamFilter='all', zrlRiderFilter='unplaced', zrlRiderLimit=40, zrlTeamCat='all', zrlTeamKind='all', zrlRiderCatF='all', zrlRiderZone='all';
 const zrlZoneShort={eu:'EU',am:'AM',ap:'AP'};
 function zrlStaffGo(tab){ zrlStaffTab=tab; if(tab==='weeks') zrlWeekly=null; if(tab==='results') zrlStand=null; if(tab==='setup'){ zrlPast=null; zrlLog=null; } try{ sessionStorage.setItem('zrlTab',tab); }catch(e){} renderZrl2(); }
 function zrlTeamStats(d){
@@ -2998,6 +2999,26 @@ function zrlPower(x){
   const p=r.raw&&r.raw.power||{}, ftpKg=p.wkg1200?(p.wkg1200*0.95).toFixed(2):'', zmap=p.wkg300?Number(p.wkg300).toFixed(2):'';
   return [r.ftp?r.ftp+' W':'', ftpKg?ftpKg+' w/kg':'', zmap?'zMAP '+zmap:''].filter(Boolean).join(' · ');
 }
+// A team's category is the letter that ends its grade ("Open B" is B). A rider is over category when their ZwiftPower category is stronger than that.
+function zrlTeamCatOf(t){ const m=/\b([A-E])\+?\s*$/i.exec(String(t.grade||'')); return m?m[1].toUpperCase():''; }
+function zrlRiderCat(x){ const q=x.zwid&&(typeof riders!=='undefined'?riders:[]).find(r=>String(r.id)===String(x.zwid)); const zp=String((q&&q.raw&&q.raw.zpCategory)||'').replace('+','').toUpperCase(); return ZRL_CATS.includes(zp)?zp:(x.cat||''); }
+function zrlOver(x,t){ const tc=zrlTeamCatOf(t), rc=zrlRiderCat(x); return !!(tc&&rc&&ZRL_CATS.indexOf(rc)<ZRL_CATS.indexOf(tc)); }
+function zrlOverOn(x,d){ return (((d.placements||{})[x.key])||[]).map(id=>d.round.teams.find(t=>t.id===id)).filter(t=>t&&zrlOver(x,t)); }
+const zrlChip=(on,label,fn)=>`<button onclick="${fn}" style="padding:4px 12px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${on?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${on?'rgba(0,212,255,0.12)':'transparent'};color:${on?'#00D4FF':'#9ca3af'}">${label}</button>`;
+const zrlBadge=(txt,col)=>`<span style="display:inline-block;padding:1px 7px;margin-left:4px;border-radius:99px;font-size:10px;font-weight:800;letter-spacing:.02em;background:${col}22;color:${col};border:1px solid ${col}55">${txt}</span>`;
+// The riders list as an Excel workbook (Riders and Teams sheets), built by the server.
+async function zrlXlsx(btn){
+  const o=btn&&btn.textContent; if(btn){ btn.disabled=true; btn.textContent='Building…'; }
+  try{
+    const res=await fetch('/api/zrl/riders-xlsx',{headers:tttHeaders()}), d=await res.json();
+    if(!res.ok) throw new Error(d.error||('Request failed ('+res.status+')'));
+    const bin=atob(d.base64), bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  }catch(e){ alert(e.message||'Could not build the file.'); }
+  if(btn){ btn.disabled=false; btn.textContent=o; }
+}
+function zrlTeamKindSet(id,dev){ zrlPost('/api/zrl/team-kind',{ teams:[id], dev }); }
+function zrlDevOkSet(key,on){ zrlPost('/api/zrl/signup-edit',{ key, devOk:on }); }
 // How many racing riders each team holds now, by team id.
 function zrlFill(d){ const n={}; d.signups.forEach(x=>{ if(x.in) (((d.placements||{})[x.key])||[]).forEach(t=>{ n[t]=(n[t]||0)+1; }); }); return n; }
 function zrlTeamIssues(t,riders,size){
@@ -3044,28 +3065,35 @@ function zrlGrowthCard(d,st){
 function zrlTeamsTab(d,st){
   const r=d.round, size=r.rosterSize;
   const zones=r.regions;
-  const matches=t=>{ if(zrlTeamFilter==='all') return true; if(zrlTeamFilter==='attention') return zrlTeamIssues(t,st.by[t.id]||[],size).length>0; if(zrlTeamFilter==='riders') return (st.by[t.id]||[]).length>0; return t.region===zrlTeamFilter; };
+  const matches=t=>{ if(zrlTeamCat!=='all'&&zrlTeamCatOf(t)!==zrlTeamCat) return false; if(zrlTeamKind!=='all'&&(zrlTeamKind==='dev')!==!!t.dev) return false; if(zrlTeamFilter==='all') return true; if(zrlTeamFilter==='attention') return zrlTeamIssues(t,st.by[t.id]||[],size).length>0; if(zrlTeamFilter==='riders') return (st.by[t.id]||[]).length>0; return t.region===zrlTeamFilter; };
   const chip=(id,label)=>`<button onclick="zrlTeamFilter='${id}';renderZrl2()" style="padding:4px 12px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${zrlTeamFilter===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${zrlTeamFilter===id?'rgba(0,212,255,0.12)':'transparent'};color:${zrlTeamFilter===id?'#00D4FF':'#9ca3af'}">${label}</button>`;
   const count=f=>r.teams.filter(t=>f==='all'||t.region===f).length;
   const shown=r.teams.filter(matches);
   const tile=t=>{
-    const riders=st.by[t.id]||[], n=riders.length, pct=Math.min(100,Math.round(n/size*100)), issues=zrlTeamIssues(t,riders,size);
+    const riders=st.by[t.id]||[], n=riders.length, pct=Math.min(100,Math.round(n/size*100)), issues=zrlTeamIssues(t,riders,size), overN=riders.filter(x=>zrlOver(x,t)).length;
     const barColor=n>size?'#FBBF24':n===size?'#10B981':n?'#00D4FF':'rgba(255,255,255,0.12)';
     const zone=(zones.find(z=>z.id===t.region)||{}).name||t.region;
     const open=zrlOpenTeamId===t.id;
     return `<div onclick="zrlOpenTeam('${esc(t.id)}')" style="cursor:pointer;padding:12px 14px;border-radius:12px;border:1px solid ${open?'rgba(0,212,255,0.6)':issues.length?'rgba(251,191,36,0.25)':'rgba(255,255,255,0.08)'};background:${open?'rgba(0,212,255,0.07)':'rgba(255,255,255,0.03)'}">
       <div style="font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(t.name)}">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</div>
-      <div style="font-size:11px;color:#6b7280;margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'—')}</div>
+      <div style="font-size:11px;color:#6b7280;margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'—')}${t.dev?zrlBadge('DEV','#a78bfa'):''}</div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#9ca3af">${esc(zone)}</span><span style="font-weight:700;color:${n>size?'#FBBF24':'#e5e7eb'}">${n}/${size}</span></div>
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:8px"><div style="height:5px;width:${pct}%;background:${barColor};border-radius:3px"></div></div>
       <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#4b5563')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
       <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(t.slot):(n?'no race time':'')}</div>
-      ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}</div>`;
+      ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}
+      ${overN?`<div style="font-size:12px;color:#f87171;font-weight:700">⚠ ${overN} over category</div>`:''}</div>`;
   };
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">${r.teams.some(t=>(st.by[t.id]||[]).length)?waBtn('zrl-all',waZrlAllText(d,st),'Share all teams'):''}${r.open?waBtn('zrl-open',waZrlOpenText(r),'Share sign-up call'):''}</div>
+  const cats=ZRL_CATS.filter(c=>r.teams.some(t=>zrlTeamCatOf(t)===c)), devN=r.teams.filter(t=>t.dev).length;
+  const lblS='font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-right:2px';
+  const filt2=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><span style="${lblS}">Category</span>${zrlChip(zrlTeamCat==='all','Any',"zrlTeamCat='all';renderZrl2()")}${cats.map(c=>zrlChip(zrlTeamCat===c,c+' ('+r.teams.filter(t=>zrlTeamCatOf(t)===c).length+')',`zrlTeamCat='${c}';renderZrl2()`)).join('')}
+    <span style="${lblS};margin-left:12px">Type</span>${zrlChip(zrlTeamKind==='all','Any',"zrlTeamKind='all';renderZrl2()")}${zrlChip(zrlTeamKind==='regular','Regular ('+(r.teams.length-devN)+')',"zrlTeamKind='regular';renderZrl2()")}${zrlChip(zrlTeamKind==='dev','Dev ('+devN+')',"zrlTeamKind='dev';renderZrl2()")}
+    <span style="font-size:12px;color:#6b7280;margin-left:auto">${shown.length} of ${r.teams.length} teams</span></div>`;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip('all','All ('+r.teams.length+')')}${chip('riders','With riders ('+r.teams.filter(t=>(st.by[t.id]||[]).length).length+')')}${zones.map(z=>chip(z.id,esc(z.name)+' ('+count(z.id)+')')).join('')}${chip('attention','⚠️ Needs attention')}</div>${filt2}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><button onclick="zrlXlsx(this)" style="padding:5px 12px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid rgba(16,185,129,0.45);background:rgba(16,185,129,0.1);color:#10B981">📊 Export riders to Excel</button>${r.teams.some(t=>(st.by[t.id]||[]).length)?waBtn('zrl-all',waZrlAllText(d,st),'Share all teams'):''}${r.open?waBtn('zrl-open',waZrlOpenText(r),'Share sign-up call'):''}</div>
     ${zrlGrowthCard(d,st)}${zrlBulkCard(d,st)}${zrlTeamDetail(d,st)}
-    ${shown.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${shown.map(tile).join('')}</div>`:`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${r.teams.length?'No teams match this filter.':'No teams yet. Import the team board from the Setup tab.'}</div>`}`;
+    ${shown.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">${shown.map(tile).join('')}</div>`:`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${r.teams.length?'No teams match this filter.':'No teams yet. Import the team board from the Setup tab.'}</div>`}
+    ${zrlLogCard()}`;
 }
 function zrlOpenTeam(id){ zrlOpenTeamId=zrlOpenTeamId===id?null:id; renderZrl2(); const el=document.getElementById('zrl-team-detail'); if(el) el.scrollIntoView({block:'nearest',behavior:'smooth'}); }
 function zrlTeamDetail(d,st){
@@ -3081,7 +3109,8 @@ function zrlTeamDetail(d,st){
   const free=st.unplaced.slice().sort((a,b)=>(b.regions.includes(t.region)-a.regions.includes(t.region))||a.name.localeCompare(b.name));
   return `<div id="zrl-team-detail" class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.4)">
     <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:16px;font-weight:800">${esc(t.name)}</div>
-      <div style="font-size:12px;color:#6b7280">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'')}</div></div>
+      <div style="font-size:12px;color:#6b7280">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'')}</div>
+      <label style="font-size:12px;color:#9ca3af;display:inline-flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input type="checkbox" ${t.dev?'checked':''} onchange="zrlTeamKindSet('${esc(t.id)}',this.checked)"/> Development team</label></div>
       ${waBtn('zrl-team-'+t.id,waZrlTeamText(t,riders,r),'Share team')}
       <button onclick="zrlWtrlMark('${esc(t.id)}',${!t.wtrlRegistered})" style="${btn}">${t.wtrlRegistered?'✅ On WTRL (undo)':'☐ Mark registered on WTRL'}</button> <button onclick="zrlOpenTeam('${esc(t.id)}')" style="${btn}">✕ Close</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
@@ -3091,7 +3120,7 @@ function zrlTeamDetail(d,st){
       <div>${lbl('Captain')}<select class="inp" data-team="${esc(t.id)}" onchange="zrlSetCaptain(this.dataset.team,this.value)" style="width:auto;max-width:240px"><option value="">— no captain —</option>${t.captain&&!has?`<option value="" disabled selected>${esc(t.captainName||t.captain)} (not on this team)</option>`:''}${riders.map(x=>`<option value="${esc(x.key)}" ${x.zwid&&x.zwid===t.captain?'selected':''} ${x.zwid?'':'disabled'}>${x.captain?'⭐ ':''}${esc(x.name)}${x.zwid?'':' (no Zwift ID)'}</option>`).join('')}</select></div></div>
     ${zrlStaffLineups(d,t,riders)}
     <div style="margin-top:12px">${lbl('Riders ('+riders.length+'/'+r.rosterSize+')')}
-      ${riders.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${riders.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 6px 6px 0">${esc(x.name)}${x.zwid===t.captain&&x.zwid?' <span title="Captain">👑</span>':''}${x.captain?' ⭐':''}${x.commit==='reserve'?' <span style="font-size:11px;color:#9ca3af">(reserve)</span>':''}
+      ${riders.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${riders.map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:6px 6px 6px 0">${esc(x.name)}${x.zwid===t.captain&&x.zwid?' <span title="Captain">👑</span>':''}${x.captain?' ⭐':''}${x.commit==='reserve'?' <span style="font-size:11px;color:#9ca3af">(reserve)</span>':''}${zrlOver(x,t)?zrlBadge('OVER CATEGORY · '+zrlRiderCat(x)+' on a '+zrlTeamCatOf(t)+' team','#f87171'):''}${x.devOk?zrlBadge('DEV OK','#a78bfa'):''}
         ${spare(x)&&needs.length?`<div style="margin-top:4px"><select class="inp" data-key="${esc(x.key)}" onchange="if(this.value)zrlAssign(this.dataset.key,this.value)" style="width:auto;max-width:260px;font-size:11px"><option value="">⭐ Also volunteered: move to a team without a captain…</option>${needs.map(n=>`<option value="${esc(n.id)}">${esc(n.name)} (${esc(zoneName(n.region))})</option>`).join('')}</select></div>`:''}</td>
         <td style="padding:6px;color:#9ca3af;width:36px">${esc(x.cat||'—')}</td><td style="padding:6px;color:#6b7280;width:50px">${esc(x.regions.map(g=>zrlZoneShort[g]||g).join('·'))}</td><td style="padding:6px;color:#9ca3af;font-size:12px;white-space:nowrap">${esc(zrlPower(x))}</td>
         <td style="padding:6px 0;text-align:right;white-space:nowrap"><button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button>
@@ -3130,25 +3159,30 @@ function zrlCatCard(){
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Compares what each rider said at sign-up with their ZwiftPower category, and checks nobody is on a team below their class. The club list is kept for an hour (ZwiftRacing.app allows it every ten minutes).</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="zrlCatCheck(false)" style="${btn}">Check categories</button><button onclick="zrlCatCheck(true)" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.15)">Refresh the club list</button></div>${out}</div>`;
 }
+const zrlRiderCat3=x=>zrlRiderCat(x)||'?';
 function zrlRidersTab(d,st){
   const r=d.round, assign=d.assign||{};
   const all=d.signups;
-  const f={ unplaced:x=>x.in&&!assign[x.key], racing:x=>x.in, out:x=>!x.in, stars:x=>x.in&&x.captain, noid:x=>!x.zwid }[zrlRiderFilter]||(x=>true);
-  const list=all.filter(f);
-  const counts={ unplaced:st.unplaced.length, racing:all.filter(x=>x.in).length, out:all.filter(x=>!x.in).length, stars:all.filter(x=>x.in&&x.captain).length, noid:all.filter(x=>!x.zwid).length };
+  const f={ unplaced:x=>x.in&&!assign[x.key], racing:x=>x.in, out:x=>!x.in, stars:x=>x.in&&x.captain, noid:x=>!x.zwid, dev:x=>x.in&&x.devOk, over:x=>x.in&&zrlOverOn(x,d).length>0 }[zrlRiderFilter]||(x=>true);
+  const list=all.filter(x=>f(x)&&(zrlRiderCatF==='all'||zrlRiderCat3(x)===zrlRiderCatF)&&(zrlRiderZone==='all'||x.regions.includes(zrlRiderZone)));
+  const counts={ unplaced:st.unplaced.length, racing:all.filter(x=>x.in).length, out:all.filter(x=>!x.in).length, stars:all.filter(x=>x.in&&x.captain).length, noid:all.filter(x=>!x.zwid).length, dev:all.filter(x=>x.in&&x.devOk).length, over:all.filter(x=>x.in&&zrlOverOn(x,d).length).length };
   const chip=(id,label)=>`<button onclick="zrlRiderFilter='${id}';zrlRiderLimit=40;renderZrl2()" style="padding:4px 12px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${zrlRiderFilter===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${zrlRiderFilter===id?'rgba(0,212,255,0.12)':'transparent'};color:${zrlRiderFilter===id?'#00D4FF':'#9ca3af'}">${label} (${counts[id]})</button>`;
   const shown=list.slice(0,zrlRiderLimit);
   const th='padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280';
   const reg=ids=>ids.map(id=>zrlZoneShort[id]||id).join(' · ');
   const rows=shown.map(x=>`<tr data-s="${esc((x.name+' '+(x.zwid||'')+' '+(x.league||'')).toLowerCase())}" style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:8px 10px;font-size:13px;${x.in?'':'opacity:.55'}">${esc(x.name)}${x.captain?' ⭐':''}${x.in?'':' <span style="font-size:10px;color:#9ca3af">(not racing)</span>'} <button title="Edit this sign-up" data-key="${esc(x.key)}" onclick="zrlEditStart(this.dataset.key)" style="padding:0 6px;margin-left:4px;font-size:12px;background:none;border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#9ca3af;cursor:pointer">✏️</button></td>
-    <td style="padding:8px 10px;font-size:13px">${esc(x.cat||'—')}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>
+    <td style="padding:8px 10px;font-size:13px;white-space:nowrap">${esc(zrlRiderCat(x)||'—')}${x.cat&&zrlRiderCat(x)&&x.cat!==zrlRiderCat(x)?` <span title="Said ${esc(x.cat)} at sign-up" style="font-size:10px;color:#6b7280">(said ${esc(x.cat)})</span>`:''}${x.in&&zrlOverOn(x,d).length?zrlBadge('OVER','#f87171'):''}</td><td style="padding:8px 10px;font-size:13px">${esc(reg(x.regions))}</td>
+    <td style="padding:8px 10px;text-align:center"><input type="checkbox" title="Eligible for a development team" ${x.devOk?'checked':''} onchange="zrlDevOkSet(this.dataset.key,this.checked)" data-key="${esc(x.key)}"/></td>
     <td style="padding:8px 10px;font-size:12px;color:#9ca3af;white-space:nowrap">${esc(zrlPower(x)||'—')}</td>
     <td style="padding:6px 10px">${zrlTeamCell(x,r,d)}</td>
     <td style="padding:8px 10px;font-size:12px;color:#9ca3af">${x.commit==='reserve'?'<b>Reserve</b> · ':''}${esc(x.league||'')}${x.prevTeam&&x.prevTeam!=='stay'?' · was '+esc(x.prevTeam):(x.prevTeam==='stay'?' · stays on previous team':'')}${x.comments?' · '+esc(x.comments):''}</td></tr>`).join('');
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${chip('unplaced','No team')}${chip('racing','All racing')}${chip('stars','⭐ Volunteers')}${chip('out','Not racing')}${chip('noid','No Zwift ID')}
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${chip('unplaced','No team')}${chip('racing','All racing')}${chip('over','⚠ Over category')}${chip('dev','Dev eligible')}${chip('stars','⭐ Volunteers')}${chip('out','Not racing')}${chip('noid','No Zwift ID')}
       <input id="zrl-rsearch" class="inp" placeholder="Search name or ID…" oninput="zrlRiderSearch(this.value)" style="width:190px;margin-left:auto"/>
+      <button onclick="zrlXlsx(this)" style="padding:5px 12px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid rgba(16,185,129,0.45);background:rgba(16,185,129,0.1);color:#10B981">📊 Export to Excel</button>
       <button onclick="zrlEditStart('new')" style="padding:5px 12px;font-size:12px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;cursor:pointer">+ Add a rider</button></div>
-    ${list.length?`<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Cat</th><th style="${th}">Time zones</th><th style="${th}">FTP · zMAP</th><th style="${th}">Team</th><th style="${th}">Notes</th></tr></thead><tbody id="zrl-rbody">${rows}</tbody></table></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Category</span>${zrlChip(zrlRiderCatF==='all','Any',"zrlRiderCatF='all';zrlRiderLimit=40;renderZrl2()")}${ZRL_CATS.map(c=>zrlChip(zrlRiderCatF===c,c,`zrlRiderCatF='${c}';zrlRiderLimit=40;renderZrl2()`)).join('')}
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-left:12px">Time zone</span>${zrlChip(zrlRiderZone==='all','Any',"zrlRiderZone='all';zrlRiderLimit=40;renderZrl2()")}${r.regions.map(z=>zrlChip(zrlRiderZone===z.id,esc(z.name),`zrlRiderZone='${esc(z.id)}';zrlRiderLimit=40;renderZrl2()`)).join('')}</div>
+    ${list.length?`<div class="card" style="overflow-x:auto;margin-bottom:8px"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="${th}">Rider</th><th style="${th}">Cat</th><th style="${th}">Time zones</th><th style="${th}" title="Eligible for a development team">Dev</th><th style="${th}">FTP · zMAP</th><th style="${th}">Team</th><th style="${th}">Notes</th></tr></thead><tbody id="zrl-rbody">${rows}</tbody></table></div>
       <div style="font-size:11px;color:#6b7280">Showing ${shown.length} of ${list.length}${list.length>shown.length?` · <button onclick="zrlRiderLimit=100000;renderZrl2()" style="background:none;border:none;color:#00D4FF;cursor:pointer;font-size:11px">show all</button>`:''}</div>`
       :`<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">${zrlRiderFilter==='unplaced'?'Everyone racing has a team. 🎉':'Nobody matches this filter.'}</div>`}${zrlCatCard()}`;
 }
@@ -3536,7 +3570,8 @@ function zrlReadyCard(){
     ${c.items.map(i=>`<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><span>${i.state==='ok'?'✅':'⬜'}</span><div style="flex:1"><b>${esc(i.title)}</b><div style="font-size:12px;color:${i.state==='ok'?'#6b7280':'#FBBF24'}">${esc(i.detail)}</div></div>${i.state==='ok'?'':`<button onclick="zrlStaffGo('${i.go}')" style="padding:3px 10px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Fix</button>`}</div>`).join('')}
     <button onclick="zrlReady=null;renderZrl2()" style="margin-top:8px;padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></details>`;
 }
-let zrlLog=null;
+let zrlLog=null, zrlLogQ='';
+function zrlLogRefilter(){ const el=document.getElementById('zrl-log-body'); if(!el) return; const tmp=document.createElement('div'); tmp.innerHTML=zrlLogCard(); const n=tmp.querySelector('#zrl-log-body'); if(n) el.innerHTML=n.innerHTML; }
 async function zrlLogLoad(){
   try{ const r=await fetch('/api/zrl/log',{headers:tttHeaders()}); if(r.ok) zrlLog=(await r.json()).entries; else zrlLog=[]; }catch(e){ zrlLog=[]; }
   if(zrlStaffTab==='setup') renderZrl2();
@@ -3544,10 +3579,13 @@ async function zrlLogLoad(){
 function zrlLogCard(){
   if(!zrlLog){ zrlLogLoad(); return `<div class="card" style="padding:14px 16px;margin-top:16px;font-size:13px;color:#9ca3af">Loading recent changes…</div>`; }
   const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:'Europe/London',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  const who=e=>e.role==='admin'?'Admin':e.role==='mod'?'Moderator':e.role==='member'?esc(e.who||'Member'):'Guest';
+  const who=e=>e.role==='admin'||e.role==='mod'?(e.role==='admin'?'Admin':'Moderator')+(e.who?' · <b>'+esc(e.who)+'</b>':''):e.role==='member'?esc(e.who||'Member'):'Guest';
+  let me=''; try{ me=localStorage.getItem('cgStaffName')||''; }catch(e){}
+  const q=zrlLogQ.toLowerCase(), shownLog=zrlLog.filter(e=>!q||(e.who+' '+e.route+' '+e.what+' '+e.role).toLowerCase().includes(q));
   return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Recent changes (staff) · ${zrlLog.length}</summary>
-    <div style="font-size:11px;color:#6b7280;margin:6px 0">The latest 100 changes made in the dashboard: who, when and what (names and IDs only, never passwords). UK time.</div>
-    <div style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">${zrlLog.map(e=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 8px 4px 0;white-space:nowrap;color:#9ca3af">${esc(when(e.ts))}</td><td style="padding:4px 8px 4px 0;white-space:nowrap">${who(e)}</td><td style="padding:4px 8px 4px 0;white-space:nowrap;font-weight:700">${esc(e.route.replace(/^zrl\//,''))}</td><td style="padding:4px 0;color:#9ca3af;word-break:break-word">${esc(e.what)}</td></tr>`).join('')||'<tr><td style="padding:8px;color:#6b7280">Nothing yet.</td></tr>'}</table></div>
+    <div style="font-size:11px;color:#6b7280;margin:6px 0">The latest 100 changes made in the dashboard: who, when and what (names and IDs only, never passwords). UK time. Staff share a password, so enter your name here and it is written next to every change you make on this device.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><input class="inp" value="${esc(me)}" placeholder="Your name for the log" maxlength="40" onchange="try{localStorage.setItem('cgStaffName',this.value.trim())}catch(e){}" style="width:190px"/><input class="inp" value="${esc(zrlLogQ)}" placeholder="Filter: a rider, team, name…" oninput="zrlLogQ=this.value;zrlLogRefilter()" style="width:220px"/></div>
+    <div id="zrl-log-body" style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">${shownLog.map(e=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 8px 4px 0;white-space:nowrap;color:#9ca3af">${esc(when(e.ts))}</td><td style="padding:4px 8px 4px 0;white-space:nowrap">${who(e)}</td><td style="padding:4px 8px 4px 0;white-space:nowrap;font-weight:700">${esc(e.route.replace(/^zrl\//,''))}</td><td style="padding:4px 0;color:#9ca3af;word-break:break-word">${esc(e.what)}</td></tr>`).join('')||'<tr><td style="padding:8px;color:#6b7280">Nothing yet.</td></tr>'}</table></div>
     <button onclick="zrlLog=null;renderZrl2()" style="margin-top:8px;padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></details>`;
 }
 function zrlPastCard(d){
