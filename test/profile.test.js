@@ -52,3 +52,20 @@ test('the club roster now carries the extra power and rating numbers, and still 
   const raw = JSON.stringify((await app.get('/api/roster')).body);
   assert.doesNotMatch(raw, /"weight"|"height"|"age"|"gender"/);
 });
+
+test('a ZRL sign-up with no Zwift ID opens by its key, and adding the ID through the sign-up edit keeps the team place', async () => {
+  await app.post('/api/zrl/round', { name: 'Round 2', start: '2026-11-17', closes: h.ymd(10) }, A);
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Alpha', region: 'eu', grade: 'Open B' }] }, A);
+  await app.post('/api/zrl/signup-edit', { name: 'No Id Nina', regions: ['eu'], cat: 'C' }, A);
+  await app.post('/api/zrl/assign', { key: 'no id nina', team: 'cryo-gen-alpha' }, A);
+  assert.equal((await app.get('/api/profile', A)).status, 400, 'say which rider');
+  const p = (await app.get('/api/profile?key=' + encodeURIComponent('no id nina'), A)).body;
+  assert.equal(p.zwid, '');
+  assert.deepEqual(p.teams.zrl.teams, ['CRYO-GEN Alpha']);
+  assert.equal(p.teams.zrl.signup.zwid, '');
+  assert.ok(p.teams.zrl.regionList.length >= 3, 'the zones to tick');
+  assert.deepEqual(p.details, {}, 'no notes until there is an ID');
+  assert.equal((await app.post('/api/zrl/signup-edit', { key: 'no id nina', zwid: '1003', devOk: true, name: 'No Id Nina' }, A)).status, 200);
+  const after = (await app.get('/api/profile?zwid=1003', A)).body.teams.zrl;
+  assert.deepEqual([after.teams, after.signup.zwid, after.devOk], [['CRYO-GEN Alpha'], '1003', true]);
+});
