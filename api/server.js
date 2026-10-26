@@ -2064,7 +2064,7 @@ const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/ro
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
-  'GET /api/me/week', 'GET /api/me/calendar', 'POST /api/me/calendar', 'POST /api/me/calendar/remove', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
+  'GET /api/me/week', 'GET /api/me/tz', 'POST /api/me/tz', 'GET /api/me/calendar', 'POST /api/me/calendar', 'POST /api/me/calendar/remove', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await assocRoute(req, body, parseRequestUrl(req).query);
@@ -2135,11 +2135,11 @@ async function handleComms(route, req, res){
 }
 
 // The staff rider profile (lib/profile.js): teams across the club, Discord link, and staff notes and details.
-const profile = require('../lib/profile')({ redis, HttpError, requireRole, text, zrl, ladder, drs, comms });
+const profile = require('../lib/profile')({ redis, HttpError, requireRole, memberFromRequest, text, zrl, ladder, drs, comms });
 async function handleProfile(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
-  if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, { zwid: body.zwid }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  if (req.method === 'POST' && !parseRequestUrl(req).pathname.startsWith('/api/me/')) await zrl.logChange(req, parseRequestUrl(req).pathname, { zwid: body.zwid }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
   sendJSON(res, 200, result);
 }
 

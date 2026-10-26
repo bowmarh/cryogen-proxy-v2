@@ -69,3 +69,18 @@ test('a ZRL sign-up with no Zwift ID opens by its key, and adding the ID through
   const after = (await app.get('/api/profile?zwid=1003', A)).body.teams.zrl;
   assert.deepEqual([after.teams, after.signup.zwid, after.devOk], [['CRYO-GEN Alpha'], '1003', true]);
 });
+
+test('a rider saves their own time zone and "show UTC too" once, and it follows them; bad zones are refused; staff passwords are not a rider', async () => {
+  const t = await app.memberSession('1002', { name: 'Rider Two' });
+  assert.equal((await app.get('/api/me/tz')).status, 401);
+  assert.equal((await app.get('/api/me/tz', A)).status, 401, 'a staff password is not a rider');
+  assert.deepEqual((await app.get('/api/me/tz', { token: t })).body, { zone: '', alsoUtc: false });
+  assert.equal((await app.post('/api/me/tz', { zone: 'Mars/Olympus' }, { token: t })).status, 400);
+  assert.equal((await app.post('/api/me/tz', { zone: '<script>' }, { token: t })).status, 400);
+  assert.deepEqual((await app.post('/api/me/tz', { zone: 'America/New_York', alsoUtc: true }, { token: t })).body, { zone: 'America/New_York', alsoUtc: true });
+  assert.deepEqual((await app.get('/api/me/tz', { token: await app.memberSession('1002', { name: 'Rider Two' }) })).body, { zone: 'America/New_York', alsoUtc: true }, 'a new sign-in on another device sees it');
+  assert.equal((await app.post('/api/me/tz', { zone: 'device' }, { token: t })).status, 200, "'device' means follow this device");
+  // an associate can set one too
+  const nora = await app.memberSession('5551', { name: 'Newbie Nora', associate: true });
+  assert.equal((await app.post('/api/me/tz', { zone: 'Europe/London' }, { token: nora })).status, 200);
+});

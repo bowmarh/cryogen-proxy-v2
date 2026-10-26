@@ -140,6 +140,7 @@ table{width:100%;border-collapse:collapse}
     </div>
     <div id="role-display" style="display:flex;align-items:center;gap:10px">
       <span id="role-badge" class="role-badge"></span>
+      <button id="tz-btn" onclick="openTz()" title="Choose the time zone times are shown in" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:11px;margin-right:6px">🕒</button>
       <button onclick="doLogout()" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#6b7280;font-size:11px">Logout</button>
     </div>
   </div>
@@ -563,6 +564,57 @@ function selectMember(id){
   const r=data.find(x=>x.id===id);
   if(r){sessionStorage.setItem('memberRider',JSON.stringify(r));memberRider=r;launchApp('member');}
 }
+
+// ── Time zone preference: show times in the viewer's own zone (their device's, or one they pick), optionally with UTC beside it ──
+let tzPref=(()=>{ try{ return localStorage.getItem('cgTz')||'device'; }catch(e){ return 'device'; } })();
+let tzAlso=(()=>{ try{ return localStorage.getItem('cgTzUtc')==='1'; }catch(e){ return false; } })();
+const tzDevice=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'; }catch(e){ return 'UTC'; } };
+const tzValid=z=>{ try{ new Intl.DateTimeFormat('en-GB',{timeZone:z}); return true; }catch(e){ return false; } };
+const tzZone=()=>{ const z=tzPref==='device'?tzDevice():tzPref; return tzValid(z)?z:'UTC'; };
+const tzShort=(ms)=>{ try{ return new Intl.DateTimeFormat('en-GB',{timeZone:tzZone(),timeZoneName:'short'}).formatToParts(new Date(ms||Date.now())).find(p=>p.type==='timeZoneName').value; }catch(e){ return 'UTC'; } };
+const tzLabel=()=>tzShort();
+// " · 18:00 UTC" after a time shown in another zone, when the viewer asked for UTC as well. `bare` is for a column that holds just the time.
+function tzUtcSuffix(ms,bare){ if(!tzAlso||tzZone()==='UTC'||!Number.isFinite(ms)) return ''; const t=new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}); return bare?' ('+t+'Z)':' · '+t+' UTC'; }
+// A league's fixed "Tue 18:00 UTC" shown in the viewer's zone, for the next time it comes round (so summer and winter time are right).
+function slotLocal(slot){
+  const m=/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d\d):(\d\d)\s+UTC\b(.*)$/i.exec(String(slot||'')); if(!m||(tzZone()==='UTC'&&true)) return String(slot||'');
+  const dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(m[1][0].toUpperCase()+m[1].slice(1).toLowerCase()), now=new Date();
+  let t=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),+m[2],+m[3]); t+=((dow-new Date(t).getUTCDay()+7)%7)*86400000; if(t<Date.now()-3600000) t+=7*86400000;
+  const local=new Date(t).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',hour:'2-digit',minute:'2-digit'});
+  return local+' '+tzShort(t)+(tzAlso?' ('+m[1]+' '+m[2]+':'+m[3]+' UTC)':'')+(m[4]||'');
+}
+function tzZones(){ let list=[]; try{ list=Intl.supportedValuesOf('timeZone'); }catch(e){} if(!list.length) list=['Europe/London','Europe/Dublin','Europe/Paris','Europe/Berlin','Europe/Madrid','Europe/Athens','Europe/Moscow','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Sao_Paulo','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Perth','Australia/Sydney','Pacific/Auckland']; return list.includes('UTC')?list:['UTC',...list]; }
+function openTz(){
+  let m=document.getElementById('tzModal');
+  if(!m){ m=document.createElement('div'); m.id='tzModal'; m.className='modal-bg'; m.onclick=e=>{ if(e.target===m) closeTz(); }; document.body.appendChild(m); }
+  const dev=tzDevice(), list=tzZones(), cur=tzPref==='device'?'':tzPref;
+  m.innerHTML=`<div class="modal"><div class="modal-head"><span>🕒 Time zone</span><button onclick="closeTz()" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:0 4px;cursor:pointer">×</button></div><div class="modal-body">
+    <div style="font-size:13px;color:#9ca3af;margin-bottom:12px">Race and ride times are shown in this time zone. League race times are fixed in UTC, so they are converted for you.</div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;margin-bottom:10px;cursor:pointer"><input type="radio" name="tz-mode" value="device" ${tzPref==='device'?'checked':''} onchange="tzModeChange()"/><span>Use my device's time zone<br><span style="font-size:12px;color:#6b7280">${esc(dev)} · ${esc(tzShortFor(dev))} now</span></span></label>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;margin-bottom:6px;cursor:pointer"><input type="radio" name="tz-mode" value="pick" ${tzPref!=='device'?'checked':''} onchange="tzModeChange()"/><span>Choose a time zone</span></label>
+    <input id="tz-pick" list="tz-list" class="inp" placeholder="Start typing a city or region, e.g. Europe/London, UTC" value="${esc(cur)}" ${tzPref==='device'?'disabled':''} style="margin:0 0 4px 24px;width:calc(100% - 24px)"/><datalist id="tz-list">${list.map(z=>`<option value="${esc(z)}"></option>`).join('')}</datalist>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:14px 0;cursor:pointer"><input type="checkbox" id="tz-utc" ${tzAlso?'checked':''}/> Also show UTC next to my times</label>
+    <div id="tz-msg" style="font-size:12px;color:#f87171;min-height:16px"></div>
+    <div style="display:flex;gap:8px"><button class="btn-cyan" style="width:auto;padding:8px 20px" onclick="tzSave()">Save</button><button onclick="closeTz()" style="padding:8px 16px;font-size:13px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">Cancel</button></div></div></div>`;
+  m.style.display='flex';
+}
+const tzShortFor=z=>{ try{ return new Intl.DateTimeFormat('en-GB',{timeZone:z,timeZoneName:'short'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName').value; }catch(e){ return ''; } };
+function closeTz(){ const m=document.getElementById('tzModal'); if(m) m.style.display='none'; }
+function tzModeChange(){ const pick=document.querySelector('input[name="tz-mode"]:checked').value==='pick'; const el=document.getElementById('tz-pick'); el.disabled=!pick; if(pick) el.focus(); }
+async function tzSave(){
+  const mode=document.querySelector('input[name="tz-mode"]:checked').value, z=document.getElementById('tz-pick').value.trim();
+  if(mode==='pick'&&!tzValid(z)){ document.getElementById('tz-msg').textContent='That is not a time zone name. Pick one from the list, such as Europe/London or America/New_York.'; return; }
+  tzPref=mode==='pick'?z:'device'; tzAlso=document.getElementById('tz-utc').checked;
+  try{ localStorage.setItem('cgTz',tzPref); localStorage.setItem('cgTzUtc',tzAlso?'1':'0'); }catch(e){}
+  if(role==='member'){ try{ await fetch('/api/me/tz',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zone:tzPref, alsoUtc:tzAlso })}); }catch(e){} }   // follows the rider to their other devices
+  closeTz(); tzRefresh();
+}
+function tzRefresh(){ const b=document.getElementById('tz-btn'); if(b) b.textContent='🕒 '+(tzPref==='device'?tzShort():tzShort())+(tzAlso&&tzZone()!=='UTC'?' + UTC':''); try{ renderAll(); }catch(e){} try{ if(typeof loadMyWeek==='function'&&role==='member') renderMyWeek(); }catch(e){} for(const f of ['renderWeek','renderZrl2','renderLadder','renderDrs','renderCover','renderRides','renderComms']){ try{ if(typeof window[f]==='function') window[f](); }catch(e){} } }
+// A signed-in rider's saved choice (kept on the server) replaces this device's.
+async function tzLoadMine(){
+  try{ const r=await fetch('/api/me/tz',{headers:tttHeaders()}); if(!r.ok) return; const d=await r.json(); if(!d.zone) return;
+    tzPref=d.zone; tzAlso=!!d.alsoUtc; try{ localStorage.setItem('cgTz',tzPref); localStorage.setItem('cgTzUtc',tzAlso?'1':'0'); }catch(e){} tzRefresh(); }catch(e){}
+}
 function launchApp(r){
   role=r; sessionStorage.setItem('role',r);
   document.getElementById('login-screen').style.display='none';
@@ -574,7 +626,8 @@ function launchApp(r){
   loadTttSummary();
   installBarMaybe();
   if(r==='admin'||r==='mod') showTab('week',document.getElementById('nav-week'));   // staff start on This week
-  if(r==='member') loadMyWeek();
+  if(r==='member'){ loadMyWeek(); tzLoadMine(); }
+  tzRefresh();
 }
 // Phone install: Android and desktop Chrome offer a real Install button; iPhones get the Share > Add to Home Screen steps. Shown once, after sign-in.
 let installEvent=null;
@@ -800,11 +853,11 @@ function renderMyWeek(){
   const el=document.getElementById('myweek-card'); const d=myWeek; if(!el||!d) return;
   if(!d.items.length){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">📅 My week</div><div style="font-size:13px;color:#9ca3af;margin-top:4px">Nothing planned for you in the next ${d.windowDays} days. <a href="#" onclick="weekGo('rides');return false" style="color:#00D4FF">Find a ride →</a></div></div>`; return; }
   const col={in:'#10B981',todo:'#FBBF24',info:'#9ca3af',out:'#6b7280'}, ico={in:'✅',todo:'🟡',info:'⚪',out:'➖'};
-  const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+  const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
-  const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:'Europe/London'}):u.date; (days[k]=days[k]||[]).push(u); });
+  const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
-  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
+  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
   el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
 }
 
@@ -838,10 +891,10 @@ function renderWeek(){
   const col={fail:'#f87171',warn:'#FBBF24',todo:'#9ca3af',ok:'#10B981'}, ico={fail:'🔴',warn:'🟡',todo:'⚪',ok:'✅'};
   const goBtn=go=>`<button onclick="weekGo('${esc(go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button>`;
   const att=d.attention.length?d.attention.map(a=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="flex:none">${ico[a.level]||'•'}</div><div style="flex:1;min-width:0"><div style="font-weight:700;color:#e5e7eb">${esc(a.title)}</div><div style="font-size:12px;color:${col[a.level]||'#9ca3af'}">${esc(a.detail)}</div></div>${goBtn(a.go)}</div>`).join(''):'<div style="padding:10px 0;font-size:13px;color:#10B981">✅ Nothing needs attention. Everything the dashboard watches is in order.</div>';
-  const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+  const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
-  const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:'Europe/London'}):u.date; (days[k]=days[k]||[]).push(u); });
-  const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
+  const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
+  const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
@@ -2276,7 +2329,7 @@ function renderTtt(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <div><div style="font-size:18px;font-weight:900">${esc(w.title)}</div>
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${archived?badge(true,'Archived','', '#9ca3af'):badge(w.open,'Sign-ups open','Sign-ups closed','#10B981')+badge(w.published,'Line-ups published','Line-ups not published yet','#00D4FF')}<span style="font-size:12px;color:#6b7280;align-self:center">${avail} available · ${d.signups.length} signed up</span></div>
-        ${!archived&&w.open&&w.closesAt?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">⏱️ Sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK</div>`:''}</div>
+        ${!archived&&w.open&&w.closesAt?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">⏱️ Sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK</div>`:''}</div>
       ${history}
     </div>
     ${!archived?tttHelpCard():''}
@@ -2337,7 +2390,7 @@ async function teamRemove(kind){
 const ladderStaff=()=>!!(ladder&&ladder.staff);
 const ladderRank=c=>ladder.ranks.indexOf(c);
 function ladderCatBadge(c){ const col=ZRA_COLOR[c]||'#6b7280'; return c?`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;color:${col};background:${col}1f;border:1px solid ${col}55">${esc(c)}</span>`:`<span style="font-size:10px;color:#6b7280">no category</span>`; }
-const ladderWhen=ms=>new Date(ms).toLocaleString(undefined,{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const ladderWhen=ms=>new Date(ms).toLocaleString(undefined,{timeZone:tzZone(),weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})+tzUtcSuffix(ms);
 const ladderEta=ms=>{ const left=ms-Date.now(); if(left<0) return 'started'; const h=left/3600000; return h<20?'in '+Math.max(1,Math.round(h))+' hour'+(Math.round(h)===1?'':'s'):'in '+Math.ceil(h/24)+' day'+(Math.ceil(h/24)===1?'':'s'); };
 function ladderLegal(ids){
   const rs=ids.map(z=>ladder.roster.find(r=>r.zwid===z)).filter(Boolean).map(r=>ladderRank(r.cat));
@@ -2360,7 +2413,7 @@ function ladderMatchCard(m,open){
   return `<details class="card" ${open?'open':''} ontoggle="ladderToggle('${esc(m.id)}',this.open)" style="padding:0;margin-bottom:10px">
     <summary style="cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
       <span style="font-size:15px;font-weight:800;flex:1;min-width:160px">${esc(m.teamName||'CRYO-GEN')} v ${esc(m.opponent)}</span>
-      ${m.at?`<span style="font-size:12px;color:#9ca3af">${esc(new Date(m.at).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}${m.upcoming?' · '+esc(ladderEta(m.at)):''}</span>`:''}
+      ${m.at?`<span style="font-size:12px;color:#9ca3af">${esc(new Date(m.at).toLocaleDateString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short'}))}${m.upcoming?' · '+esc(ladderEta(m.at)):''}</span>`:''}
       <span style="font-size:11px;font-weight:700;color:${status[1]}">${status[0]}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
     <div style="padding:0 14px 14px">
       <div style="font-size:12px;color:#9ca3af">${m.challenger==='us'?'We challenged, so we choose the route.':'They challenged us: they choose the route.'}${m.at?` · <b style="color:#e5e7eb">${esc(ladderWhen(m.at))}</b>`:' · date and time still to agree on Discord with their captain'}</div>
@@ -2521,7 +2574,7 @@ async function drsPost(path,body){
 const drsStaff=()=>!!(drs&&drs.staff);
 const DRS_STATE={ok:['Within the threshold','#10B981'],buffer:['In the buffer','#38bdf8'],danger:['Danger zone','#FBBF24'],breach:['Past the cap','#f87171'],'entry-over':['Above the threshold','#f87171'],unknown:['No rating','#6b7280']};
 const DRS_ICON={scratch:'🏁',points:'🎯',itt:'⏱️',ttt:'🚂'};
-const drsWhen=(ms,tz)=>new Date(ms).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const drsWhen=(ms,tz)=>new Date(ms).toLocaleString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})+tzUtcSuffix(ms);
 const drsEta=ms=>{ const left=ms-Date.now(); if(left<0) return 'passed'; const h=left/3600000; return h<20?'in '+Math.max(1,Math.round(h))+' h':'in '+Math.ceil(h/24)+' day'+(Math.ceil(h/24)===1?'':'s'); };
 function drsBar(r,s){
   const lo=s.threshold-200, hi=s.cap+40, pc=v=>Math.max(0,Math.min(100,(v-lo)/(hi-lo)*100));
@@ -2566,7 +2619,7 @@ function drsStageCard(st,open){
   const lock=up?`<div style="font-size:12px;margin-top:6px;color:${st.lockMs<Date.now()?'#f87171':'#FBBF24'}">🔒 The squad must be final in the DRS portal by <b>${esc(drsWhen(st.lockMs))}</b> (${st.lockMs<Date.now()?'locked':drsEta(st.lockMs)}).</div>`:'';
   return `<details class="card" ${open?'open':''} ontoggle="drsToggle('${esc(st.id)}',this.open)" style="padding:0;margin-bottom:10px"><summary style="cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;list-style:none">
     <span style="font-size:20px">${DRS_ICON[st.type]||'🏁'}</span><span style="font-size:14px;font-weight:800;flex:1;min-width:150px">Stage ${st.n} · ${esc(drs.types[st.type]||st.type)}${st.route?` <span style="font-weight:400;color:#9ca3af">${esc(st.route)}${st.km?' · '+st.km+' km':''}</span>`:''}</span>
-    <span style="font-size:12px;color:#9ca3af">${esc(new Date(st.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}${up?' · '+esc(drsEta(st.startMs)):''}</span>
+    <span style="font-size:12px;color:#9ca3af">${esc(new Date(st.startMs).toLocaleDateString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short'}))}${up?' · '+esc(drsEta(st.startMs)):''}</span>
     <span style="font-size:11px;font-weight:700;color:${st.status==='played'?'#10B981':st.status==='cancelled'?'#6b7280':'#FBBF24'}">${st.status==='played'?'Played':st.status==='cancelled'?'Cancelled':'Upcoming'}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
     <div style="padding:0 14px 14px"><div style="font-size:13px"><b>${esc(drsWhen(st.startMs))}</b> <span style="color:#6b7280">· ${esc(s.slot||'squad slot')}</span></div><div style="margin-top:4px">${link}</div>${lock}
       ${st.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(st.notes)}</div>`:''}
@@ -2872,7 +2925,7 @@ function zrlSignupCard(d){
   const my=(zrlMy&&zrlMy.signup)||{};
   const regs=new Set(mine&&mine.in?mine.regions:[]);
   const cat=(mine&&mine.cat)||String(memberRider.cat||'').replace('+','');
-  const teamsIn=id=>round.teams.filter(t=>t.region===id).map(t=>t.name+(t.slot?' · '+t.slot:''));
+  const teamsIn=id=>round.teams.filter(t=>t.region===id).map(t=>t.name+(t.slot?' · '+slotLocal(t.slot):''));
   return `<div class="card" style="padding:16px;margin-bottom:20px">
     <div style="font-size:14px;font-weight:700;margin-bottom:10px">${mine&&mine.in?'Update your sign-up':'Sign up for '+esc(round.name)}</div>
     ${status}
@@ -2933,7 +2986,7 @@ function zrlStaffPanel(d){
       <div style="font-size:11px;color:#4b5563;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
   if(!round) return start;
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
-      <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' UK (automatic)':''}
+      <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' '+tzLabel()+' (automatic)':''}
         <button onclick="zrlSetOpen(${!round.open})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">${round.open?'Close now':'Reopen'}</button></div>
       <details style="margin-bottom:10px"><summary style="font-size:12px;color:#9ca3af;cursor:pointer">Edit the round's name and dates</summary>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
@@ -3242,7 +3295,7 @@ function zrlTeamIssues(t,riders,size){
 }
 function renderZrlStaff(d){
   const r=d.round, dem=d.demand, st=zrlTeamStats(d);
-  const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} UK`:'';
+  const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} ${tzLabel()}`:'';
   const attention=r.teams.filter(t=>zrlTeamIssues(t,st.by[t.id]||[],r.rosterSize).length).length;
   const tab=(id,label,badge,warn)=>`<button onclick="zrlStaffGo('${id}')" style="padding:7px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${zrlStaffTab===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${zrlStaffTab===id?'rgba(0,212,255,0.12)':'rgba(255,255,255,0.04)'};color:${zrlStaffTab===id?'#00D4FF':'#e5e7eb'}">${label}${badge!==''?` <span style="font-size:11px;font-weight:700;margin-left:4px;padding:1px 7px;border-radius:99px;background:${warn?'rgba(251,191,36,0.18)':'rgba(255,255,255,0.08)'};color:${warn?'#FBBF24':'#9ca3af'}">${badge}</span>`:''}</button>`;
   let body='';
@@ -3292,7 +3345,7 @@ function zrlTeamsTab(d,st){
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#9ca3af">${esc(zone)}</span><span style="font-weight:700;color:${n>size?'#FBBF24':'#e5e7eb'}">${n}/${size}</span></div>
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:8px"><div style="height:5px;width:${pct}%;background:${barColor};border-radius:3px"></div></div>
       <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#4b5563')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
-      <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(t.slot):(n?'no race time':'')}</div>
+      <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(slotLocal(t.slot)):(n?'no race time':'')}</div>
       ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}
       ${overN?`<div style="font-size:12px;color:#f87171;font-weight:700">⚠ ${overN} over category</div>`:''}</div>`;
   };
@@ -3418,7 +3471,7 @@ function zrlAvailHtml(m){
 }
 function zrlWtrlMark(team,registered){ zrlPost('/api/zrl/wtrl-registered',{ team, registered }); }
 function zrlWtrlDeadlineSave(){ zrlPost('/api/zrl/wtrl-deadline',{ date:document.getElementById('zrl-wtrl-date').value }); }
-const zrlDeadlineText=iso=>iso?new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/London'}):'';
+const zrlDeadlineText=iso=>iso?new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:tzZone()}):'';
 function zrlWtrlCard(d){
   const r=d.round, playing=r.teams.filter(t=>(zrlTeamStats(d).by[t.id]||[]).length), done=playing.filter(t=>t.wtrlRegistered).length;
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
@@ -3478,7 +3531,7 @@ async function changeLogLoad(key){
   const el=document.getElementById('chg-'+key); if(!el) return;
   let list; try{ const r=await fetch('/api/zrl/log',{headers:tttHeaders()}); list=r.ok?(await r.json()).entries:[]; }catch(e){ list=[]; }
   const mine=list.filter(e=>CHANGE_LOG_PREFIX[key].some(p=>p.endsWith('/')?e.route.startsWith(p):(e.route===p||e.route.startsWith(p+'/'))));
-  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:'Europe/London',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   el.innerHTML=mine.length?`<div style="max-height:260px;overflow:auto"><table style="width:100%;border-collapse:collapse">${mine.map(e=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:3px 8px 3px 0;white-space:nowrap;color:#9ca3af">${esc(when(e.ts))}</td><td style="padding:3px 8px 3px 0;white-space:nowrap">${e.role==='admin'?'Admin':e.role==='mod'?'Moderator':esc(e.who||'Member')}</td><td style="padding:3px 8px 3px 0;white-space:nowrap;font-weight:700">${esc(e.route)}</td><td style="padding:3px 0;color:#9ca3af;word-break:break-word">${esc(e.what)}</td></tr>`).join('')}</table></div><div style="font-size:11px;color:#6b7280;margin-top:4px">What staff changed, newest first (UK time). Riders' own sign-ups are not listed.</div>`:'Nothing yet.';
 }
 function tttHelpCard(){
@@ -3790,7 +3843,7 @@ async function zrlLogLoad(){
 }
 function zrlLogCard(){
   if(!zrlLog){ zrlLogLoad(); return `<div class="card" style="padding:14px 16px;margin-top:16px;font-size:13px;color:#9ca3af">Loading recent changes…</div>`; }
-  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:'Europe/London',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   const who=e=>e.role==='admin'||e.role==='mod'?(e.role==='admin'?'Admin':'Moderator')+(e.who?' · <b>'+esc(e.who)+'</b>':''):e.role==='member'?esc(e.who||'Member'):'Guest';
   let me=''; try{ me=localStorage.getItem('cgStaffName')||''; }catch(e){}
   const q=zrlLogQ.toLowerCase(), shownLog=zrlLog.filter(e=>!q||(e.who+' '+e.route+' '+e.what+' '+e.role).toLowerCase().includes(q));
@@ -3883,7 +3936,7 @@ function zrlNextRaceCard(m){
   const t=m.team, weeks=m.weeks||[]; if(!t||!weeks.length) return '';
   const today=new Date().toISOString().slice(0,10), w=weeks.find(x=>x.date>=today); if(!w) return '';
   const at=zrlRaceMoment(w.date,t.slot), now=Date.now();
-  const when=at?new Date(at).toLocaleString(undefined,{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}):seasonDay(w.date);
+  const when=at?new Date(at).toLocaleString(undefined,{timeZone:tzZone(),weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})+tzUtcSuffix(at):seasonDay(w.date);
   const left=at?at-now:null;
   const eta=left===null?'':left<0?(left>-5400000?'under way':'today'):left<3600000*20?'in '+Math.max(1,Math.round(left/3600000))+' hour'+(Math.round(left/3600000)===1?'':'s'):'in '+Math.ceil(left/86400000)+' day'+(Math.ceil(left/86400000)===1?'':'s');
   const btn=(v,l)=>`<button onclick="zrlAvail(${w.i},'${w.mine===v?'':v}','','${esc(w.team||'')}')" style="padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid ${w.mine===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${w.mine===v?'rgba(0,212,255,0.18)':'transparent'};color:${w.mine===v?'#00D4FF':'#d1d5db'}">${l}</button>`;
@@ -3898,7 +3951,7 @@ function zrlMyCard(){
   const m=zrlMy; if(!m||!m.round) return '';
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px';
   const lbl=x=>`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 8px">${x}</div>`;
-  const sub=t=>esc([t.division,t.grade,t.regionName,t.slot].filter(Boolean).join(' · '));
+  const sub=t=>esc([t.division,t.grade,t.regionName,slotLocal(t.slot)].filter(Boolean).join(' · '));
   const out=[];
   m.captainOf.forEach((t,i)=>{
     const a='mt'+i, b='mi'+i; zrlCopies[a]=t.text; zrlCopies[b]=t.ids;
@@ -3931,7 +3984,7 @@ function renderZrl(d){
   if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No ZRL round is open right now. We'll announce it in Discord when the next one starts.</div>${staff?zrlStaffPanel(d):''}`;
   if(staff) return renderZrlStaff(d);
   const r=d.round, dem=d.demand;
-  const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} UK`:'';
+  const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} ${tzLabel()}`:'';
   const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
   return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#6b7280">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
@@ -4083,7 +4136,7 @@ function renderMyTtt(m){
   let body='';
   if(!w) body='<div style="font-size:13px;color:#9ca3af">No TTT week is open yet.</div>';
   else{
-    const closes=w.open&&w.closesAt?` · sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} UK`:'';
+    const closes=w.open&&w.closesAt?` · sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} ${tzLabel()}`:'';
     body+=`<div style="font-size:14px;font-weight:700">${esc(w.title)}<span style="font-weight:400;color:#9ca3af;font-size:12px">${closes}</span></div>`;
     const s=m.signup;
     if(!s){
@@ -4135,7 +4188,7 @@ function renderMySeason(d){
   const rideTile=tile('🚴 Social rides',r?r.attended:0,r&&r.rsvps?`${plural(r.rsvps,'RSVP')}${r.rsvps>r.attended?` · ${r.rsvps-r.attended} coming up`:''}`:'RSVP to a ride to start','#10B981');
   const next=c&&c.upcoming&&c.upcoming[0];
   const coverTile=tile('🧭 Ride cover',c?c.past:0,c&&c.past?`${plural(c.led,'ride')} led · ${c.swept} swept`:(next?'None yet':'Lead or sweep a ride'),'#A78BFA')
-    .replace('</div></div>',next?`</div><div style="font-size:11px;color:#A78BFA;margin-top:4px">Next: ${esc(next.role)} · ${esc(next.title)} · ${esc(new Date(next.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}))}</div></div>`:'</div></div>');
+    .replace('</div></div>',next?`</div><div style="font-size:11px;color:#A78BFA;margin-top:4px">Next: ${esc(next.role)} · ${esc(next.title)} · ${esc(new Date(next.startMs).toLocaleDateString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short'}))}</div></div>`:'</div></div>');
   const hl=d.highlights&&d.highlights.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${d.highlights.map(h=>`<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25)">${esc(h)}</span>`).join('')}</div>`:'';
   return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.08em;margin-bottom:8px">⭐ Your season</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">${zrlTile}${tttTile}${rideTile}${coverTile}</div>${hl}`;
@@ -4163,13 +4216,13 @@ function renderMyZrl(m){
   let body=`<div style="font-size:14px;font-weight:700">${esc(r.name)}<span style="font-weight:400;color:#9ca3af;font-size:12px"> · ${r.weeks} races from ${esc(seasonDay(r.start))}</span></div>`;
   (m.captainOf||[]).forEach(t=>{
     body+=`<div style="margin-top:10px;padding:10px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:8px;background:rgba(0,212,255,0.06)"><div style="font-weight:700">⭐ You captain ${esc(t.name)}</div>
-      ${myTttLine('Team',esc([t.division,t.grade,t.regionName,t.slot].filter(Boolean).join(' · ')||'—'))}${myTttLine('Riders',t.riders.length+' of '+r.rosterSize)}
+      ${myTttLine('Team',esc([t.division,t.grade,t.regionName,slotLocal(t.slot)].filter(Boolean).join(' · ')||'—'))}${myTttLine('Riders',t.riders.length+' of '+r.rosterSize)}
       <div style="font-size:12px;color:#9ca3af;margin-top:6px">Open ZRL to copy your team's details for WTRL registration.</div></div>`;
   });
   if(m.team){
     const t=m.team;
     body+=`<div style="margin-top:10px;padding:10px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.06)"><div style="font-weight:700">✅ ${esc(t.name)}</div>
-      ${myTttLine('Team',esc([t.division,t.grade,t.regionName].filter(Boolean).join(' · ')||'—'))}${myTttLine('Race time',esc(t.slot||'To be confirmed'))}
+      ${myTttLine('Team',esc([t.division,t.grade,t.regionName].filter(Boolean).join(' · ')||'—'))}${myTttLine('Race time',esc(t.slot?slotLocal(t.slot):'To be confirmed'))}
       ${myTttLine('Captain',esc(t.captainName||'Not chosen yet'))}${myTttLine('Teammates',t.riders.length?t.riders.map(x=>esc(x.name)+(x.reserve?' (reserve)':'')).join(', '):'—')}</div>`;
   } else if(m.placed&&!(m.captainOf||[]).length){
     body+=`<div style="font-size:13px;color:#10B981;margin-top:10px">✅ You have a place on a team. It will show here when the club publishes the rosters.</div>`;
@@ -4284,7 +4337,7 @@ async function coverPost(path,body){
   if(d.series) renderCover();
   return d;
 }
-const coverWhen=(o)=>new Date(o.startMs).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const coverWhen=(o)=>new Date(o.startMs).toLocaleString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})+tzUtcSuffix(o.startMs);
 function coverSlot(s,o,roleDef){
   const slot=o.cover[roleDef.id], me=cover.me, base=roleDef.id.replace('2',''), isBackup=roleDef.id!==base;
   const open=!slot, col=slot?'#10B981':isBackup?'#FBBF24':'#f87171';
@@ -4307,7 +4360,7 @@ let coverOpen=new Set(), coverOnlyGaps=false;
 const coverPrimaryGaps=o=>o.gaps.filter(g=>g==='leader'||g==='sweeper');
 function coverChip(o){
   if(!o) return '<span style="font-size:11px;color:#6b7280">no dates</span>';
-  const d=new Date(o.startMs).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+  const d=new Date(o.startMs).toLocaleDateString(undefined,{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short'});
   if(o.cancelled) return `<span style="font-size:11px;color:#6b7280">${esc(d)} · cancelled</span>`;
   const p=coverPrimaryGaps(o);
   if(p.length) return `<span style="font-size:11px;font-weight:700;color:#f87171">${esc(d)} · needs ${p.map(x=>x==='leader'?'leader':'sweeper').join(' + ')}</span>`;
