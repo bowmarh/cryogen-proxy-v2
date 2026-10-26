@@ -2080,6 +2080,15 @@ const comms = require('../lib/comms')({
   siteUrl: SITE_URL,
   signState: payload => signToken('discord-state', payload),
   readState: token => { const sess = sessionFromRequest({ headers: { authorization: `Bearer ${token}` } }); return sess && sess.role === 'discord-state' ? sess : null; },
+  candidates: async () => {
+    const out = new Map();
+    try {
+      const { riders, members } = await fetchRoster();
+      for (const r of riders) out.set(String(r.riderId), r.name);
+      for (const m of uniqueMembers(members || [])) if (m.name) out.set(String(m.zwift_id), m.name);
+    } catch (e) { /* nothing to match against */ }
+    return [...out].map(([zwid, name]) => ({ zwid, name }));
+  },
   namesFor: async zwids => {
     const out = {};
     try {

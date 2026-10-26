@@ -952,7 +952,7 @@ function renderComms(){
   const result=commsResult?`<div class="card" style="padding:12px 14px;margin-top:12px;border-color:${commsResult.failed?'rgba(251,191,36,0.4)':'rgba(16,185,129,0.4)'}"><div style="font-weight:700;color:${commsResult.failed?'#FBBF24':'#10B981'}">${commsResult.audience==='all'?'✅ Sent to the club channel.':`${commsResult.sent} sent${commsResult.failed?`, ${commsResult.failed} not`:''} (${commsResult.via==='dm'?'direct messages':'mentioned in the club channel'})`}</div>${(commsResult.results||[]).filter(r=>!r.ok).map(r=>`<div style="font-size:12px;color:#9ca3af;margin-top:3px">• ${esc(r.name)}: ${esc(r.error||'not sent')}</div>`).join('')}</div>`:'';
   el.innerHTML=`<div style="margin-bottom:16px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">💬 Comms</h2><p style="font-size:13px;color:#6b7280">Send a message to Discord: everyone in the club channel, or chosen members.</p></div>
   <div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:12px;color:#9ca3af">${d.channel?'✅ Club channel is set.':'⚠️ No club Discord channel is set (DISCORD_WEBHOOK_PUBLIC), so nothing can be posted there.'} ${d.dm?'✅ Direct messages are on: members get a private DM.':'ℹ️ Direct messages are off. Members are <b>@mentioned in the club channel</b> instead, so everyone in the channel sees the message. To send private DMs, add <b>DISCORD_BOT_TOKEN</b> in Vercel.'}</div>
-  ${commsAutoHtml(d)}${commsTemplatesHtml(d)}
+  ${commsAutoHtml(d)}${commsImportHtml(d)}${commsTemplatesHtml(d)}
   <div class="card" style="padding:16px"><label class="lbl">Who gets it</label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${aud('all','Everyone','One post in the club channel')}${aud('members','Chosen members',d.dm?'A private DM each':'An @mention in the channel')}</div>
     ${commsAudience==='members'?`<input id="comms-q" placeholder="Search members…" value="${esc(commsQ)}" oninput="commsSearch(this.value)" style="${inp};width:100%;margin-bottom:6px"/>
@@ -972,6 +972,74 @@ function renderComms(){
   commsRefreshBits();
 }
 
+
+// ── Import Discord IDs in bulk: from the server's member list (through the bot) or from a CSV file ──
+let commsImp=null;
+function commsImpShow(){ const el=document.getElementById('comms-imp'); if(el) el.innerHTML=commsImportBody(); }
+function commsImportHtml(d){
+  return `<div class="card" style="padding:14px 16px;margin-bottom:12px"><div style="font-weight:800;margin-bottom:4px">📥 Import Discord IDs</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Get everyone's Discord ID into the app at once. Members are paired with riders by name and you confirm before anything is saved. Riders who connect themselves later replace an imported link with a verified one.</div>
+    <div id="comms-imp">${commsImportBody()}</div></div>`;
+}
+function commsImportBody(){
+  const c=commsImp, b='padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
+  const start=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button onclick="commsImpFetch()" style="${b}">Fetch from the Discord server</button><label style="${b};display:inline-block">Upload a CSV file<input type="file" accept=".csv,.txt,text/csv" onchange="commsImpFile(this.files[0])" style="display:none"/></label>
+    <span style="font-size:11px;color:#6b7280">A CSV needs a column of Discord user IDs (17 to 19 digits) and, ideally, a name column.</span></div>`;
+  if(!c) return start;
+  if(c.loading) return start+'<div style="font-size:12px;color:#9ca3af;margin-top:10px">Asking Discord…</div>';
+  if(c.error) return start+`<div style="font-size:12px;color:#f87171;margin-top:10px">${esc(c.error)}</div>`;
+  if(c.done) return start+`<div style="font-size:13px;margin-top:10px;color:#10B981">✓ Saved ${c.done.saved} link${c.done.saved===1?'':'s'}.${c.done.skipped.length?` <span style="color:#FBBF24">${c.done.skipped.length} not saved: ${esc(c.done.skipped.slice(0,4).map(x=>x.reason).join('; '))}${c.done.skipped.length>4?'…':''}</span>`:''}</div>`;
+  const rows=c.rows.filter(r=>c.filter==='all'||r.status===c.filter||(c.filter==='linked'&&r.alreadyLinkedTo));
+  const chip=(id,l,n)=>`<button onclick="commsImp.filter='${id}';commsImpShow()" style="padding:3px 11px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${c.filter===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${c.filter===id?'rgba(0,212,255,0.12)':'transparent'};color:${c.filter===id?'#00D4FF':'#9ca3af'}">${l} (${n})</button>`;
+  const ridersList=(typeof riders!=='undefined'?riders:[]);
+  const chosen=()=>Object.values(c.pick).filter(Boolean).length;
+  const row=r=>{
+    const pick=c.pick[r.discordId]||'', linked=r.alreadyLinkedTo;
+    const opts=r.matches.map(m=>`<option value="${esc(m.zwid)}" ${pick===m.zwid?'selected':''}>${esc(m.name)}${m.score>=90?'':' (close)'}</option>`).join('');
+    const who=pick&&!r.matches.some(m=>m.zwid===pick)?(ridersList.find(x=>String(x.id)===pick)||{name:pick}).name:'';
+    return `<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:6px 8px 6px 0;font-size:12px"><b>${esc(r.discordName)}</b><div style="color:#6b7280;font-size:10px">${esc(r.discordId)}</div></td>
+      <td style="padding:6px 0;font-size:12px">${linked?`<span style="color:#6b7280">Already linked (Zwift ID ${esc(linked)})</span>`:`<select class="inp" onchange="commsImpPick('${esc(r.discordId)}',this.value)" style="width:auto;max-width:230px;font-size:12px"><option value="">— don't link —</option>${opts}${who?`<option value="${esc(pick)}" selected>${esc(who)}</option>`:''}</select> <input list="comms-imp-riders" placeholder="or search a rider…" onchange="commsImpSearch('${esc(r.discordId)}',this.value);this.value=''" style="width:140px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:4px 8px;color:white"/>`}</td></tr>`;
+  };
+  return start+`<div style="font-size:12px;color:#9ca3af;margin:12px 0 8px">${c.total} Discord members: <b style="color:#10B981">${c.counts.exact} matched</b>, ${c.counts.near} close, ${c.counts.none} with no match${c.counts.linked?`, ${c.counts.linked} already linked`:''}. ${chosen()} will be linked.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chip('all','All',c.rows.length)}${chip('exact','Matched',c.counts.exact)}${chip('near','Close',c.counts.near)}${chip('none','No match',c.counts.none)}${c.counts.linked?chip('linked','Linked',c.counts.linked):''}</div>
+    <datalist id="comms-imp-riders">${ridersList.slice(0,3000).map(x=>`<option value="${esc(x.name)} (${esc(String(x.id))})"></option>`).join('')}</datalist>
+    <div style="max-height:340px;overflow:auto"><table style="width:100%;border-collapse:collapse">${rows.slice(0,400).map(row).join('')||'<tr><td style="padding:10px;color:#6b7280;font-size:12px">Nothing in this view.</td></tr>'}</table>${rows.length>400?`<div style="font-size:11px;color:#6b7280;padding:6px">Showing the first 400 of ${rows.length}: use the filters.</div>`:''}</div>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 18px" onclick="commsImpSave()" ${chosen()?'':'disabled'}>Save ${chosen()} link${chosen()===1?'':'s'}</button><button onclick="commsImp=null;commsImpShow()" style="padding:7px 14px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">Cancel</button></div>`;
+}
+function commsImpLoaded(d){ commsImp={ ...d, filter:'all', pick:Object.fromEntries(d.rows.map(r=>[r.discordId,r.alreadyLinkedTo?'':r.pick])) }; commsImpShow(); }
+async function commsImpFetch(){
+  commsImp={ loading:true }; commsImpShow();
+  try{ commsImpLoaded(await commsCall('GET','/api/comms/discord-members')); }catch(e){ commsImp={ error:e.message }; commsImpShow(); }
+}
+// Reads a CSV: finds the column of 17 to 19 digit IDs and a name column (a header such as name, nickname, display name or username, else the first text column).
+function commsImpParse(textIn){
+  const rows=[]; for(const line of String(textIn).replace(/^﻿/,'').split(/\r?\n/)){ if(!line.trim()) continue; const cells=[]; let cur='', q=false; const sep=line.includes('\t')?'\t':line.includes(';')&&!line.includes(',')?';':',';
+    for(const ch of line){ if(ch==='"') q=!q; else if(ch===sep&&!q){ cells.push(cur.trim()); cur=''; } else cur+=ch; } cells.push(cur.trim()); rows.push(cells); }
+  if(!rows.length) return [];
+  const idCol=(()=>{ const n=Math.max(...rows.map(r=>r.length)); let best=-1,cnt=0; for(let i=0;i<n;i++){ const c=rows.filter(r=>/^\d{15,25}$/.test(r[i]||'')).length; if(c>cnt){ cnt=c; best=i; } } return best; })();
+  if(idCol<0) return [];
+  const head=rows[0].map(x=>x.toLowerCase()), isHead=!/^\d{15,25}$/.test(rows[0][idCol]||'');
+  let nameCol=head.findIndex((x,i)=>i!==idCol&&/nick|display|global|name|member/.test(x)&&!/user ?name|^username$/.test(x)); if(nameCol<0) nameCol=head.findIndex((x,i)=>i!==idCol&&/user/.test(x));
+  if(nameCol<0) nameCol=rows[1||0].findIndex((x,i)=>i!==idCol&&x&&!/^\d+$/.test(x));
+  return rows.slice(isHead?1:0).filter(r=>/^\d{15,25}$/.test(r[idCol]||'')).map(r=>({ id:r[idCol], name:nameCol>=0?r[nameCol]||'':'' }));
+}
+async function commsImpFile(f){
+  if(!f) return; commsImp={ loading:true }; commsImpShow();
+  try{
+    const list=commsImpParse(await f.text()); if(!list.length) throw new Error('No Discord user IDs (17 to 19 digits) were found in that file.');
+    commsImpLoaded(await commsCall('POST','/api/comms/discord-match',{ members:list }));
+  }catch(e){ commsImp={ error:e.message }; commsImpShow(); }
+}
+function commsImpPick(id,z){ commsImp.pick[id]=z; commsImpShow(); }
+function commsImpSearch(id,v){ const m=/\((\d{1,12})\)\s*$/.exec(v||''); if(m){ commsImp.pick[id]=m[1]; commsImpShow(); } }
+async function commsImpSave(){
+  const picks=Object.entries(commsImp.pick).filter(([,z])=>z); const used=new Map(); const dup=picks.find(([,z])=>used.has(z)||!used.set(z,1)&&false);
+  if(dup&&!confirm('A rider is chosen for more than one Discord member. Only the first is saved. Continue?')) return;
+  const tag=id=>(commsImp.rows.find(r=>r.discordId===id)||{}).discordName||'';
+  const links=picks.map(([id,z])=>({ zwid:z, discordId:id, tag:tag(id) }));
+  try{ const done=await commsCall('POST','/api/comms/import',{ links }); commsImp={ done }; try{ commsData=await commsCall('GET','/api/comms'); }catch(e){} renderComms(); }
+  catch(e){ commsImp={ ...commsImp, error:e.message }; commsImpShow(); }
+}
 function commsAutoHtml(d){
   if(!d.auto) return '';
   const on=d.auto.nudge;
