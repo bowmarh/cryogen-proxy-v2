@@ -812,13 +812,57 @@ const TTT_ROUTES = {
     const [candidates, data] = await Promise.all([readTttSheet(), loadTtt()]);
     const taken = new Set(data.signups.map(s => s.name.toLowerCase())), takenIds = new Set(data.signups.map(s => s.zwid).filter(Boolean));
     const rows = candidates.map(c => ({ ...c, status: taken.has(c.name.toLowerCase()) || (c.zwid && takenIds.has(c.zwid)) ? 'exists' : 'new' }));
+    const idsFor = names => data.week.teams.filter(t => (names || []).some(n => n.toLowerCase() === t.name.toLowerCase())).map(t => t.id).slice(0, 5);
     const fresh = rows.filter(r => r.status === 'new');
     if (!body.apply) return { preview: { rows, counts: { total: rows.length, new: fresh.length, exists: rows.length - fresh.length, unmatched: fresh.filter(r => !r.zwid).length, unavailable: fresh.filter(r => !r.available).length } } };
     if (fresh.length) {
       const now = new Date().toISOString();
-      await redis(fresh.map(r => ['HSETNX', TTT_KEYS.signups, r.name.toLowerCase(), JSON.stringify({ name: r.name, zwid: r.zwid, cat: r.cat, available: r.available, style: r.style, doubleUp: r.doubleUp, preferred: [], comments: '', captain: false, ts: now, source: 'sheet' })]));
+      await redis(fresh.map(r => ['HSETNX', TTT_KEYS.signups, r.name.toLowerCase(), JSON.stringify({ name: r.name, zwid: r.zwid, cat: r.cat, available: r.available, style: r.style, doubleUp: r.doubleUp, preferred: idsFor(r.preferredNames), comments: '', captain: false, ts: now, source: 'sheet' })]));
     }
     return { ...tttView(await loadTtt(), roleFromRequest(req)), imported: fresh.length };
+  },
+
+  // Staff: read the published teams from the TEAM LIST tab (names with Zwift IDs beside them, in blocks across the sheet) and compare them with the
+  // teams here. Preview first: which columns were read, and for each rider whether the app already agrees. Applying creates missing sign-ups and puts
+  // unplaced riders on the team the sheet names (full teams are left alone); `overwrite` also moves riders the app has on another team.
+  'POST /api/ttt/import-board': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    await requireWeek();
+    const [board, data] = await Promise.all([readTttBoard(), loadTtt()]);
+    let roster = []; try { roster = (await fetchRoster()).riders || []; } catch (e) { /* names are still compared */ }
+    const byRosterName = new Map(); for (const r of roster) { const k = nameKey(r.name); byRosterName.set(k, byRosterName.has(k) ? null : r); }   // two riders with one name: no safe match
+    for (const b of board.blocks) for (const r of b.riders) if (!r.zwid) { const m = byRosterName.get(nameKey(r.name)); if (m) r.zwid = String(m.riderId); }
+    const teamByName = new Map(data.week.teams.map(t => [t.name.toLowerCase(), t]));
+    const signupOf = (r) => data.signups.find(s => (r.zwid && s.zwid === r.zwid) || s.name.toLowerCase() === r.name.toLowerCase());
+    const fill = {}; for (const ids of Object.values(data.assign)) for (const id of ids) fill[id] = (fill[id] || 0) + 1;
+    const plan = [], seen = new Set();
+    for (const b of board.blocks) {
+      const team = teamByName.get(String(b.label).toLowerCase()) || null;
+      for (const r of b.riders) {
+        const key = `${r.zwid || r.name.toLowerCase()}|${b.label}`; if (seen.has(key)) continue; seen.add(key);
+        const su = signupOf(r), placed = su ? (data.assign[su.name.toLowerCase()] || []) : [];
+        const status = !team ? 'no-team' : placed.includes(team.id) ? 'same' : !su ? 'new' : placed.length ? 'elsewhere' : 'unplaced';
+        plan.push({ name: r.name, zwid: r.zwid, block: b.cols, label: b.label, zone: b.zone, team: team ? team.id : '', status, appTeams: placed.map(id => (data.week.teams.find(t => t.id === id) || { name: id }).name) });
+      }
+    }
+    const counts = Object.fromEntries(['same', 'new', 'unplaced', 'elsewhere', 'no-team'].map(k => [k, plan.filter(p => p.status === k).length]));
+    const blocks = board.blocks.map(b => ({ cols: b.cols, label: b.label, zone: b.zone, riders: b.riders.length, withId: b.riders.filter(r => r.sheetId).length, team: teamByName.has(String(b.label).toLowerCase()) }));
+    if (!body.apply) return { preview: { tab: board.tab, blocks, plan, counts } };
+    const now = new Date().toISOString(), cmds = [], skipped = [];
+    let created = 0, placedN = 0;
+    for (const p of plan) {
+      if (!p.team || p.status === 'same' || p.status === 'no-team') continue;
+      if (p.status === 'elsewhere' && body.overwrite !== true) continue;
+      const max = (data.week.teams.find(t => t.id === p.team) || {}).max || TTT_TEAM_MAX;
+      if ((fill[p.team] || 0) >= max) { skipped.push({ name: p.name, reason: 'That team is full' }); continue; }
+      const key = p.name.toLowerCase();
+      if (p.status === 'new') { cmds.push(['HSETNX', TTT_KEYS.signups, key, JSON.stringify({ name: p.name, zwid: p.zwid, cat: '', available: true, style: 'casual', doubleUp: false, preferred: [], comments: '', captain: false, ts: now, source: 'sheet' })]); created++; }
+      const su = signupOf(p), k = su ? su.name.toLowerCase() : key;
+      cmds.push(['HSET', TTT_KEYS.assign, k, JSON.stringify([p.team])]);
+      fill[p.team] = (fill[p.team] || 0) + 1; placedN++;
+    }
+    if (cmds.length) await redis(cmds);
+    return { ...tttView(await loadTtt(), roleFromRequest(req)), board: { created, placed: placedN, skipped } };
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
@@ -960,37 +1004,121 @@ async function lastSettings(data, member, week){
     preferred: (found.preferred || []).filter(id => ids.has(id)).slice(0, 5) };
 }
 
-// The club's Google Form responses (the TEAM LIST sheet), as TTT sign-up candidates: name, matched Zwift ID and category when the rider is in the
-// club roster, whether they are available, riding style, double-up. The last row for a name wins.
+// The club's Google Form responses, as TTT sign-up candidates: name, Zwift ID (from the form's Zwift Power ID answer, else matched by name in the club
+// roster), whether they are available, riding style, double-up, the teams they asked for. The last row for a name wins. The responses are not on
+// the TEAM LIST tab (that tab holds the published teams), so the form tab is looked for: SHEET_TAB_TTT_FORM, the usual form tab names, then the
+// workbook's first tab (where Google puts form responses by default). A tab is accepted only if it has the form's columns.
 const nameKey = n => String(n || '').toLowerCase().replace(/\[[^\]]*\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const TTT_FORM_NAME = /^please select your name/i, TTT_FORM_OTHER = /enter your first name and surname|first name and surname/i;
+function tttFormColumns(headers){
+  const find = (re, not) => headers.find(h => re.test(h) && !(not && not.test(h)));
+  const col = {
+    name: find(TTT_FORM_NAME) || find(/^(riders?|name|full name)\b/i) || find(/\bname\b/i, /zwift|e-?mail|consent|other|first name/i),
+    other: find(TTT_FORM_OTHER),
+    zwid: find(/zwift ?power ?id|zwift ?id|zwid/i),
+    cat: find(/^cat/i),
+    avail: find(/^availability$/i) || find(/^avail/i) || find(/avail/i, /zone/i),
+    style: find(/level for this week|practice or race|practice|competitive/i, /zone/i),
+    region: find(/which region|^region/i),
+    dbl: find(/double/i),
+    teams: find(/teams you would like to ride/i),
+  };
+  return col;
+}
+const tttFormUsable = col => !!col.name && !!(col.zwid || col.avail);
+async function tttFormRows(){
+  const tried = [];
+  for (const tab of [...new Set([process.env.SHEET_TAB_TTT_FORM, 'Form Responses 1', 'Form responses 1', SHEET_TABS['ttt-sheet'], `__first_tab_${Date.now()}`].filter(Boolean))]){
+    let parsed;
+    parsed = parseGviz(await fetchTab(tab));   // Google answers an unknown tab name with the first tab, so a real error (not shared, slow, down) is passed on
+    const col = tttFormColumns(parsed.headers);
+    if (tttFormUsable(col)) return { ...parsed, col, tab };
+    tried.push(tab);
+  }
+  throw new HttpError(422, 'The sign-up form responses were not found in the Google Sheet: no tab has the form\'s "Please select your name" and "Availability" columns. Set SHEET_TAB_TTT_FORM to the form responses tab name.');
+}
+const teamNamesOf = v => String(v || '').split(/\)\s*,\s*/).map(x => x.replace(/\)\s*$/, '').split(/\s+-\s+/)[0].trim()).filter(Boolean);
 async function readTttSheet(){
-  const { headers, rows } = parseGviz(await fetchTab(SHEET_TABS['ttt-sheet']));
-  const find = re => headers.find(h => re.test(h));
-  const col = { name: find(/rider|name/i), cat: find(/^cat/i), avail: find(/avail/i), style: find(/practice|race/i), region: find(/region/i), dbl: find(/double/i) };
-  if (!col.name) throw new HttpError(422, 'The TEAM LIST sheet has no column with the riders\' names.');
+  const { rows, col } = await tttFormRows();
   let roster = [];
   try { roster = (await fetchRoster()).riders || []; } catch (e) { /* match nobody: names are still imported */ }
-  const byName = new Map();
+  const byName = new Map(), byId = new Map(roster.map(r => [String(r.riderId), r]));
   for (const r of roster) { const k = nameKey(r.name); byName.set(k, byName.has(k) ? null : r); }   // two riders with one name: no safe match
   const out = new Map();
   for (const row of rows) {
-    const name = String(row[col.name] || '').trim().replace(/\s+/g, ' ');
-    if (!name || name === '-' || /^(total|riders? left|team\b)/i.test(name) || name.length > 60) continue;
-    const r = byName.get(nameKey(name)) || null;
+    let name = String(row[col.name] || '').trim().replace(/\s+/g, ' ');
+    if ((!name || /^\*?other\*?$/i.test(name)) && col.other) name = String(row[col.other] || '').trim().replace(/\s+/g, ' ');
+    if (!name || name === '-' || /^\*?other\*?$/i.test(name) || /^(total|riders? left|team\b)/i.test(name) || name.length > 60) continue;
+    const idText = String(col.zwid ? row[col.zwid] : '').replace(/\D/g, '');
+    const idRider = idText.length >= 4 && idText.length <= 9 ? byId.get(idText) : null;
+    const r = idRider || byName.get(nameKey(name)) || null;
+    const zwid = idRider ? idText : r ? String(r.riderId) : (idText.length >= 4 && idText.length <= 9 ? idText : '');
     const sheetCat = String(col.cat ? row[col.cat] : '').trim().toUpperCase();
     const availText = String(col.avail ? row[col.avail] : '');
+    const styleText = String(col.style ? row[col.style] : '');
     out.set(name.toLowerCase(), {
       name: r && r.name ? String(r.name).trim() : name,
-      zwid: r ? String(r.riderId) : '',
+      zwid,
       cat: CATS.includes(sheetCat) ? sheetCat : CATS.includes(r && r.zpCategory) ? r.zpCategory : '',
       available: !/\bnot\b|unavailable|can'?t|no\b/i.test(availText),
-      style: /compet|race/i.test(String(col.style ? row[col.style] : '')) && !/not bothered/i.test(String(row[col.style])) ? 'race' : 'casual',
+      style: /compet|race/i.test(styleText) && !/not bothered/i.test(styleText) ? 'race' : 'casual',
       doubleUp: /^\s*y/i.test(String(col.dbl ? row[col.dbl] : '')),
       region: String(col.region ? row[col.region] : '').replace(/^-$/, '').trim(),
       note: availText.trim().slice(0, 60),
+      preferredNames: teamNamesOf(col.teams ? row[col.teams] : ''),
     });
   }
   return [...out.values()];
+}
+
+// The TEAM LIST tab publishes the teams as blocks across the sheet (DH, FV, GH ...). A block starts with a "Zwiftpower name tag" cell such as
+// "(CRYO-GEN Snow Geese)" with the time zone above it and the pen below; the riders' names run down that column, and a Zwift ID may sit in the
+// column to the right (some blocks show it, others leave it empty), followed by the stats. So blocks are found by their tag cell, not by fixed
+// letters, and a rider without an ID beside them is matched to the club roster by name. Where a sheet has no tag cells, columns of Zwift IDs with a
+// column of names beside them are read instead. The preview shows exactly which columns were read.
+const colLetters = i => { let s = ''; for (i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + ((i - 1) % 26)) + s; return s; };
+const ID_CELL = /^\d{4,9}$/;
+const NOT_A_RIDER = /^(chart|zp cat|w\/kg|cp w\/kg|average power|team total|makeup|spread|team overall|time zones?|pen [a-e]|zone \d+|n\/a|unavailable)\b/i;
+const HEADER_WORD = /^(riders?|names?|id|zwift ?id|total|cat|category|captain|latte\+?|mocha|frappe|espresso)$/i;
+const looksLikeName = v => /[a-z]/i.test(v) && !/^\d/.test(v) && v.length <= 60 && !NOT_A_RIDER.test(v) && !HEADER_WORD.test(v) && !/^\(.*\)$/.test(v);
+const tagLabel = inner => String(inner).replace(/^(toyota\s+)?cryo[\s-]*(gen|rdt)\s*/i, '').trim() || String(inner).trim();
+function readTeamBoard(grid){
+  const cell = (r, c) => String((grid[r] || [])[c] || '').trim();
+  const width = Math.max(0, ...grid.map(r => r.length)), blocks = [];
+  for (let r = 0; r < Math.min(grid.length, 12); r++) {
+    for (let c = 0; c < width; c++) {
+      const m = /^\((.{2,40})\)$/.exec(cell(r, c));
+      if (!m || !/cryo/i.test(m[1])) continue;
+      const riders = [];
+      for (let rr = r + 1, started = false; rr < grid.length; rr++) {
+        const v = cell(rr, c).replace(/\s+/g, ' ');
+        if (!v) { if (started) break; continue; }
+        if (!looksLikeName(v)) { if (started) break; continue; }
+        started = true;
+        const id = cell(rr, c + 1);
+        riders.push({ row: rr, name: v, zwid: ID_CELL.test(id) ? id : '', sheetId: ID_CELL.test(id) });
+      }
+      if (riders.length) blocks.push({ cols: `${colLetters(c)}:${colLetters(c + 1)}`, label: tagLabel(m[1]), zone: r > 0 ? cell(r - 1, c) : '', riders });
+    }
+  }
+  if (blocks.length) return blocks;
+  for (let c = 1; c < width; c++) {   // no tag cells: a column of IDs with a column of names beside it
+    const rows = [];
+    for (let r = 0; r < grid.length; r++) {
+      const name = cell(r, c - 1).replace(/\s+/g, ' '), id = cell(r, c);
+      if (ID_CELL.test(id) && looksLikeName(name)) rows.push({ row: r, name, zwid: id, sheetId: true });
+    }
+    if (rows.length < 2) continue;
+    let label = '';
+    for (let r = rows[0].row - 1; r >= Math.max(0, rows[0].row - 8) && !label; r--) for (const cc of [c - 1, c]) { const v = cell(r, cc); if (v && !ID_CELL.test(v) && looksLikeName(v)) { label = v; break; } }
+    blocks.push({ cols: `${colLetters(c - 1)}:${colLetters(c)}`, label, zone: '', riders: rows });
+  }
+  return blocks;
+}
+async function readTttBoard(){
+  const tab = SHEET_TABS['ttt-sheet'];
+  const grid = await fetchGrid(tab);
+  return { tab, blocks: readTeamBoard(grid) };
 }
 
 // ── Auto-assign planner ────────────────────────────────────
@@ -1452,6 +1580,7 @@ function slimRider(r){
     power: pick(r.power, ['wkg5', 'wkg15', 'wkg30', 'wkg60', 'wkg120', 'wkg300', 'wkg1200', 'w5', 'w60', 'w300', 'w1200', 'CP', 'AWC']),
     race: {
       ...pick(race, ['finishes', 'dnfs', 'wins', 'podiums']),
+      last: race.last && race.last.date ? { date: race.last.date } : undefined,
       current: race.current ? { rating: race.current.rating, mixed: race.current.mixed ? { category: race.current.mixed.category } : undefined } : undefined,
       max30: race.max30 ? { rating: race.max30.rating } : undefined,
       max90: race.max90 ? { rating: race.max90.rating } : undefined,
@@ -2143,6 +2272,9 @@ async function handleProfile(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// Duplicate and inactive members (lib/tidy.js): finds them; staff act with the member tools that already exist.
+const tidy = require('../lib/tidy')({ requireRole, fetchRoster, normTier });
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
@@ -2224,6 +2356,8 @@ async function route(req, res){
   }
   const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
   if (pathname === '/api/members/bulk' && req.method === 'POST') return handleMemberBulk(req, res);
+  const tidyRoute = tidy.routes[`${req.method} ${pathname}`];
+  if (tidyRoute) return sendJSON(res, 200, await tidyRoute(req));
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
 

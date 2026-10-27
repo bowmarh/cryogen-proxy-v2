@@ -289,7 +289,7 @@ table{width:100%;border-collapse:collapse}
   </div>
 
   <div id="page-members" class="page">
-    <div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div>
+    <div style="margin-bottom:20px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Members</h2><p id="members-sub" style="font-size:13px;color:#6b7280">Loading…</p></div><button id="tidy-open" onclick="openTidy()" style="display:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.4)">🧹 Duplicates &amp; inactive</button></div>
    <div id="assoc-panel"></div>
    <div id="offboarding-panel"></div>   
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -454,6 +454,88 @@ function setZRA(color, msg) {
   if (dot) dot.style.background = color;
   if (text) text.textContent = msg;
 }
+
+
+// ── Duplicate and inactive members ──
+let tidyData=null, tidyErr='', tidyTab='dup', tidyDays=180, tidyReason='all', tidySel=new Set(), tidyBusy=false, tidyMsg='';
+async function openTidy(){
+  let m=document.getElementById('tidyModal');
+  if(!m){ m=document.createElement('div'); m.id='tidyModal'; m.className='modal-bg'; m.onclick=e=>{ if(e.target===m) closeTidy(); }; document.body.appendChild(m); }
+  m.style.display='flex'; tidyData=null; tidyErr=''; tidySel=new Set(); tidyMsg=''; renderTidy();
+  try{ const r=await fetch('/api/members/tidy',{headers:tttHeaders()}), d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); tidyData=d; }catch(e){ tidyErr=e.message; }
+  renderTidy();
+}
+function closeTidy(){ const m=document.getElementById('tidyModal'); if(m) m.style.display='none'; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=document.getElementById('tidyModal'); if(m&&m.style.display==='flex') closeTidy(); } });
+const tidyAgo=d=>d===null||d===undefined?'unknown':d<2?'today':d<60?d+' days ago':d<700?Math.round(d/30)+' months ago':Math.round(d/365)+' years ago';
+function tidyInactive(){
+  const d=tidyData; if(!d) return [];
+  return d.inactive.map(i=>({ ...i, why:[i.reasons.includes('not-in-club')?'Not in the Zwift club':'', i.reasons.includes('never-raced')?'Never raced':'', i.daysSinceRace!==null&&i.daysSinceRace>=tidyDays?'No race for '+tidyAgo(i.daysSinceRace).replace(' ago',''):''].filter(Boolean) })).filter(i=>i.why.length&&(tidyReason==='all'||(tidyReason==='club'&&i.reasons.includes('not-in-club'))||(tidyReason==='never'&&i.reasons.includes('never-raced'))||(tidyReason==='old'&&i.daysSinceRace!==null&&i.daysSinceRace>=tidyDays)));
+}
+function renderTidy(){
+  const m=document.getElementById('tidyModal'); if(!m) return;
+  const d=tidyData, btn='padding:5px 11px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15)';
+  const tab=(id,l,n)=>`<button onclick="tidyTab='${id}';tidyMsg='';renderTidy()" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${tidyTab===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${tidyTab===id?'rgba(0,212,255,0.12)':'transparent'};color:${tidyTab===id?'#00D4FF':'#9ca3af'}">${l}${n!==undefined?` <span style="font-size:11px;opacity:.8">${n}</span>`:''}</button>`;
+  const stCol=s=>s==='active'?'#10B981':s==='suspended'?'#F59E0B':s==='left'?'#EF4444':'#6b7280';
+  let body='<div style="font-size:13px;color:#9ca3af">Looking through the members…</div>';
+  if(tidyErr) body=`<div style="font-size:13px;color:#f87171">${esc(tidyErr)}</div>`;
+  else if(d&&!d.hasMembers) body='<div style="font-size:13px;color:#FBBF24">The WordPress member records could not be read, so there is nothing to compare yet. '+esc(d.membersError||'')+'</div>';
+  else if(d){
+    const dup=d.duplicates, inact=tidyInactive();
+    if(tidyTab==='dup'){
+      const grp=g=>`<div style="padding:10px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:8px"><div style="font-weight:800;font-size:14px;margin-bottom:6px">${esc(g.name)}</div>
+        ${g.members.map(x=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="min-width:74px;color:#9ca3af">${esc(x.zwid)}</span><span style="color:${stCol(x.status)};min-width:62px">${esc(x.status)}</span><span style="min-width:62px">${esc(x.tier||'—')}</span><span style="min-width:96px;color:${x.inClub?'#10B981':'#6b7280'}">${x.inClub?'in Zwift club':'not in club'}</span><span style="flex:1;color:#9ca3af">raced ${esc(tidyAgo(x.daysSinceRace))}</span>
+          ${x.zwid===g.keep?'<span style="font-size:11px;color:#10B981;font-weight:700">suggested to keep</span>':''}${x.hasRecord&&x.status!=='left'?`<button onclick="tidySet('${esc(x.zwid)}','left')" style="${btn}">Mark as left</button>`:''}<button onclick="openRider('${esc(x.zwid)}')" title="Open profile" style="${btn}">👤</button></div>`).join('')}
+        ${g.members.filter(x=>x.zwid!==g.keep&&x.hasRecord&&x.status!=='left').length?`<div style="margin-top:6px"><button onclick="tidyKeep('${esc(g.keep)}','${esc(g.key)}')" style="${btn};background:rgba(16,185,129,0.1);color:#10B981;border-color:rgba(16,185,129,0.4)">Keep the suggested one, mark the others as left</button></div>`:''}</div>`;
+      body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">The same name under more than one Zwift ID. People with a common name can be different riders, so check before marking anyone. Marking a member as left saves to WordPress and can be undone from the Members table.</div>
+        ${dup.sameName.length?dup.sameName.map(grp).join(''):'<div style="font-size:13px;color:#10B981;margin-bottom:10px">✅ No one is listed under two Zwift IDs.</div>'}
+        ${dup.sameId.length?`<div style="font-weight:800;font-size:13px;margin:16px 0 4px;color:#FBBF24">WordPress holds a Zwift ID twice (${dup.sameId.length})</div><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">The app can only see one of the two records. Delete the extra one on cryogen.team.</div>${dup.sameId.map(x=>`<div style="font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b>${esc(x.zwid)}</b> · ${x.records.map(r=>esc(r.name)+' ('+esc(r.status)+', '+esc(r.tier||'—')+')').join(' and ')}</div>`).join('')}`:''}
+        ${dup.noId.length?`<div style="font-weight:800;font-size:13px;margin:16px 0 4px;color:#FBBF24">No usable Zwift ID in WordPress (${dup.noId.length})</div><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">The app cannot manage these records because it finds a member by Zwift ID. Add the ID, or remove the record, on cryogen.team.</div><div style="max-height:160px;overflow:auto">${dup.noId.map(x=>`<div style="font-size:12px;padding:3px 0;border-top:1px solid rgba(255,255,255,0.05)">${esc(x.name||'(no name)')} · ${esc(x.status)} · ${esc(x.tier||'—')}${x.zwid?' · “'+esc(x.zwid)+'”':''}</div>`).join('')}</div>`:''}`;
+    }else{
+      const rb=(id,l)=>`<button onclick="tidyReason='${id}';renderTidy()" style="padding:3px 11px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${tidyReason===id?'rgba(0,212,255,0.5)':'rgba(255,255,255,0.12)'};background:${tidyReason===id?'rgba(0,212,255,0.12)':'transparent'};color:${tidyReason===id?'#00D4FF':'#9ca3af'}">${l}</button>`;
+      const all=inact.map(i=>String(i.zwid)), allIn=all.length&&all.every(z=>tidySel.has(z));
+      body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Active members who may have drifted away. Associates are not flagged for being outside the Zwift club.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase">Show</span>${rb('all','All')}${rb('club','Not in the Zwift club')}${rb('never','Never raced')}${rb('old','No race for…')}
+          <select class="inp" style="width:auto" onchange="tidyDays=+this.value;renderTidy()">${[[60,'60 days'],[90,'90 days'],[180,'6 months'],[365,'a year']].map(([v,l])=>`<option value="${v}" ${tidyDays===v?'selected':''}>${l}</option>`).join('')}</select></div>
+        ${inact.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label style="font-size:12px;cursor:pointer"><input type="checkbox" ${allIn?'checked':''} onchange="tidyAll(this.checked)"/> Select all ${inact.length}</label>${tidySel.size?`<b style="font-size:12px;color:#00D4FF">${tidySel.size} selected</b><button onclick="tidyBulk('suspended')" ${tidyBusy?'disabled':''} style="${btn};color:#F59E0B;border-color:rgba(245,158,11,0.4)">Suspend</button><button onclick="tidyBulk('left')" ${tidyBusy?'disabled':''} style="${btn};color:#f87171;border-color:rgba(239,68,68,0.4)">Mark as left</button><button onclick="tidyMessage()" style="${btn};color:#a5b4fc;border-color:rgba(88,101,242,0.45)">💬 Message them</button>`:''}</div>
+          <div style="max-height:360px;overflow:auto">${inact.slice(0,300).map(i=>`<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><input type="checkbox" ${tidySel.has(String(i.zwid))?'checked':''} onchange="tidyPick('${esc(String(i.zwid))}',this.checked)"/><span style="flex:1;min-width:130px"><b>${esc(i.name)}</b> <span style="color:#6b7280">${esc(i.zwid)}</span></span><span style="color:#FBBF24;flex:2;min-width:150px">${esc(i.why.join(' · '))}</span><span style="color:#9ca3af;min-width:90px">${i.inClub?'last raced '+esc(tidyAgo(i.daysSinceRace)):'not in club'}</span><button onclick="openRider('${esc(String(i.zwid))}')" title="Open profile" style="${btn}">👤</button></div>`).join('')}${inact.length>300?`<div style="font-size:11px;color:#6b7280;padding:6px">Showing the first 300 of ${inact.length}: use the filters.</div>`:''}</div>`:'<div style="font-size:13px;color:#10B981">✅ Nobody matches.</div>'}`;
+    }
+    body+=tidyMsg?`<div style="font-size:12px;margin-top:10px;color:${tidyMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(tidyMsg)}</div>`:'';
+  }
+  const dup=d&&d.hasMembers?d.counts.sameName+d.counts.sameId+d.counts.noId:undefined;
+  m.innerHTML=`<div class="modal" style="max-width:760px"><div class="modal-head"><span>🧹 Duplicates &amp; inactive members</span><button onclick="closeTidy()" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:0 4px;cursor:pointer">×</button></div>
+    <div class="modal-body"><div style="display:flex;gap:8px;margin-bottom:14px">${tab('dup','Duplicates',dup)}${tab('inact','Inactive',d&&d.hasMembers?tidyInactive().length:undefined)}</div>${body}</div></div>`;
+}
+function tidyPick(z,on){ if(on) tidySel.add(z); else tidySel.delete(z); renderTidy(); }
+function tidyAll(on){ tidyInactive().forEach(i=>{ if(on) tidySel.add(String(i.zwid)); else tidySel.delete(String(i.zwid)); }); renderTidy(); }
+async function tidyApply(zwids,changes){
+  const r=await fetch('/api/members/bulk',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zwids, changes })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  const done=new Set(d.results.filter(x=>x.ok).map(x=>x.zwid));
+  for(const rec of [...riders,...wpOnly]) if(done.has(String(rec.id))) applyMemberRecord(rec,changes);
+  if(tidyData){ const gone=changes.status==='left'||changes.status==='suspended'; tidyData.inactive=tidyData.inactive.filter(i=>!(done.has(String(i.zwid))&&gone)); tidyData.duplicates.sameName.forEach(g=>g.members.forEach(x=>{ if(done.has(String(x.zwid))) x.status=changes.status; })); }
+  renderMembers();
+  return d;
+}
+async function tidySet(zwid,status){
+  if(!confirm('Mark this member as '+(status==='left'?'having left the club':status)+'?')) return;
+  try{ const d=await tidyApply([zwid],{ status }); tidyMsg=d.failed?('Not saved: '+(d.results.find(x=>!x.ok)||{}).error):'✓ Saved.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
+  renderTidy();
+}
+async function tidyKeep(keep,key){
+  const g=tidyData.duplicates.sameName.find(x=>x.key===key); const ids=g.members.filter(x=>x.zwid!==keep&&x.hasRecord&&x.status!=='left').map(x=>x.zwid);
+  if(!ids.length||!confirm('Keep '+g.name+' ('+keep+') and mark '+ids.length+' other record'+(ids.length===1?'':'s')+' as left?')) return;
+  try{ const d=await tidyApply(ids,{ status:'left' }); tidyMsg=d.failed?('Saved '+d.saved+'. Not saved: '+d.results.filter(x=>!x.ok).map(x=>x.zwid+' '+x.error).join('; ')):'✓ Saved.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
+  renderTidy();
+}
+async function tidyBulk(status){
+  const ids=[...tidySel]; if(!ids.length) return;
+  if(ids.length>100){ tidyMsg='Choose at most 100 at a time.'; renderTidy(); return; }
+  if(!confirm((status==='left'?'Mark ':'Suspend ')+ids.length+' member'+(ids.length===1?'':'s')+(status==='left'?' as having left the club?':'?')+'\n\nThis saves to WordPress. You can change it back in the Members table.')) return;
+  tidyBusy=true; renderTidy();
+  try{ const d=await tidyApply(ids,{ status }); ids.forEach(z=>{ if(d.results.find(x=>x.zwid===z&&x.ok)) tidySel.delete(z); }); tidyMsg=d.failed?('Saved '+d.saved+'. '+d.failed+' not saved: '+d.results.filter(x=>!x.ok).slice(0,4).map(x=>x.zwid+' '+x.error).join('; ')):'✓ Saved '+d.saved+'.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
+  tidyBusy=false; renderTidy();
+}
+function tidyMessage(){ mSel=new Set(tidySel); closeTidy(); commsFromMembers(); }
 
 // ── API Bridge to WordPress ──────────────────────────────
 const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
@@ -1747,6 +1829,7 @@ function renderMembers(){
   renderBulkBar();
   
   const staffM=(role === 'admin' || role === 'mod');
+  const tb=document.getElementById('tidy-open'); if(tb) tb.style.display=staffM?'':'none';
   document.getElementById('members-table-head').innerHTML = `
       ${staffM?`<th style="width:28px"><input type="checkbox" title="Select everyone who matches the filters" ${mFilteredIds.length&&mFilteredIds.every(id=>mSel.has(id))?'checked':''} onchange="mSelectAll(this.checked)"/></th>`:''}
       <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
@@ -2208,6 +2291,33 @@ async function tttImportRun(apply){
   if(apply){ tttData=d; tttSummary=null; tttImport={ done:d.imported }; } else tttImport={ preview:d.preview };
   renderTtt();
 }
+
+// The published teams on the TEAM LIST tab, compared with the teams here: which columns were read, who the app already agrees on, and who can be placed.
+let tttBoardImp=null;
+async function tttBoardRun(apply,overwrite){
+  if(!apply){ tttBoardImp={ loading:true }; renderTtt(); }
+  let res,d; try{ res=await fetch('/api/ttt/import-board',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ apply:!!apply, overwrite:!!overwrite })}); d=await res.json(); }catch(e){ tttBoardImp={ error:'Could not reach the server.' }; renderTtt(); return; }
+  if(!res.ok){ tttBoardImp={ error:d.error||('Request failed ('+res.status+')') }; renderTtt(); return; }
+  if(apply){ const b=d.board; tttData=d; tttSummary=null; tttBoardImp={ done:b }; } else tttBoardImp={ preview:d.preview };
+  renderTtt();
+}
+function tttBoardCard(){
+  const c=tttBoardImp; if(!c) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  let body;
+  if(c.loading) body='<div style="font-size:13px;color:#9ca3af">Reading the TEAM LIST tab…</div>';
+  else if(c.error) body=`<div style="font-size:13px;color:#FBBF24">${esc(c.error)}</div>`;
+  else if(c.done) body=`<div style="font-size:13px;color:#10B981">✅ ${c.done.placed} rider${c.done.placed===1?'':'s'} placed${c.done.created?`, ${c.done.created} new sign-up${c.done.created===1?'':'s'} created`:''}.${c.done.skipped.length?` <span style="color:#FBBF24">${c.done.skipped.length} left out: ${esc(c.done.skipped.slice(0,4).map(x=>x.name+' ('+x.reason+')').join(', '))}</span>`:''}</div>`;
+  else{
+    const p=c.preview, n=p.counts, st={ same:['#10B981','agrees'], unplaced:['#00D4FF','can be placed'], new:['#00D4FF','new sign-up'], elsewhere:['#FBBF24','app has another team'], 'no-team':['#6b7280','no team of that name here'] };
+    const place=n.unplaced+n.new;
+    body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Read from <b style="color:#e5e7eb">${esc(p.tab)}</b>: ${p.blocks.map(b=>`<span style="white-space:nowrap">${esc(b.cols)} ${b.label?'<b style="color:'+(b.team?'#10B981':'#FBBF24')+'">'+esc(b.label)+'</b>':'(no label)'} (${b.riders}${b.withId<b.riders?', '+(b.riders-b.withId)+' matched by name':''})</span>`).join(' · ')||'no blocks of names with Zwift IDs beside them were found'}.</div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${n.same} already agree${n.unplaced?`, <b style="color:#00D4FF">${n.unplaced} can be placed</b>`:''}${n.new?`, <b style="color:#00D4FF">${n.new} are not signed up here yet</b>`:''}${n.elsewhere?`, <b style="color:#FBBF24">${n.elsewhere} are on a different team here</b>`:''}${n['no-team']?`, ${n['no-team']} are in a block with no matching team here`:''}.</div>
+      <div style="max-height:240px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse">${p.plan.filter(x=>x.status!=='same').map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px">${esc(x.name)}</td><td style="padding:4px 6px;color:#9ca3af">${esc(x.label)} <span style="color:#4b5563">${esc(x.block)}</span></td><td style="padding:4px 6px;color:${st[x.status][0]}">${st[x.status][1]}${x.appTeams.length?': '+esc(x.appTeams.join(', ')):''}</td></tr>`).join('')||'<tr><td style="padding:6px;color:#10B981">The app and the sheet agree.</td></tr>'}</table></div>
+      ${place?`<button onclick="tttBoardRun(true,false)" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Place ${place} rider${place===1?'':'s'} as the sheet has them</button> `:''}${n.elsewhere?`<button onclick="if(confirm('Move ${n.elsewhere} rider${n.elsewhere===1?'':'s'} to the team the sheet names? Their team here is replaced.'))tttBoardRun(true,true)" style="${btn};color:#FBBF24;border-color:rgba(251,191,36,0.4)">Also move ${n.elsewhere} to the sheet's team</button> `:''}`;
+  }
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(167,139,250,0.4)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">📋 Published teams on the TEAM LIST tab</div>${body}<button onclick="tttBoardImp=null;renderTtt()" style="${btn}">Close</button></div>`;
+}
 function tttImportCard(){
   const c=tttImport; if(!c) return '';
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
@@ -2258,11 +2368,12 @@ function tttStaffPanel(d){
       <div><div style="font-size:15px;font-weight:800">Team builder</div><div style="font-size:12px;color:#9ca3af">${d.signups.length} signed up · ${placed} in a team · <span style="color:${unplaced?'#FBBF24':'#10B981'}">${unplaced} waiting</span></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="tttImportRun(false)" style="${prim};background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)">📥 Import from the sheet</button>
+        <button onclick="tttBoardRun(false)" style="${prim};background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)" title="Compare the published teams on the TEAM LIST tab with the teams here">📋 Compare with TEAM LIST</button>
         <button onclick="tttPlanRun()" style="${prim};background:rgba(16,185,129,0.14);color:#10B981;border:1px solid rgba(16,185,129,0.4)" ${unplaced?'':'disabled'}>✨ Auto-allocate${unplaced?` (${unplaced})`:''}</button>
         <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" style="${prim};background:${w.published?'rgba(255,255,255,0.05)':'rgba(0,212,255,0.12)'};color:${w.published?'#e5e7eb':'#00D4FF'};border:1px solid ${w.published?'rgba(255,255,255,0.18)':'rgba(0,212,255,0.4)'}">${w.published?'🙈 Unpublish line-ups':'📢 Publish line-ups'}</button>
       </div>
     </div>
-    ${tttImportCard()}${tttPlanCard(d)}${tttSummaryBox()}
+    ${tttImportCard()}${tttBoardCard()}${tttPlanCard(d)}${tttSummaryBox()}
     ${tttEditingTeams?tttTeamsEditor(w):''}
     ${d.signups.length?tttBoard(d):`<div style="font-size:13px;color:#9ca3af;padding:14px 0">No sign-ups yet. Riders sign up on this page, or press <b>Import from the sheet</b> to bring in the Google Form responses.</div>`}
     <details style="margin-top:14px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#9ca3af">More tools</summary>
