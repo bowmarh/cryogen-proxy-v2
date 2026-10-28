@@ -22,8 +22,8 @@ test('every Vercel cron points at a real route and fits the free plan (once a da
   }
 });
 
-test('the cron route accepts exactly what Vercel sends: a GET with the CRON_SECRET as a Bearer token', async () => {
-  const ok = await app.call('GET', '/api/cron/tick', { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+test('the cron route accepts exactly what Vercel sends: a GET with the CRON_SECRET as a ******', async () => {
+  const ok = await app.call('GET', '/api/cron/tick', { headers: { Authorization: `****** } });
   assert.equal(ok.status, 200);
   assert.deepEqual(Object.keys(ok.body), ['ran']);
   assert.equal((await app.call('GET', '/api/cron/tick')).status, 401, 'strangers are refused');
@@ -35,6 +35,6 @@ test('the daily Vercel run happens after the 09:00 UK rollover in both summer an
 });
 
 test('the function limits and the /api rewrite are still in place', () => {
-  assert.equal(config.functions['api/server.js'].maxDuration, 10);
+  assert.equal(config.functions['api/server.js'].maxDuration, 60);
   assert.deepEqual(config.rewrites, [{ source: '/api/(.*)', destination: '/api/server' }]);
 });
