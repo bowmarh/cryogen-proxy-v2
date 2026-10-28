@@ -22,8 +22,8 @@ test('every Vercel cron points at a real route and fits the free plan (once a da
   }
 });
 
-test('the cron route accepts exactly what Vercel sends: a GET with the CRON_SECRET as a ******', async () => {
-  const ok = await app.call('GET', '/api/cron/tick', { headers: { Authorization: `****** } });
+test('the cron route accepts exactly what Vercel sends: a GET with the CRON_SECRET bearer token', async () => {
+  const ok = await app.call('GET', '/api/cron/tick', { headers: { Authorization: 'Bearer cron-secret' } });
   assert.equal(ok.status, 200);
   assert.deepEqual(Object.keys(ok.body), ['ran']);
   assert.equal((await app.call('GET', '/api/cron/tick')).status, 401, 'strangers are refused');
