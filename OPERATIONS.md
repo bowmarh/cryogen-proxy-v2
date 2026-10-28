@@ -16,11 +16,11 @@ The health panel intentionally does not send test messages. It also must not rev
 The GitHub Actions schedule and the daily Vercel Cron are fallbacks; GitHub may delay scheduled jobs in quiet repositories. For dependable frequent runs, configure an Upstash QStash schedule:
 
 - **Destination:** `https://club.cryo-gen.team/api/cron/tick`
-- **Method:** `GET`
 - **Schedule:** `*/15 * * * *`
-- **Request header:** `Authorization: Bearer <CRON_SECRET>`
+- **HTTP method:** `POST` (the endpoint accepts both GET and POST)
+- **Forwarded destination header:** `Authorization`, with `Bearer` followed by the existing production `CRON_SECRET` value.
 
-Use the existing production `CRON_SECRET` value, entered directly in the QStash dashboard as a protected header. Do not copy it into this repository or share it in chat. The endpoint rejects requests without the matching bearer token. Keep the existing daily Vercel Cron and GitHub Actions workflow as backup triggers; scheduled events are idempotently claimed in shared storage.
+Set the forwarded header in the QStash dashboard as a protected header. Do not copy the secret into this repository or share it in chat. The endpoint rejects requests without the matching bearer token. Keep the existing daily Vercel Cron and GitHub Actions workflow as backup triggers; scheduled events are idempotently claimed in shared storage.
 
 After enabling the schedule, confirm the admin health panel's **Scheduled runs** timestamp advances about every 15 minutes. Check Vercel runtime errors if it does not. The API function is configured with a 60-second maximum duration; Vercel plan limits still apply.
 
