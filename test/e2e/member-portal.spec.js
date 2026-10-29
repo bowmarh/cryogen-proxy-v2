@@ -39,6 +39,27 @@ test('a member can create a private calendar link and subscribe to its feed', as
   expect(body).toContain('END:VCALENDAR');
 });
 
+test('calendar settings errors are visible and can be retried', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  let failRequest = true;
+  await page.route('**/api/me/calendar', route => {
+    if (failRequest && route.request().method() === 'GET') {
+      return route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'calendar storage unavailable' }),
+      });
+    }
+    return route.continue();
+  });
+
+  await page.getByRole('button', { name: /My Profile/ }).click();
+  await expect(page.locator('.cal-slot')).toContainText('calendar storage unavailable');
+  failRequest = false;
+  await page.locator('.cal-slot').getByRole('button', { name: 'Try again' }).click();
+  await expect(page.locator('.cal-slot')).toContainText(/Create my calendar link|Your calendar link is ready/);
+});
+
 test('member search reports roster failures instead of showing sample riders', async ({ page, baseURL }) => {
   await page.route('**/api/auth/status', route => route.fulfill({
     status: 200,
