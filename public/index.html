@@ -54,7 +54,7 @@ table{width:100%;border-collapse:collapse}
 .modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;flex:1 1 auto}
 .modal-foot{flex:none;padding:14px 20px;border-top:1px solid rgba(255,255,255,0.07)}
 .btn-cyan{padding:10px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;width:100%;font-size:14px}
-.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;display:block;margin-bottom:5px}
+.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;display:block;margin-bottom:5px}
 .cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
 .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
 .navgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#4b5563;padding:12px 12px 4px}
@@ -106,7 +106,7 @@ table{width:100%;border-collapse:collapse}
     </div>
     <div id="login-step2" style="display:none">
       <div class="card" style="padding:24px">
-        <button onclick="backToStep1()" style="background:none;border:none;color:#6b7280;font-size:13px;margin-bottom:16px;padding:0;display:flex;align-items:center;gap:4px">← Back</button>
+        <button onclick="backToStep1()" style="background:none;border:none;color:#9ca3af;font-size:13px;margin-bottom:16px;padding:0;display:flex;align-items:center;gap:4px">← Back</button>
         <div id="login-form-admin" style="display:none">
           <label class="lbl">Administrator Password</label>
           <input id="admin-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAdminLogin()" style="margin-bottom:12px"/>
@@ -2655,7 +2655,7 @@ function renderLadder(){
 }
 async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
 
-// ── DIRT Racing Series (DRS): squad of up to ten, fixed calendar, best four score, vELO buffer ─────────
+// ── DIRT Racing Series (DRS): squad of up to eight, fixed calendar, best four score, vELO buffer ─────────
 let drsTeam='', drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
 async function loadDrs(){
   try{
@@ -2740,12 +2740,14 @@ function drsToggle(id,open){ if(open) drsOpen.add(id); else drsOpen.delete(id); 
 function drsRolesOpen(id){ const st=drs.stages.find(x=>x.id===id), has=Object.values(st.roles||{}).includes('scorer'); drsRoles={ stage:id, picked:new Set(has?Object.keys(st.roles).filter(z=>st.roles[z]==='scorer'):st.suggestedScorers) }; drsResult=null; drsOpen.add(id); renderDrs(); }
 function drsRolesForm(st){
   const s=drs.season, picked=drsRoles.picked, btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  const suggestion=[...drs.squad].sort((a,b)=>Number(b.rating||0)-Number(a.rating||0)).slice(0,s.scorers).map(r=>r.zwid);
   return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Scoring ${s.scorers} <span style="font-weight:400;color:#9ca3af">${picked.size} picked</span></div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Only the best ${s.scorers} of our finishers score, so the others work for them: closing gaps, pacing climbs and leading out. Suggested: the ${s.scorers} highest vELO.</div>
     ${drs.squad.map(r=>{ const on=picked.has(r.zwid), blocked=!on&&picked.size>=s.scorers; return `<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;${blocked?'opacity:.4':''}"><input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="drsRoleTick('${esc(r.zwid)}',this.checked)"/><span style="flex:1;font-size:13px;font-weight:600">${esc(r.name)}</span><span style="font-size:11px;color:#6b7280">${r.rating||''}</span></label>`; }).join('')}
-    <div style="display:flex;gap:6px;margin-top:8px"><button onclick="drsRolesSave('${esc(st.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save the plan</button><button onclick="drsRoles=null;renderDrs()" style="${btn}">Close</button></div></div>`;
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button onclick="drsRoleSuggest('${esc(st.id)}')" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">✨ Auto-pick the strongest ${s.scorers}</button><button onclick="drsRolesSave('${esc(st.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save the plan</button><button onclick="drsRoles=null;renderDrs()" style="${btn}">Close</button></div></div>`;
 }
 function drsRoleTick(z,on){ if(on) drsRoles.picked.add(z); else drsRoles.picked.delete(z); renderDrs(); }
+function drsRoleSuggest(id){ const best=[...drs.squad].sort((a,b)=>Number(b.rating||0)-Number(a.rating||0)).slice(0,drs.season.scorers).map(r=>r.zwid); drsRoles={ stage:id, picked:new Set(best) }; renderDrs(); }
 async function drsRolesSave(id){ if(await drsPost('roles',{ stage:id, scorers:[...drsRoles.picked] })) drsRoles=null, renderDrs(); }
 function drsResultOpen(id){ drsResult={ stage:id }; drsRoles=null; drsOpen.add(id); renderDrs(); }
 function drsResultForm(st){
@@ -2789,7 +2791,7 @@ function drsSetupCard(){
       ${lab('Time slot name')}<input id="dz-slot" ${inp}width:140px" maxlength="60" placeholder="Tuesday EU" value="${esc(s.slot||'')}"/></label>
       ${lab('Start time')}<input id="dz-time" ${inp}width:80px" maxlength="5" placeholder="19:30" value="${esc(s.time||'19:30')}"/></label>
       ${lab('Time zone')}<input id="dz-tz" ${inp}width:140px" placeholder="Europe/London" value="${esc(s.tz||'Europe/London')}"/></label></div>
-    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||10}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||8}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
     <div style="display:flex;gap:6px"><button onclick="drsSetupSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save</button>${drs.season?`<button onclick="drsSetup=false;renderDrs()" style="${btn}">Close</button>`:''}</div></div>`;
 }
 async function drsSetupSave(){
@@ -2802,7 +2804,7 @@ async function drsCalendarPaste(){
 }
 function drsHelpCard(){
   return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">❓ How the DIRT Racing Series works</summary><ol style="font-size:13px;color:#d1d5db;margin:8px 0 0 18px;padding:0;line-height:1.7">
-    <li><b>Squad:</b> up to ten riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
+    <li><b>Squad:</b> up to eight riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
     <li><b>Calendar:</b> a fixed run of Tuesday stages (scratch, points, individual time trial and team time trial), all in the squad's time slot for the season.</li>
     <li><b>Lock:</b> the squad must be final in the DRS portal 24 hours before a stage, so Race Control can run its checks. You get a reminder, and the stage card shows the lock time.</li>
     <li><b>Race:</b> all eight can race but only the best four finishers score. Name the scoring four; the rest ride support. No PowerUps.</li>
