@@ -7,15 +7,16 @@ Browser (public/index.html)
  │     /zwift/public/clubs/2740/0   live roster from ZwiftRacing.app
  ├─ fetch /api/proxy?endpoint=rides|ttt-sheet           → api/server.js → Google Sheets (gviz JSON)
  ├─ fetch /api/state, POST /api/signups|rsvps|rides|…   → api/server.js → Upstash Redis (shared)
+ ├─ profile calendar settings /api/me/calendar         → api/server.js → private /api/cal/{secret}.ics feed
  └─ localStorage                                         affiliation history (per browser)
 ```
 
 ## Frontend (`public/index.html`)
 
-A single file with no build step. Tabs: Team Overview, Racing Dashboard, Events & Sign-Up, Social Rides, Members, plus a profile page.
+The dashboard keeps its no-build setup. `public/index.html` contains the shell and most UI logic; small, self-contained features are being extracted into `public/js/` over time (the personal calendar settings UI is the first module). Tabs: Team Overview, Racing Dashboard, Events & Sign-Up, Social Rides, Members, plus a profile page.
 
 - **Roles:** admin, moderator and member. Admin and moderator passwords are checked by `POST /api/login` against the `ADMIN_PASSWORD` / `MOD_PASSWORD` environment variables. Members either sign in with their cryogen.team account (verified) or pick themselves from the live roster by name or Zwift ID (guest). The role is kept in `sessionStorage`.
-- **Data loading:** `loadLive()` reads `/api/roster`, which merges the club roster with the WordPress member records by Zwift ID. If loading fails, it falls back to a small `MOCK` roster.
+- **Data loading:** `loadLive()` reads `/api/roster`, which merges the club roster with the WordPress member records by Zwift ID. The response includes the roster's last successful update time and whether it is stale; the UI labels stale data and never substitutes sample riders.
 - **Member edits:** tier, status and off-boarding checkboxes call `POST /api/members/{zwiftId}` (staff only). The server PATCHes the WordPress record, reads it back, and reports an error if a field didn't save. The browser never holds WordPress credentials.
 - **Shared state:** sign-ups, series locks, club-created rides and RSVPs come from `/api/state`. Every write returns the full new state, which the page re-renders from.
 - **Escaping:** everything people type is shown to other people, so it's rendered through `esc()`. Values passed to click handlers go through `data-*` attributes, never inline into the JS.
@@ -48,7 +49,7 @@ A plain Node.js request handler:
 
 - When run locally, all other paths serve files from `public/`.
 
-The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, and `npm start` runs it as a local server.
+The file exports its handler for Vercel. `vercel.json` rewrites `/api/*` to it, and `npm start` runs it as a local server. Mutating requests with an `Origin` header must come from the configured `SITE_URL` origin; CORS preflights advertise only that origin.
 
 ## Social rides extras (taken from the ZRL)
 
@@ -241,4 +242,3 @@ The workbook has the Google Form responses on its first tab and the published te
 - **What they can call**: the `ASSOCIATE_ALLOWED` list in `api/server.js` (TTT and ZRL sign-up, other race sign-ups, social-ride RSVPs, what the pages read, their own `/api/assoc/*`). Everything else under `/api/` answers 403 with `associate: true`. The gate re-checks `stillAssociate` on every call, so an approval unlocks a live session at once.
 - **The checklist** (`progress`): in the club on Zwift, joined Discord (self-ticked), `RULES.rsvps` social rides, one team event, `RULES.days` days since first seen. When complete they can request; staff are told on the admin channel. Staff can approve anyone at any time (`approve` also sets the WordPress tier to full when there is a record), or decline with a note.
 - **Schedule** (cron job "Associates"): a weekly admin digest of requests waiting more than three days and associates ready to ask. A health row reports the pipeline. Backups include the assoc keys.
-

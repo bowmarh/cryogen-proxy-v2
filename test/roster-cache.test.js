@@ -18,6 +18,9 @@ test('one request to the source, then shared by every instance, even while it is
   const world = h.createWorld();
   let app = await start(world);
   assert.equal((await app.get('/api/roster')).body.riders.length, 5);
+  const fresh = await app.get('/api/roster');
+  assert.equal(fresh.body.roster.stale, false);
+  assert.ok(Date.parse(fresh.body.roster.updatedAt) <= Date.now());
   assert.equal(world.clubCalls, 1);
   assert.ok(world.db[RIDERS_KEY], 'a shared copy was saved');
   await app.get('/api/roster');
@@ -47,6 +50,8 @@ test('a stale copy is still served when the source fails', async () => {
   const r = await app.get('/api/roster');
   assert.equal(r.status, 200);
   assert.equal(r.body.riders.length, 5, 'last good copy');
+  assert.equal(r.body.roster.stale, true);
+  assert.ok(Date.parse(r.body.roster.updatedAt) < Date.now());
   assert.equal(world.clubCalls, calls + 1, 'it did try the source first');
   await app.close();
 });

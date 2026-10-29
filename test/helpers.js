@@ -24,7 +24,7 @@ const BASE_ENV = {
 
 // Must run before the server module is loaded: some settings are read at load time.
 function setEnv(extra = {}) {
-  for (const k of ['SESSION_SECRET', 'REQUIRE_MEMBER_LOGIN', 'WP_SSO_LOGIN_URL', 'VERCEL_ENV', 'VERCEL_GIT_COMMIT_SHA']) delete process.env[k];
+  for (const k of ['SESSION_SECRET', 'REQUIRE_MEMBER_LOGIN', 'WP_SSO_LOGIN_URL', 'SITE_URL', 'VERCEL_ENV', 'VERCEL_GIT_COMMIT_SHA']) delete process.env[k];
   Object.assign(process.env, BASE_ENV);
   for (const [k, v] of Object.entries(extra)) {
     if (v === null) delete process.env[k]; // null = make sure it is unset
@@ -203,14 +203,14 @@ function installFetch(world) {
 }
 
 // Loads a fresh copy of the server (a "new serverless instance") and serves it on a free port.
-async function startApp(world) {
+async function startApp(world, { host = 'localhost', port = 0 } = {}) {
   const restore = installFetch(world);
   const file = require.resolve('../api/server.js');
   delete require.cache[file];
   const handler = require(file);
   const server = http.createServer(handler);
-  await new Promise(r => server.listen(0, r));
-  const base = `http://localhost:${server.address().port}`;
+  await new Promise(r => server.listen(port, host, r));
+  const base = `http://${host}:${server.address().port}`;
   let closed = false;
 
   const app = {

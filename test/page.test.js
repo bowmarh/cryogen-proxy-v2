@@ -8,7 +8,9 @@ const vm = require('vm');
 const h = require('./helpers');
 
 h.setEnv();
-const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const publicDir = path.join(__dirname, '..', 'public');
+const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+const externalScripts = [path.join(publicDir, 'js', 'calendar-settings.js')].map(file => fs.readFileSync(file, 'utf8'));
 let app;
 before(async () => { app = await h.startApp(h.createWorld()); });
 after(() => app.close());
@@ -16,7 +18,7 @@ after(() => app.close());
 test('every inline script parses (a typo there would blank the whole dashboard)', () => {
   const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
   assert.ok(scripts.length >= 1);
-  scripts.forEach((code, i) => assert.doesNotThrow(() => new vm.Script(code, { filename: `index.html script ${i + 1}` })));
+  [...scripts, ...externalScripts].forEach((code, i) => assert.doesNotThrow(() => new vm.Script(code, { filename: `dashboard script ${i + 1}` })));
 });
 
 test('no placeholder credentials or WordPress login details are in the page', () => {
@@ -26,7 +28,8 @@ test('no placeholder credentials or WordPress login details are in the page', ()
 });
 
 test('every server route the page calls exists', async () => {
-  const paths = new Set([...html.matchAll(/['"`](\/api\/[A-Za-z0-9/_-]+)(?:\?[^'"`]*)?['"`]/g)].map(m => m[1]).filter(p => !p.endsWith('/')));
+  const source = [html, ...externalScripts].join('\n');
+  const paths = new Set([...source.matchAll(/['"`](\/api\/[A-Za-z0-9/_-]+)(?:\?[^'"`]*)?['"`]/g)].map(m => m[1]).filter(p => !p.endsWith('/')));
   assert.ok(paths.size >= 10, `found only ${paths.size} routes`);
   for (const p of paths) {
     // A missing route answers {error:'Not found'}; other 404s (e.g. unknown week) mean the route exists.
@@ -35,4 +38,10 @@ test('every server route the page calls exists', async () => {
     const post = await app.post(p, {});
     assert.ok(!noRoute(get) || !noRoute(post), `${p} is called by the page but the server has no such route`);
   }
+});
+
+test('the dashboard uses real roster data only and loads the extracted calendar module', () => {
+  assert.match(html, /\/js\/calendar-settings\.js/);
+  assert.doesNotMatch(html, /\bMOCK\b|mock data|riders \(mock\)/i);
+  assert.match(html, /Cached roster may be out of date/);
 });

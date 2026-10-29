@@ -120,7 +120,7 @@ table{width:100%;border-collapse:collapse}
         <div id="login-form-member" style="display:none">
           <label class="lbl">Your Zwift Name or Rider ID</label>
           <input id="member-search" class="inp" placeholder="e.g. Rick or 24650" onkeydown="if(event.key==='Enter')doMemberLogin()" style="margin-bottom:6px"/>
-          <div style="font-size:11px;color:#4b5563;margin-bottom:12px">Data loads from ZwiftRacing.app — make sure you've refreshed first</div>
+          <div id="roster-login-status" role="status" aria-live="polite" style="font-size:11px;color:#6b7280;margin-bottom:12px">Loading the live club roster…</div>
           <button class="btn-cyan" onclick="doMemberLogin()">Find My Profile</button>
           <div id="member-results" style="margin-top:12px"></div>
         </div>
@@ -388,6 +388,7 @@ table{width:100%;border-collapse:collapse}
   </div>
 </div>
 
+<script src="/js/calendar-settings.js"></script>
 <script>
 // ── Constants ──────────────────────────────────────────────
 const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
@@ -432,6 +433,7 @@ let role=sessionStorage.getItem('role');
 })();
 let memberRider=JSON.parse(sessionStorage.getItem('memberRider')||'null');
 let riders=[];
+let rosterLoading=false, rosterError='', rosterMeta=null;
 let wpOnly=[];   // member records in WordPress with no one on the Zwift club roster (associates who have not joined the club, for one): shown in Members only
 let allSignups={ttt:[],ladder:[],zrl:[],dirt:[],herd:[]};
 let lockedSeries={};
@@ -455,6 +457,10 @@ function setZRA(color, msg) {
   if (text) text.textContent = msg;
 }
 
+function setRosterLoginStatus(message, color='#6b7280') {
+  const el=document.getElementById('roster-login-status');
+  if(el){el.textContent=message;el.style.color=color;}
+}
 
 // ── Duplicate and inactive members ──
 let tidyData=null, tidyErr='', tidyTab='dup', tidyDays=180, tidyReason='all', tidySel=new Set(), tidyBusy=false, tidyMsg='';
@@ -559,14 +565,6 @@ function applyMemberRecord(r, m) {
   for (const k of ['discord', 'fb', 'zp']) if (m['offboard_' + k] !== undefined) r['ob_' + k] = String(m['offboard_' + k]) === '1';
 }
 
-const MOCK=[
-  {id:25864,name:"Michael Mansfield (CRYO)",cc:"us",cat:"A+",ftp:392,wkg:5.35,velo:3044,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"associate",status:"active"},
-  {id:99549,name:"Norman Henderson (CRYO-GEN)",cc:"gb",cat:"A",ftp:370,wkg:4.73,velo:2409,zraCat:"Diamond",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:15744,name:"Owen Graham CRYO-GEN",cc:"gb",cat:"B",ftp:287,wkg:4.12,velo:1901,zraCat:"Ruby",ph:"time-trialist",active:true,raw:null,tier:"associate",status:"suspended"},
-  {id:24650,name:"Rick (CRYO-GEN)",cc:"ie",cat:"B",ftp:282,wkg:4.07,velo:1325,zraCat:"Amethyst",ph:"all-rounder",active:true,raw:null,tier:"full",status:"active"},
-  {id:82951,name:"Roxanne Timmins [CRYO-GEN]",cc:"gb",cat:"D",ftp:179,wkg:2.15,velo:505,zraCat:"Copper",ph:"sprinter",active:true,raw:null,tier:"associate",status:"active"},
-];
-
 // ── Escaping (shared data is shown to other people) ─────────
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=u=>/^https?:\/\//i.test(u||'')?esc(u):'';
@@ -628,8 +626,8 @@ function doModLogin(){doRoleLogin('mod','mod-pw');}
 function doMemberLogin(){
   const q=document.getElementById('member-search').value.trim();
   if(!q){showLoginErr('Please enter your name or Zwift ID.');return;}
-  const data=riders.length?riders:MOCK;
-  const matches=data.filter(r=>r.name.toLowerCase().includes(q.toLowerCase())||r.id.toString()===q);
+  if(!riders.length){showLoginErr(rosterLoading?'The live club roster is still loading. Please wait and try again.':`The live club roster is unavailable${rosterError?': '+rosterError:''}. Please retry the load.`);return;}
+  const matches=riders.filter(r=>r.name.toLowerCase().includes(q.toLowerCase())||r.id.toString()===q);
   if(matches.length===1){
     sessionStorage.setItem('memberRider',JSON.stringify(matches[0]));
     memberRider=matches[0];
@@ -642,8 +640,7 @@ function doMemberLogin(){
   }
 }
 function selectMember(id){
-  const data=riders.length?riders:MOCK;
-  const r=data.find(x=>x.id===id);
+  const r=riders.find(x=>x.id===id);
   if(r){sessionStorage.setItem('memberRider',JSON.stringify(r));memberRider=r;launchApp('member');}
 }
 
@@ -1022,29 +1019,10 @@ function renderDiscordSlots(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${d.verified&&d.canVerify?`<button onclick="dcTest()" style="${btn}">Send me a test message</button>`:''}<button onclick="dcRemove()" style="${ghost}">Remove my Discord ID</button></div>`;
   document.querySelectorAll('.discord-slot').forEach(el=>{ el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">💬 Discord messages</div>${body}${myDiscordMsg?`<div style="font-size:12px;margin-top:8px;color:${myDiscordMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(myDiscordMsg)}</div>`:''}</div>`; });
 }
-let myCal=null, myCalMsg='';
-async function fillCalSlots(){
-  if(!document.querySelector('.cal-slot')) return;
-  if(!myCal){ try{ myCal=await dcCall('GET','/api/me/calendar'); }catch(e){ return; } }
-  renderCalSlots();
-}
-function renderCalSlots(){
-  const c=myCal; if(!c) return;
-  const btn='padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
-  const ghost='padding:6px 12px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)';
-  const body=!c.on?`<div style="font-size:13px;color:#9ca3af;margin-bottom:10px">Put your races and rides in your own calendar (Google, Apple or Outlook). It updates by itself: your next ${c.windowDays/7} weeks, with the things waiting for your answer marked ❓.</div><button onclick="calAct('POST',{},'Calendar link created.')" style="${btn}">Create my calendar link</button>`
-    :`<div style="font-size:13px;color:#10B981;margin-bottom:8px">✅ Your calendar link is ready. Add it once and it stays up to date.</div>
-    <input readonly value="${esc(c.url)}" onclick="this.select()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:8px 12px;color:white;font-size:12px"/>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button onclick="calCopy()" style="${btn}">📋 Copy link</button><a href="${esc(c.url.replace(/^https?:/,'webcal:'))}" style="${btn};text-decoration:none">Add to my calendar</a><button onclick="if(confirm('Make a new link? The old one stops working.'))calAct('POST',{reset:true},'New link created. Add it to your calendar again.')" style="${ghost}">New link</button><button onclick="if(confirm('Switch the calendar off? The link stops working.'))calAct('POST/remove',{},'Calendar switched off.')" style="${ghost}">Switch off</button></div>
-    <div style="font-size:11px;color:#6b7280;margin-top:8px">Keep the link to yourself: anyone who has it can see your schedule. In Google Calendar choose Other calendars → From URL and paste it.</div>`;
-  document.querySelectorAll('.cal-slot').forEach(el=>{ el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">📅 My calendar</div>${body}${myCalMsg?`<div style="font-size:12px;margin-top:8px;color:${myCalMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(myCalMsg)}</div>`:''}</div>`; });
-}
-async function calAct(how,body,okMsg){
-  myCalMsg='';
-  try{ myCal=await dcCall('POST',how==='POST/remove'?'/api/me/calendar/remove':'/api/me/calendar',body); if(!myCal.on) myCal={ on:false, url:null, windowDays:28 }; myCalMsg='✓ '+okMsg; }catch(e){ myCalMsg=e.message; }
-  renderCalSlots();
-}
-async function calCopy(){ try{ await navigator.clipboard.writeText(myCal.url); myCalMsg='✓ Link copied.'; }catch(e){ myCalMsg='Select the link and copy it.'; } renderCalSlots(); }
+async function fillCalSlots(){ return window.CryogenCalendarSettings.fill(dcCall,esc); }
+function renderCalSlots(){ return window.CryogenCalendarSettings.render(esc); }
+async function calAct(how,body,okMsg){ return window.CryogenCalendarSettings.act(how,body,okMsg,dcCall,esc); }
+async function calCopy(){ return window.CryogenCalendarSettings.copy(esc); }
 async function dcAct(fn,okMsg){ myDiscordMsg=''; try{ await fn(); if(okMsg) myDiscordMsg='✓ '+okMsg; }catch(e){ myDiscordMsg=e.message; } try{ myDiscord=await dcCall('GET','/api/me/discord'); }catch(e){ /* keep what we have */ } renderDiscordSlots(); }
 function dcSave(){ const v=document.getElementById('dc-id').value.trim(); return dcAct(async()=>{ const r=await dcCall('POST','/api/me/discord',{ discordId:v }); myDiscordMsg=r.needsCode?'✓ Code sent. Check your Discord messages.':''; },''); }
 function dcResend(){ return dcAct(async()=>{ await dcCall('POST','/api/me/discord',{ discordId:myDiscord.id }); },'A new code is on its way.'); }
@@ -1402,6 +1380,9 @@ function showTab(id,btn){
 
 // ── Live Data ──────────────────────────────────────────────
 async function loadLive() {
+  rosterLoading=true;
+  rosterError='';
+  setRosterLoginStatus('Loading the live club roster…');
   setZRA('#FBBF24', 'Loading live roster...');
   try {
     const res = await fetch('/api/roster', { headers: tttHeaders() });
@@ -1410,6 +1391,7 @@ async function loadLive() {
     // Member records (tier/status) come from WordPress when the server has credentials for it.
     // Without them, everyone on the live Zwift club roster counts as an active member.
     const haveDb = Array.isArray(d.members);
+    rosterMeta=d.roster||null;
     const dbLookup = {};
     (d.members || []).forEach(m => dbLookup[m.zwift_id] = m);
     riders = d.riders.map(r => {
@@ -1439,12 +1421,21 @@ async function loadLive() {
       id:/^\d+$/.test(String(m.zwift_id))?Number(m.zwift_id):m.zwift_id, name:m.name||String(m.zwift_id), cc:'', cat:'', ftp:0, wkg:0, velo:0, zraCat:'', ph:'',
       active:m.status==='active', tier:m.tier||'associate', status:m.status||'pending',
       ob_discord:String(m.offboard_discord)==='1', ob_fb:String(m.offboard_fb)==='1', ob_zp:String(m.offboard_zp)==='1', raw:null, noZwift:true }));
-    setZRA('#10B981', `${haveDb ? 'Synced DB + Live' : 'Live roster'} · ${riders.length} riders ✓`);
+    const updatedAt=rosterMeta&&Date.parse(rosterMeta.updatedAt);
+    const updatedText=Number.isFinite(updatedAt)?` · updated ${new Date(updatedAt).toLocaleString()}`:'';
+    const stale=!!(rosterMeta&&rosterMeta.stale);
+    const status=`${haveDb?'Synced DB + live roster':'Live roster'} · ${riders.length} riders${stale?' · cached copy may be out of date':' ✓'}${updatedText}${d.membersAvailable===false?' · membership details unavailable':''}`;
+    setZRA(stale?'#FBBF24':'#10B981', status);
+    setRosterLoginStatus(`${stale?'Cached roster may be out of date. ':'Live roster loaded. '}${riders.length} riders${updatedText}${d.membersAvailable===false?'; membership details unavailable':''}.`,stale?'#FBBF24':'#10B981');
     trackAffiliations(riders);
     renderAll();
     if (document.getElementById('page-ttt').classList.contains('active') && tttData) renderTtt();
   } catch (e) {
+    rosterError=e.message;
+    setRosterLoginStatus(`Live roster unavailable: ${e.message}. Member search is disabled until the roster loads.`,'#F87171');
     setZRA('#EF4444', 'Live roster unavailable: ' + e.message);
+  } finally {
+    rosterLoading=false;
   }
 }
 
@@ -1500,7 +1491,7 @@ function updateStatus(id, action, days) {
 function renderOffboarding() {
   const el = document.getElementById('offboarding-panel');
   if (!el) return;
-  const pendingOffboard = (riders.length ? riders : MOCK).filter(r => r.status === 'left');
+  const pendingOffboard = [...riders, ...wpOnly].filter(r => r.status === 'left');
   if (pendingOffboard.length === 0) { el.innerHTML = ''; return; }
   const incomplete = pendingOffboard.filter(r => !(r.ob_discord && r.ob_fb && r.ob_zp));
   if (incomplete.length === 0) { el.innerHTML = ''; return; }
@@ -1723,13 +1714,13 @@ function riderLinks(m){
 
 // ── Render All ─────────────────────────────────────────────
 function renderAll(){
-  const data=riders.length?riders:MOCK;
+  const data=riders;
   const active=data.filter(m=>m.active);
   const avg=active.length?Math.round(active.reduce((s,m)=>s+m.velo,0)/active.length):0;
   document.getElementById('s-riders').textContent=active.length;
-  document.getElementById('s-riders-s').textContent=riders.length?`${riders.length} in roster`:'mock data';
+  document.getElementById('s-riders-s').textContent=riders.length?`${riders.length} in roster${rosterMeta?.stale?' · stale':''}`:'Live roster unavailable';
   document.getElementById('s-velo').textContent=avg||'—';
-  document.getElementById('s-velo-s').textContent=riders.length?'Live':'mock data';
+  document.getElementById('s-velo-s').textContent=riders.length?(rosterMeta?.stale?'Cached':'Live'):'No live data';
   if(tttData&&tttData.week){
     const avail=tttData.signups.filter(s=>s.available).length;
     const spots=tttData.week.teams.reduce((n,t)=>n+t.max,0);
@@ -1767,7 +1758,7 @@ function renderAll(){
 
 // ── Racing ─────────────────────────────────────────────────
 function renderRacing(){
-  const data=riders.length?riders:MOCK;
+  const data=riders;
   const search=(document.getElementById('r-search')||{value:''}).value.toLowerCase();
   const cat=(document.getElementById('r-cat')||{value:'All'}).value;
   const zra=(document.getElementById('r-zra')||{value:''}).value;
@@ -1779,8 +1770,8 @@ function renderRacing(){
     (!ph||m.ph===ph)
   );
   const sorted=sortData(filtered,rSort);
-  document.getElementById('r-badge').textContent=riders.length?`${filtered.length} of ${riders.length} · live ✓`:`${filtered.length} riders (mock)`;
-  document.getElementById('r-badge').style.color=riders.length?'#10B981':'#4b5563';
+  document.getElementById('r-badge').textContent=riders.length?`${filtered.length} of ${riders.length}${rosterMeta?.stale?' · cached':' · live ✓'}`:'Live roster unavailable';
+  document.getElementById('r-badge').style.color=riders.length?(rosterMeta?.stale?'#FBBF24':'#10B981'):'#F87171';
   updateSortArrows('r',rSort);
   document.getElementById('racing-body').innerHTML=sorted.map((m,i)=>{
     const barW=Math.min(m.velo/3500*100,100);
@@ -1802,7 +1793,7 @@ function renderRacing(){
 // ── Members ────────────────────────────────────────────────
 function renderMembers(){
   renderOffboarding(); if(assocList||assocErr) renderAssocPanel();
-  const data=riders.length?[...riders,...wpOnly]:MOCK;
+  const data=[...riders,...wpOnly];
   const search=(document.getElementById('m-search')||{value:''}).value.toLowerCase();
   const cat=(document.getElementById('m-cat')||{value:'All'}).value;
   const ph=(document.getElementById('m-ph')||{value:''}).value;
@@ -1822,7 +1813,7 @@ function renderMembers(){
   const PER=15, total=Math.ceil(sorted.length/PER)||1;
   if(mPage>total)mPage=1;
   const page=sorted.slice((mPage-1)*PER,mPage*PER);
-  document.getElementById('members-sub').textContent=`Showing ${filtered.length}${riders.length?' of '+(riders.length+wpOnly.length)+' members'+(wpOnly.length?` (${wpOnly.length} in WordPress but not in the Zwift club)`:''):' (mock data)'}`;
+  document.getElementById('members-sub').textContent=`Showing ${filtered.length}${riders.length||wpOnly.length?' of '+(riders.length+wpOnly.length)+' members'+(wpOnly.length?` (${wpOnly.length} in WordPress but not in the Zwift club)`:''):' · live roster unavailable'}`;
   document.getElementById('m-page-info').textContent=`Page ${mPage} of ${total}`;
   updateSortArrows('m',mSort);
   renderBulkBar();
@@ -1892,7 +1883,7 @@ function renderMembers(){
     </tr>`;
   }).join('');
 }
-function changeMPage(d){const data=riders.length?riders:MOCK;const PER=15;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
+function changeMPage(d){const data=[...riders,...wpOnly];const PER=15;const total=Math.ceil(data.length/PER)||1;mPage=Math.max(1,Math.min(total,mPage+d));renderMembers();}
 
 function trackAffiliations(rArr) {
   let changed = false;
@@ -2032,7 +2023,7 @@ const TTT_STYLE_LABEL={race:'Competitive (captain decides)',casual:'Not bothered
 const tttStaff=()=>role==='admin'||role==='mod';
 const tttKey=n=>String(n||'').toLowerCase();
 function tttRider(s){
-  const data=riders.length?riders:MOCK;
+  const data=riders;
   return data.find(r=>s.zwid&&String(r.id)===String(s.zwid))||data.find(r=>r.name.toLowerCase()===tttKey(s.name))||null;
 }
 function tttHeaders(){
