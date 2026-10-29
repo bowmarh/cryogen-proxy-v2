@@ -338,6 +338,7 @@ table{width:100%;border-collapse:collapse}
     <div class="modal-body">
       <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
       <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
+      <div id="sync-card"></div>
       <div style="display:flex;gap:8px">
         <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
       </div>
@@ -542,6 +543,73 @@ async function tidyBulk(status){
   tidyBusy=false; renderTidy();
 }
 function tidyMessage(){ mSel=new Set(tidySel); closeTidy(); commsFromMembers(); }
+
+
+// ── Google Sheet sync (Admin): pull the sheet into the app (the sheet wins), push the app's teams to a mirror tab ──
+let syncData=null, syncErr='', syncBusy='', syncMsg='';
+async function syncCall(method,path,body){
+  const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
+  const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); return d;
+}
+async function loadSync(){
+  if(role!=='admin'&&role!=='mod') return;
+  try{ syncData=await syncCall('GET','/api/sync'); syncErr=''; }catch(e){ syncErr=e.message; }
+  renderSync();
+}
+// Staff opening TTT or ZRL: what is switched on runs, at most every ten minutes, and the page reloads if the sheet changed anything.
+async function syncAuto(series){
+  if(role!=='admin'&&role!=='mod') return;
+  try{
+    const d=await syncCall('POST','/api/sync/auto',{ series });
+    if(d.ran&&d.ran.includes('pull')){ if(series==='ttt') loadTtt(); else loadZrl(); }
+  }catch(e){ /* the Admin card shows problems */ }
+}
+function renderSync(){
+  const el=document.getElementById('sync-card'); if(!el) return;
+  const d=syncData, btn='padding:6px 12px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.3)';
+  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  let body;
+  if(syncErr) body=`<div style="font-size:12px;color:#f87171">${esc(syncErr)}</div>`;
+  else if(!d) body='<div style="font-size:12px;color:#9ca3af">Loading…</div>';
+  else{
+    const g=d.google, admin=d.canChange;
+    const google=g.configured?`<div style="font-size:12px;color:#10B981;margin-bottom:8px">✅ Google service account: <b>${esc(g.email)}</b>. Share each sheet with this address as an <b>Editor</b>.</div>`
+      :`<div style="font-size:12px;color:#FBBF24;margin-bottom:8px">Publishing to the sheets needs a Google service account${g.error?' ('+esc(g.error)+')':''}. In Google Cloud create one, enable the Google Sheets API, make a JSON key, and add it in Vercel as GOOGLE_SERVICE_ACCOUNT_JSON. Reading the sheets into the app works without it.</div>`;
+    const row=(id,s)=>{
+      const st=s.state||{}, pu=st.push, pl=st.pull;
+      const line=(label,x,ok)=>x?`<div style="font-size:11px;color:${x.ok?'#9ca3af':'#f87171'}">${label}: ${x.ok?esc(ok(x)):'failed, '+esc(x.error)} · ${esc(when(x.at))}</div>`:`<div style="font-size:11px;color:#6b7280">${label}: not run yet</div>`;
+      const tog=(key,label)=>`<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center;margin-right:12px;${admin?'cursor:pointer':'opacity:.6'}"><input type="checkbox" ${s.settings[key]?'checked':''} ${admin?'':'disabled'} onchange="syncToggle('${id}','${key}',this.checked)"/> ${label}</label>`;
+      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:800;font-size:13px;margin-bottom:2px">${esc(s.label)} <span style="font-weight:400;font-size:11px;color:#6b7280">· ${esc(s.pullTab)} tab in <a href="https://docs.google.com/spreadsheets/d/${esc(s.sheetId)}/edit" target="_blank" rel="noopener" style="color:#6b7280">${esc(s.sheetId.slice(0,8))}…</a> · writes “${esc(s.mirrorTab)}”</span></div>
+        ${line('Sheet → app',pl,x=>Object.entries(x.summary||{}).filter(([,v])=>typeof v==='number').map(([k,v])=>v+' '+k).join(', ')||'done')}${line('App → sheet',pu,x=>x.rows+' rows written')}
+        <div style="margin:6px 0">${tog('pull','Keep the app in step with the sheet (sheet wins)')}${tog('push','Keep the mirror tab up to date')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button ${syncBusy?'disabled':''} onclick="syncRun('${id}','pull')" style="${btn}">${syncBusy===id+'pull'?'Reading…':'Pull from the sheet now'}</button><button ${syncBusy?'disabled':''} onclick="syncRun('${id}','push')" style="${btn}">${syncBusy===id+'push'?'Writing…':'Publish to the sheet now'}</button>${admin?`<button onclick="syncSheet('${id}',${s.customSheet})" style="${btn};background:none;color:#9ca3af;border-color:rgba(255,255,255,0.15)">Change sheet</button>`:''}</div></div>`;
+    };
+    body=google+Object.entries(d.series).map(([id,s])=>row(id,s)).join('')+`<div style="font-size:11px;color:#6b7280;margin-top:8px">The sheet wins: with “keep in step” on, a change made only in the app is replaced at the next sync. The app never writes to your own tabs, only its mirror tab, which is replaced each time. Runs happen every 15 minutes, and when staff open the TTT or ZRL page.</div>`;
+  }
+  el.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#00D4FF;margin-bottom:6px">🔄 Google Sheet sync</div>${body}${syncMsg?`<div style="font-size:12px;margin-top:8px;color:${syncMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(syncMsg)}</div>`:''}</div>`;
+}
+async function syncToggle(series,key,on){
+  syncMsg='';
+  try{ syncData=await syncCall('POST','/api/sync/settings',{ series, [key]:on }); }catch(e){ syncMsg=e.message; try{ syncData=await syncCall('GET','/api/sync'); }catch(x){} }
+  renderSync();
+}
+async function syncSheet(series,custom){
+  const v=prompt('Paste the Google Sheet link (or its ID) to use for '+series.toUpperCase()+'. Leave empty to go back to the club sheet.','');
+  if(v===null) return; syncMsg='';
+  try{ syncData=await syncCall('POST','/api/sync/settings',{ series, sheetId:v.trim() }); syncMsg='✓ Sheet changed.'; }catch(e){ syncMsg=e.message; }
+  renderSync();
+}
+async function syncRun(series,direction){
+  if(direction==='pull'&&!confirm('Read the sheet into the app now? The sheet wins: riders are placed as the sheet has them, and a rider the sheet no longer lists is taken off that team.')) return;
+  syncBusy=series+direction; syncMsg=''; renderSync();
+  try{
+    const d=await syncCall('POST','/api/sync/run',{ series, direction }); syncData=d;
+    const r=d.result||{}, bad=Object.entries(r).filter(([,v])=>v&&v.error);
+    syncMsg=bad.length?bad.map(([k,v])=>(k==='pull'?'Sheet → app: ':'App → sheet: ')+v.error).join(' · '):'✓ Done.';
+    if(!bad.length&&direction==='pull'){ if(series==='ttt') loadTtt(); else loadZrl(); }
+  }catch(e){ syncMsg=e.message; }
+  syncBusy=''; renderSync();
+}
 
 // ── API Bridge to WordPress ──────────────────────────────
 const WP_URL = 'https://cryogen.team/wp-json/cryogen/v1';
@@ -779,7 +847,7 @@ async function backupRestore(id){
 let healthTimer=null;
 function openAdmin(){
   document.getElementById('adminModal').style.display='flex';
-  loadHealth(); loadBackups();
+  loadHealth(); loadBackups(); loadSync();
   if(healthTimer) clearInterval(healthTimer);
   healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
     const m=document.getElementById('adminModal');
@@ -1367,9 +1435,9 @@ function showTab(id,btn){
   if(id==='events')renderEvents();
   if(id==='profile')renderProfile();
   if(id==='rides'){ renderRidesTabs(); if(!isAssoc()) loadCover(); }
-  if(id==='ttt')loadTtt();
+  if(id==='ttt'){ loadTtt(); syncAuto('ttt'); }
   if(id==='season')loadSeason();
-  if(id==='zrl')loadZrl();
+  if(id==='zrl'){ loadZrl(); syncAuto('zrl'); }
   if(id==='ladder')loadLadder();
   if(id==='drs')loadDrs();
   if(id==='members'){ renderMembers(); loadAssocPanel(); }
