@@ -26,4 +26,6 @@ After enabling the schedule, confirm the admin health panel's **Scheduled runs**
 
 ## Access control
 
-Production has `REQUIRE_MEMBER_LOGIN=1`, which prevents guests from signing up, withdrawing, or RSVPing as another rider. Maintain that setting in the Production environment. Member-facing access control and staff roles must also be enforced by server routes, not only hidden or disabled in the browser.
+Production should keep `REQUIRE_MEMBER_LOGIN=1` explicitly configured for visibility. The server also enforces member sign-in automatically whenever `VERCEL_ENV=production`, so a missing flag does not reopen guest sign-ups, withdrawals, or RSVPs. Member-facing access control and staff roles must also be enforced by server routes, not only hidden or disabled in the browser.
+
+`SITE_URL` must match the public portal's origin (default `https://club.cryo-gen.team`). Browser API mutations from other origins are refused; external calendar clients can still fetch a member's private `.ics` link.

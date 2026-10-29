@@ -62,9 +62,55 @@ test('unknown API routes 404, preflight is answered, and the page is served', as
   assert.equal((await app.get('/api/nope')).status, 404);
   const pre = await fetch(`${app.base}/api/login`, { method: 'OPTIONS' });
   assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), 'https://club.cryo-gen.team');
   const page = await app.get('/');
   assert.equal(page.status, 200);
   assert.match(String(page.body), /Team CRYO-GEN/);
+});
+
+test('API requests from other origins are refused while the configured site origin is allowed', async () => {
+  const rejected = await app.post('/api/rsvps', { rideId: 'ride-1' }, { headers: { Origin: 'https://attacker.example' } });
+  assert.equal(rejected.status, 403);
+  assert.match(rejected.body.error, /origin are not allowed/i);
+  const accepted = await app.post('/api/rsvps', { rideId: 'ride-1', name: 'Rider One' }, { headers: { Origin: 'https://club.cryo-gen.team' } });
+  assert.equal(accepted.status, 200);
+});
+
+test('production requires member sign-in even if REQUIRE_MEMBER_LOGIN is omitted', async () => {
+  const savedEnv = process.env.VERCEL_ENV;
+  const savedRequirement = process.env.REQUIRE_MEMBER_LOGIN;
+  process.env.VERCEL_ENV = 'production';
+  delete process.env.REQUIRE_MEMBER_LOGIN;
+  try {
+    assert.equal((await app.get('/api/auth/status')).body.requireLogin, true);
+    const guest = await app.post('/api/rsvps', { rideId: 'ride-1', name: 'Rider One' });
+    assert.equal(guest.status, 401);
+    const member = await app.memberSession('1002');
+    assert.equal((await app.post('/api/rsvps', { rideId: 'ride-1' }, { token: member })).status, 200);
+  } finally {
+    if (savedEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = savedEnv;
+    if (savedRequirement === undefined) delete process.env.REQUIRE_MEMBER_LOGIN;
+    else process.env.REQUIRE_MEMBER_LOGIN = savedRequirement;
+  }
+});
+
+test('sensitive feature routes enforce server-side roles, not just hidden UI', async () => {
+  const mod = await app.login('mod');
+  const member = await app.memberSession('1002');
+  const sensitive = [
+    ['POST', '/api/members/bulk'],
+    ['POST', '/api/ttt/auto-assign'],
+    ['POST', '/api/cover/series'],
+    ['POST', '/api/comms/send'],
+  ];
+  for (const [method, path] of sensitive) {
+    for (const token of [null, member]) {
+      const response = await app.call(method, path, { token, body: {} });
+      assert.equal(response.status, 401, `${method} ${path} should reject non-staff`);
+    }
+  }
+  assert.equal((await app.get('/api/health', { token: mod })).status, 403, 'health is admin-only');
 });
 
 test('oversized or non-JSON request bodies are refused and the server keeps serving', async () => {

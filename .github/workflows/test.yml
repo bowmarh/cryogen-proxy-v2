@@ -1,5 +1,4 @@
-# Runs the automated tests on every pull request and every push to main.
-# The tests use no network and no packages (Node's built-in test runner).
+# Runs unit and browser tests on every pull request and push to main.
 name: Tests
 
 on:
@@ -10,11 +9,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run tests
-        run: node --test --test-timeout=30000 test/*.test.js
+          cache: npm
+      - run: npm ci
+      - name: Run unit tests
+        run: npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: npm run test:e2e
