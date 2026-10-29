@@ -11,6 +11,9 @@ module.exports = defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     browserName: 'chromium',
     headless: true,
+    // The app registers a service worker. Requests a service worker handles bypass page.route(), so a test that mocks an API
+    // response only worked when the worker had not yet taken control of the page: a race. Blocking it makes the mocks reliable.
+    serviceWorkers: 'block',
   },
   webServer: {
     command: 'node test/e2e/server.js',
