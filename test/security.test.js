@@ -76,11 +76,12 @@ test('the page escapes the names it shows (a member name with HTML in it must no
   assert.deepEqual(markup.map(l => l.trim().slice(0, 90)), [], `unescaped names in markup (${raw.length} found)`);
 });
 
-test('the deployment sends basic security headers and does not cache the service worker', () => {
+test('the deployment sends basic security headers and allows scheduled work to finish', () => {
   const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
   const all = Object.fromEntries(config.headers.find(x => x.source === '/(.*)').headers.map(x => [x.key, x.value]));
   assert.equal(all['X-Content-Type-Options'], 'nosniff');
   assert.match(all['Referrer-Policy'], /strict-origin/);
   assert.match(all['Permissions-Policy'], /camera=\(\)/);
   assert.equal(config.headers.find(x => x.source === '/sw.js').headers[0].value, 'no-cache');
+  assert.equal(config.functions['api/server.js'].maxDuration, 60);
 });

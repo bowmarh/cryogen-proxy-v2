@@ -6,7 +6,8 @@ Members dashboard for the CRYO-GEN Zwift cycling club (Zwift club 2740), live at
 
 | Path | What it is |
 |---|---|
-| `public/index.html` | The dashboard: a single-page app (HTML, CSS and JS in one file). Vercel serves it as a static file. |
+| `public/index.html` | The dashboard shell: HTML, CSS and most app logic. Vercel serves it as a static file. |
+| `public/js/` | Self-contained browser modules extracted incrementally from the dashboard. |
 | `api/server.js` | Node.js API: admin/mod login, shared sign-ups/RSVPs/rides (`/api/state`, …), and the Google Sheets reader (`/api/proxy`). Serves `public/` when run locally. |
 | `vercel.json` | Vercel config pointing at `api/server.js`. |
 | `schema.sql` | Empty placeholder. |
@@ -26,7 +27,14 @@ ADMIN_PASSWORD=... MOD_PASSWORD=... KV_REST_API_URL=... KV_REST_API_TOKEN=... np
 node --test test/*.test.js
 ```
 
-About 70 tests, about a second, no packages and no network (Node 20+; CI uses 22). They run against in-memory fakes of Redis, WordPress, Google Sheets and Discord (`test/helpers.js`) and cover logins and sessions, member sign-in, who a sign-up is recorded for, the TTT week (sign-up, line-ups, waitlist, captains, results, rollover, Discord posts), member record edits, the roster cache, the public sheet data, the health panel, and the dashboard page itself (scripts parse, every route it calls exists). GitHub runs them on every pull request.
+The API runtime uses only Node's built-in modules. Unit tests use Node's built-in test runner and in-memory fakes for Redis, WordPress, Google Sheets and Discord (`test/helpers.js`); Playwright covers real browser flows against that local fake-backed server.
+
+```bash
+npm test
+npm run test:e2e
+```
+
+Install the browser once with `npx playwright install chromium`. Unit tests cover login and sessions, authorization, member sign-in, TTT, member record edits, roster caching, public sheet data, system health and dashboard routes. Playwright covers the member portal and calendar flow in a browser. GitHub runs both suites on pull requests.
 
 When you change behaviour, change or add a test with it. A test file runs in its own process, so settings from `setEnv()` don't leak between files.
 
@@ -39,6 +47,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `SHEET_ID` *(optional)* | Google Sheet to read rides and TTT data from. Defaults to the club sheet. |
 | `SHEET_TAB_RIDES`, `SHEET_TAB_TTT` *(optional)* | Tab names. Default `Social Rides` and `TEAM LIST`. |
 | `SHEET_TIMEOUT_MS` *(optional)* | How long to wait for Google before answering "did not answer in time" (504). Default 6000. |
+| `SITE_URL` *(optional)* | Public portal URL, used for links and as the only allowed browser origin for API mutations. Defaults to `https://club.cryo-gen.team`. |
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
 | `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
@@ -57,7 +66,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `CRON_SECRET` | Shared secret for `/api/cron/tick`. Set the same value as a GitHub repository secret so the **TTT schedule** workflow (every 15 min) can run reminders, auto-close and the next-week rollover on time. |
 | `WP_SSO_SECRET` *(optional)* | Shared secret that lets riders sign in with their cryogen.team account (see ARCHITECTURE.md, "Member sign-in"). The same value goes into the WordPress snippet. Without it the "Sign in" button is hidden and the name-picker is the only member login. |
 | `WP_SSO_LOGIN_URL` *(optional)* | Where the "Sign in" button sends riders. Default `https://cryogen.team/club-login`. |
-| `REQUIRE_MEMBER_LOGIN` *(optional)* | Set to `1` to stop guests (name-picker logins) signing up, withdrawing or RSVPing. Signed-in members and staff are unaffected. Leave unset during rollout. |
+| `REQUIRE_MEMBER_LOGIN` *(optional)* | Set to `1` to stop guests (name-picker logins) signing up, withdrawing or RSVPing. This is enforced automatically in Vercel Production even if unset. Signed-in members and staff are unaffected. |
 | `WP_API_USER`, `WP_API_APP_PASSWORD` *(optional)* | WordPress user + Application Password for the cryogen.team member records (tier/status/off-boarding, read and edited through the server). Without them the live Zwift club roster still loads and everyone counts as active. |
 
 No dependencies: it uses only Node's built-in modules.
@@ -68,6 +77,8 @@ No dependencies: it uses only Node's built-in modules.
 - **Google Sheets** (via `/api/proxy`): social rides and team time trial (TTT) data. The sheet must be shared as "Anyone with the link can view".
 - **Shared storage** (Upstash Redis, via `/api/state` and friends): event sign-ups, series locks, club-created rides and RSVPs.
 - **Browser `localStorage`**: affiliation history (not shared yet).
+
+The roster response includes its last successful update time and marks last-good fallback data as stale. The dashboard labels stale data and does not substitute sample riders when the live roster is unavailable.
 
 ## Weekly TTT automation
 

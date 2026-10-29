@@ -40,7 +40,7 @@ function sendJSON(res, statusCode, obj){
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(s),
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': SITE_ORIGIN
   });
   res.end(s);
 }
@@ -118,12 +118,16 @@ function memberFromRequest(req){
     ? { zwid: String(session.zwid), name: String(session.name), assoc: session.assoc === true } : null;
 }
 
+function memberLoginRequired(){
+  return process.env.REQUIRE_MEMBER_LOGIN === '1' || process.env.VERCEL_ENV === 'production';
+}
+
 // Who a sign-up / withdrawal / RSVP is for. A signed-in member always acts as themselves.
-// Staff and (until REQUIRE_MEMBER_LOGIN=1) guests name the rider in the request.
+// Staff and (when member login is not required) guests name the rider in the request.
 function identify(req, body){
   const member = memberFromRequest(req);
   if (member) return member;
-  if (!roleFromRequest(req) && process.env.REQUIRE_MEMBER_LOGIN === '1'){
+  if (!roleFromRequest(req) && memberLoginRequired()){
     throw new HttpError(401, 'Please sign in with your cryogen.team account.');
   }
   return {
@@ -390,6 +394,7 @@ const TTT_CLOSE_HOUR = 19;         // 7pm
 const TTT_NEXT_WEEK_HOUR = 9;      // 9am the day after the race
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SITE_URL = process.env.SITE_URL || 'https://club.cryo-gen.team';
+const SITE_ORIGIN = new URL(SITE_URL).origin;
 
 function addDays(ymd, n){
   const [y, m, d] = ymd.split('-').map(Number);
@@ -1602,14 +1607,15 @@ async function loadRiders(){
     const [raw] = await redis([['GET', RIDERS_KEY]]);
     saved = raw ? JSON.parse(raw) : null;
   } catch (e) { /* shared storage unavailable: ask the source directly */ }
-  if (saved && Date.now() - saved.at < RIDERS_FRESH_MS) return saved.riders;
+  if (saved && Date.now() - saved.at < RIDERS_FRESH_MS) return { riders: saved.riders, updatedAt: saved.at, stale: false };
   try {
     const club = await wpGet(`/zwift/public/clubs/${encodeURIComponent(ZWIFT_CLUB_ID)}/0`);
     const riders = Array.isArray(club.riders) ? club.riders.map(slimRider) : [];
-    await redis([['SET', RIDERS_KEY, JSON.stringify({ at: Date.now(), riders }), 'EX', '604800']]).catch(() => {});
-    return riders;
+    const updatedAt = Date.now();
+    await redis([['SET', RIDERS_KEY, JSON.stringify({ at: updatedAt, riders }), 'EX', '604800']]).catch(() => {});
+    return { riders, updatedAt, stale: false };
   } catch (e) {
-    if (saved) return saved.riders;
+    if (saved) return { riders: saved.riders, updatedAt: saved.at, stale: true };
     throw e;
   }
 }
@@ -1623,9 +1629,12 @@ async function fetchRoster(){
     auth ? wpGet('/members', auth) : Promise.reject(new Error('not configured')),
   ]);
   if (club.status === 'rejected') throw club.reason;
+  const roster = club.value;
   rosterCache = {
     at: Date.now(),
-    riders: club.value,
+    riders: roster.riders,
+    ridersUpdatedAt: roster.updatedAt,
+    ridersStale: roster.stale,
     members: members.status === 'fulfilled' && Array.isArray(members.value) ? members.value : null,
     membersError: members.status === 'rejected' ? members.reason.message : null,
   };
@@ -1646,15 +1655,22 @@ function uniqueMembers(list){
 }
 
 async function handleRoster(req, res){
-  const { riders, members: allMembers, membersError } = await fetchRoster();
+  const { riders, ridersUpdatedAt, ridersStale, members: allMembers, membersError } = await fetchRoster();
   const members = allMembers && uniqueMembers(allMembers);
   const staff = ['admin', 'mod'].includes(roleFromRequest(req));
+  const stale = ridersStale || Date.now() - ridersUpdatedAt >= RIDERS_FRESH_MS;
   // Everyone sees name/status/tier; off-boarding progress is staff-only.
   const memberView = members && members.map(m => ({
     zwift_id: m.zwift_id, name: m.name, status: m.status, tier: normTier(m.tier),
     ...(staff ? { offboard_discord: m.offboard_discord, offboard_fb: m.offboard_fb, offboard_zp: m.offboard_zp } : {}),
   }));
-  sendJSON(res, 200, { riders, members: memberView, membersError: staff ? membersError : undefined });
+  sendJSON(res, 200, {
+    riders,
+    members: memberView,
+    membersAvailable: Array.isArray(allMembers),
+    membersError: staff ? membersError : undefined,
+    roster: { updatedAt: new Date(ridersUpdatedAt).toISOString(), stale },
+  });
 }
 
 // Staff edits to a member record, saved to WordPress with the server's credentials.
@@ -1992,7 +2008,7 @@ async function healthChecks(){
     run('signin', 'Member sign-in (cryogen.team)', async () => process.env.WP_SSO_SECRET
       ? ['ok', 'On. Riders can sign in with their cryogen.team account.']
       : ['warn', 'WP_SSO_SECRET is not set, so the sign-in button is hidden.']),
-    run('guests', 'Guest sign-ups', async () => process.env.REQUIRE_MEMBER_LOGIN === '1'
+    run('guests', 'Guest sign-ups', async () => memberLoginRequired()
       ? ['ok', 'Blocked: only signed-in members and staff can sign up, withdraw or RSVP.']
       : ['info', 'Allowed: anyone using the name-picker can sign up as anyone. Set REQUIRE_MEMBER_LOGIN=1 to block this.']),
     run('staff', 'Staff passwords and sessions', async () => {
@@ -2320,10 +2336,15 @@ async function handleZrl(zrlRoute, req, res){
 async function route(req, res){
   const parsed = parseRequestUrl(req);
   const pathname = parsed.pathname || '/';
+  const origin = req.headers.origin;
+
+  if (origin && origin !== SITE_ORIGIN && !['GET', 'HEAD'].includes(req.method)) {
+    throw new HttpError(403, 'Requests from this origin are not allowed.');
+  }
 
   if (req.method === 'OPTIONS'){
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': SITE_ORIGIN,
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type,Authorization'
     });
@@ -2345,7 +2366,7 @@ async function route(req, res){
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
-    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: process.env.REQUIRE_MEMBER_LOGIN === '1' });
+    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired() });
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);

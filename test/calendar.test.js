@@ -37,7 +37,7 @@ test('the feed is a calendar with the rider\'s own events, to-do items marked, a
   const url = (await app.post('/api/me/calendar', {}, { token: t })).body.url;
   assert.doesNotMatch((await app.get(new URL(url).pathname)).body, /Sunday/, 'a ride you have not said yes to is not in your calendar');
   await app.post('/api/rsvps', { rideId: Object.keys(app.world.db['cg:rides'])[0] }, { token: t });
-  const r = await app.get(new URL(url).pathname);
+  const r = await app.get(new URL(url).pathname, { headers: { Origin: 'https://calendar-client.example' } });
   assert.equal(r.status, 200);
   assert.match(r.body, /^BEGIN:VCALENDAR\r\nVERSION:2\.0/);
   assert.match(r.body, /END:VCALENDAR\r\n$/);
