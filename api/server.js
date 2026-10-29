@@ -866,8 +866,19 @@ const TTT_ROUTES = {
       cmds.push(['HSET', TTT_KEYS.assign, k, JSON.stringify([p.team])]);
       fill[p.team] = (fill[p.team] || 0) + 1; placedN++;
     }
+    // With `prune` (the sheet wins): a rider the app has on a team whose block is on the sheet, but who is not in that block, comes off that team.
+    let pruned = 0;
+    if (body.prune === true) {
+      const listed = new Map();
+      for (const p of plan) if (p.team) (listed.get(p.team) || listed.set(p.team, new Set()).get(p.team)).add(p.name.toLowerCase()).add(p.zwid || p.name.toLowerCase());
+      for (const su of data.signups) {
+        const key = su.name.toLowerCase(), cur = data.assign[key] || [];
+        const next = cur.filter(id => !listed.has(id) || listed.get(id).has(key) || (su.zwid && listed.get(id).has(su.zwid)));
+        if (next.length !== cur.length) { cmds.push(next.length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(next)] : ['HDEL', TTT_KEYS.assign, key]); pruned++; }
+      }
+    }
     if (cmds.length) await redis(cmds);
-    return { ...tttView(await loadTtt(), roleFromRequest(req)), board: { created, placed: placedN, skipped } };
+    return { ...tttView(await loadTtt(), roleFromRequest(req)), board: { created, placed: placedN, pruned, skipped } };
   },
 
   'POST /api/ttt/withdraw': async (req, body) => {
@@ -1469,7 +1480,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1987,6 +1998,7 @@ async function healthChecks(){
     run('ladder', 'Zwift Club Ladder', async () => ladder.healthRow()),
     run('drs', 'DIRT Racing Series', async () => drs.healthRow()),
     run('assoc', 'Associate members', async () => assoc.healthRow()),
+    run('sheetsync', 'Google Sheet sync', () => sheetSync.healthRow()),
     run('comms', 'Discord messages (Comms)', async () => {
       const auth = wpAuth();   // member records only: this check never calls the rate-limited roster source
       const [s, list, auto] = await Promise.all([comms.stats(), auth ? wpGet('/members', auth).catch(() => null) : null, comms.getSettings()]);
@@ -2291,6 +2303,45 @@ async function handleProfile(route, req, res){
 // Duplicate and inactive members (lib/tidy.js): finds them; staff act with the member tools that already exist.
 const tidy = require('../lib/tidy')({ requireRole, fetchRoster, normTier });
 
+// Google Sheet sync (lib/sheetsync.js, lib/gsheets.js): the sheets pulled into the app (the sheet wins) and the app's teams pushed to a mirror tab it owns.
+const gsheets = require('../lib/gsheets')();
+const syncReq = () => ({ headers: { authorization: `Bearer ${signToken('admin')}` } });   // the sync acts as staff, inside this process only
+async function tttMirrorRows(){
+  const head = ['Team', 'Level', 'Zone', 'Rider', 'Zwift ID', 'Cat', 'Volunteer captain', 'Double up'];
+  const data = await loadTtt();
+  if (!data.week) return [head];
+  const rows = [head], placed = new Set();
+  for (const t of data.week.teams) {
+    const riders = data.signups.filter(s => (data.assign[s.name.toLowerCase()] || []).includes(t.id)).sort((a, b) => (b.captain === true) - (a.captain === true) || a.name.localeCompare(b.name));
+    riders.forEach(s => placed.add(s.name.toLowerCase()));
+    if (!riders.length) rows.push([t.name, t.level || '', t.zone || '', '', '', '', '', '']);
+    for (const s of riders) rows.push([t.name, t.level || '', t.zone || '', s.name, s.zwid || '', s.cat || '', s.captain ? 'Yes' : '', s.doubleUp ? 'Yes' : '']);
+  }
+  for (const s of data.signups.filter(x => x.available && !placed.has(x.name.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name))) rows.push(['— Not in a team —', '', '', s.name, s.zwid || '', s.cat || '', s.captain ? 'Yes' : '', s.doubleUp ? 'Yes' : '']);
+  return rows;
+}
+async function tttPull(){
+  if (!(await loadTtt()).week) throw new HttpError(409, 'There is no TTT week yet, so there is nothing to sync into.');
+  const a = await TTT_ROUTES['POST /api/ttt/import-sheet'](syncReq(), { apply: true });
+  const b = await TTT_ROUTES['POST /api/ttt/import-board'](syncReq(), { apply: true, overwrite: true, prune: true });
+  return { signups: a.imported, placed: b.board.placed, removed: b.board.pruned, created: b.board.created, skipped: b.board.skipped.length };
+}
+const ZRL_SHEET_DEFAULT = '1s8lrYj3f-nD3qSmlA_kaSRJxzvun7-ZJfIl8kR5Pjsc';   // the club's ZRL tracker
+const sheetSync = require('../lib/sheetsync')({
+  redis, HttpError, requireRole, roleFromRequest, gsheets,
+  series: {
+    ttt: { label: 'TTT', mirrorTab: 'CRYO-GEN App TTT', pullTab: SHEET_TABS['ttt-sheet'], sheetId: () => SHEET_ID, rows: tttMirrorRows, pull: tttPull },
+    zrl: { label: 'ZRL', mirrorTab: 'CRYO-GEN App ZRL', pullTab: 'TEAM LIST', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => zrl.mirrorRows(),
+      pull: async sheetId => (await zrl.routes['POST /api/zrl/sync-board'](syncReq(), { tab: 'TEAM LIST', sheet: sheetId })).sync },
+  },
+});
+async function handleSync(route, req, res){
+  const body = req.method === 'POST' ? await readJSONBody(req) : {};
+  const result = await route(req, body);
+  if (req.method === 'POST' && !parseRequestUrl(req).pathname.endsWith('/auto')) await zrl.logChange(req, parseRequestUrl(req).pathname, { series: body.series, direction: body.direction }, { staffOnly: true }).catch(e => console.error('Log:', e.message));
+  sendJSON(res, 200, result);
+}
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
@@ -2314,7 +2365,7 @@ async function handleCalendar(route, req, res){
 }
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS, syncKeys: sheetSync.KEYS });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2405,6 +2456,8 @@ async function route(req, res){
   const calRoute = calendar.routes[`${req.method} ${pathname}`];
   if (calRoute) return handleCalendar(calRoute, req, res);
 
+  const syncRoute = sheetSync.routes[`${req.method} ${pathname}`];
+  if (syncRoute) return handleSync(syncRoute, req, res);
   const profileRoute = profile.routes[`${req.method} ${pathname}`];
   if (profileRoute) return handleProfile(profileRoute, req, res);
 

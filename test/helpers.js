@@ -179,6 +179,33 @@ function installFetch(world) {
       return world.hookFail ? json({}, 500) : json({ ok: true });
     }
     if (u.host === 'cal.test') return new Response(world.ical || '', { status: world.icalStatus || 200 });   // an iCal feed
+    if (u.host === 'oauth2.googleapis.com') {   // a service account signing in: world.gs.tokenCalls counts them, world.gs.tokenFail answers 400
+      const gs = world.gs = world.gs || { sheets: {}, calls: [], tokenCalls: 0 };
+      gs.tokenCalls++;
+      if (gs.tokenFail) return json({ error: 'invalid_grant', error_description: 'Invalid JWT Signature.' }, 400);
+      return json({ access_token: 'gs-token', expires_in: 3600 });
+    }
+    if (u.host === 'sheets.googleapis.com') {   // the Sheets API: world.gs.sheets[<id>] = { tabs: { <title>: rows[][] } }; a sheet not listed answers 404, one with `locked` answers 403
+      const gs = world.gs = world.gs || { sheets: {}, calls: [], tokenCalls: 0 };
+      if ((opts.headers || {}).Authorization !== 'Bearer gs-token') return json({ error: { message: 'unauthenticated' } }, 401);
+      const m = /^\/v4\/spreadsheets\/([^/:]+)(.*)$/.exec(u.pathname);
+      const sheet = m && gs.sheets[decodeURIComponent(m[1])];
+      gs.calls.push({ method: opts.method || 'GET', path: u.pathname + u.search });
+      if (!sheet) return json({ error: { message: 'not found' } }, 404);
+      if (sheet.locked) return json({ error: { message: 'The caller does not have permission' } }, 403);
+      const rest = decodeURIComponent(m[2]);
+      if (!rest) return json({ sheets: Object.keys(sheet.tabs).map(title => ({ properties: { title } })) });
+      if (rest === ':batchUpdate') { for (const r of JSON.parse(opts.body).requests) if (r.addSheet) sheet.tabs[r.addSheet.properties.title] = []; return json({}); }
+      const t = /^\/values\/'((?:[^']|'')*)'!(.*?)(:clear)?$/.exec(rest);
+      if (t) {
+        const title = t[1].replace(/''/g, "'");
+        if (!(title in sheet.tabs)) return json({ error: { message: 'Unable to parse range' } }, 400);
+        if (t[3]) { sheet.tabs[title] = []; return json({}); }
+        const body = JSON.parse(opts.body); sheet.tabs[title] = body.values;
+        return json({ updatedCells: body.values.reduce((n, r) => n + r.length, 0) });
+      }
+      return json({ error: { message: 'no stub' } }, 404);
+    }
     if (u.host === 'discord.com') {   // the Discord bot API: world.dms collects direct messages; world.dmFail is a set of user ids whose DMs are closed
       const m = /\/channels\/dm-(\d+)\/messages$/.exec(u.pathname);
       if (/\/guilds\/\d+\/members$/.test(u.pathname)) {   // the server's member list: world.guildMembers (world.guildDenied answers 403, as when the Server Members Intent is off)
