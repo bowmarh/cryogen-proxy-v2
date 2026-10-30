@@ -1576,7 +1576,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2463,6 +2463,33 @@ async function handleSync(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
+const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
+async function runDigest(now = Date.now()){
+  const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
+  let on = true; try { if (raw && JSON.parse(raw).on === false) on = false; } catch (e) { /* default on */ }
+  if (!on) return [];
+  const uk = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23', hour: 'numeric' }).format(new Date(now));
+  if (Number(uk) < Number(process.env.DIGEST_FROM_HOUR || 7)) return [];   // the env var exists so tests do not depend on the time of day
+  const day = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  const w = await week.build(syncReq(), now, 'admin');
+  const urgent = w.attention.filter(a => a.level === 'fail' || a.level === 'warn'), todo = w.attention.filter(a => a.level === 'todo');
+  const soon = w.upcoming.filter(u => u.atMs <= now + 36 * 3600000 && u.atMs >= now - 3 * 3600000);
+  const did = (await autoLog.list()).filter(e => Date.parse(e.ts) >= now - 24 * 3600000 && !e.undone);
+  if (!urgent.length && !todo.length && !soon.length && !did.length) return [];
+  const [claimed] = await redis([['HSETNX', DIGEST_KEYS.sent, day, new Date(now).toISOString()]]);
+  if (!claimed) return [];
+  const lines = [`☀️ **Good morning: the club today, ${new Date(now).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'long', day: 'numeric', month: 'long' })}**`];
+  if (urgent.length) lines.push(`**Needs attention (${urgent.length}${todo.length ? `, and ${todo.length} to do` : ''})**\n${urgent.slice(0, 8).map(a => `${a.level === 'fail' ? '🔴' : '🟡'} ${discordEscape(a.title)}: ${discordEscape(a.detail)}`).join('\n')}${urgent.length > 8 ? `\n…and ${urgent.length - 8} more` : ''}`);
+  else if (todo.length) lines.push(`**To do (${todo.length})**\n${todo.slice(0, 5).map(a => `⚪ ${discordEscape(a.title)}`).join('\n')}`);
+  else lines.push('✅ Nothing needs attention.');
+  if (soon.length) lines.push(`**On today and tomorrow**\n${soon.slice(0, 8).map(u => `• ${discordEscape(u.kind)}: ${discordEscape(u.title)}${u.timed ? ` at ${new Date(u.atMs).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })} UK` : ''}`).join('\n')}`);
+  if (did.length) lines.push(`**The automation did ${did.length} thing${did.length === 1 ? '' : 's'} in the last day**\n${did.slice(0, 5).map(e => `🤖 ${discordEscape(e.series)}: ${discordEscape(e.summary)}`).join('\n')}\nUndo any of it on This week.`);
+  lines.push(`${SITE_URL} → 📌 This week`);
+  await discord('admin', { content: lines.join('\n\n').slice(0, 1900) });
+  return ['digest'];
+}
+
 // Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
 const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
 
@@ -2588,6 +2615,13 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  if (pathname === '/api/digest' && (req.method === 'GET' || req.method === 'POST')) {
+    const role = requireRole(req, ['admin', 'mod']);
+    if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on !== false })]]); return sendJSON(res, 200, { on: body.on !== false, canChange: true }); }
+    const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
+    let on = true; try { if (raw && JSON.parse(raw).on === false) on = false; } catch (e) { /* default on */ }
+    return sendJSON(res, 200, { on, canChange: role === 'admin' });
+  }
   const liveRoute = live.routes[`${req.method} ${pathname}`];
   if (liveRoute) return sendJSON(res, 200, await liveRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
