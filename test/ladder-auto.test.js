@@ -142,3 +142,18 @@ test('past results nudge the pick, and the pick says why', async () => {
   await post('auto-lineup', { match: m.id });
   assert.ok((await app.get('/api/ladder', { token: admin })).body.matches[0].lineupInfo.every(r => r.why), 'each rider carries a reason');
 });
+
+test('the challenge planner gives the range, whether a legal five exists, free dates and a draft', async () => {
+  const empty = (await app.get('/api/ladder/planner', { token: admin })).body;
+  assert.equal(empty.canField, false); assert.ok(empty.issues.some(i => /Fewer than five/.test(i)));
+  await post('meta', { rung: 12 });
+  for (let i = 0; i < 6; i++) await post('roster', { zwid: ID(i) });
+  const m = await match(7 * 24);   // a match a week away takes that day off the list
+  const p = (await app.get('/api/ladder/planner', { token: admin })).body;
+  assert.equal(p.canField, true); assert.deepEqual(p.range, { from: 5, to: 11 });
+  assert.equal(p.slots.length, 3);
+  const taken = new Date(m.at).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  assert.ok(p.slots.every(s => s.date !== taken && s.time && s.label));
+  assert.match(p.draft, /would like to challenge \[your team\].*one or two power-ups/);
+  assert.equal((await app.get('/api/ladder/planner')).status, 401);
+});

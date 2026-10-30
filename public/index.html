@@ -2703,6 +2703,25 @@ async function ladderImport(id){
   const p=d.preview, lines=Object.entries(p.positions).sort((a,b)=>a[1]-b[1]).map(([z,pos])=>ordinal(pos)+' '+p.names[z]).join(', ');
   if(confirm('Result from Zwift: '+(p.won?'we win':'they win')+' '+p.ourPoints+'–'+p.theirPoints+'.\n'+lines+(p.lineupChanged?'\n(The five who raced differ from the line-up; it will be updated.)':'')+'\n\nSave it?')) await ladderPost('result-import',{ match:id, event, apply:true });
 }
+let ladderPlanData=null;
+async function ladderPlan(){
+  try{ const r=await fetch('/api/ladder/planner?team='+encodeURIComponent(ladderTeam||''),{headers:tttHeaders()}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not plan.'); ladderPlanData=d; }catch(e){ alert(e.message); return; }
+  renderLadder();
+}
+function ladderPlanCard(){
+  const p=ladderPlanData; if(!p) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">🎯 Plan a challenge for ${esc(p.team)}</div>
+    <div style="font-size:13px;margin-bottom:4px">${p.range?`You may challenge rungs <b>${p.range.from}${p.range.to>p.range.from?' to '+p.range.to:''}</b> (up to seven above you; zombie teams do not count towards the seven).`:'Set the rung to see the range.'}</div>
+    <div style="font-size:13px;margin-bottom:4px;color:${p.canField?'#10B981':'#f87171'}">${p.canField?'✅ A legal five exists ('+esc(p.window)+').':'❌ No legal five yet.'}${p.activity&&p.activity.days!=null&&p.activity.state!=='active'?` Last raced ${p.activity.days} days ago.`:''}${p.bestDay?` Riders say yes most on <b>${esc(p.bestDay.weekday)}s</b> (${p.bestDay.yesRate}%).`:''}</div>
+    ${(p.issues||[]).map(i=>`<div style="font-size:12px;color:#FBBF24">⚠️ ${esc(i)}</div>`).join('')}
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:10px 0 4px">Dates to propose</div>
+    ${p.slots.map(s=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0"><span style="flex:1">${esc(s.label)}</span><button onclick="ladderPlanUse('${esc(s.date)}','${esc(s.time)}')" style="${btn}">Use this date</button></div>`).join('')||'<div style="font-size:12px;color:#9ca3af">No free day found in the next 12 days.</div>'}
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:10px 0 4px">Draft message for their captain</div>
+    <textarea readonly style="width:100%;min-height:80px;font-size:12px;background:#0f1623;color:#e5e7eb;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:8px">${esc(p.draft)}</textarea>
+    <div style="margin-top:8px;display:flex;gap:6px"><button onclick="navigator.clipboard&&navigator.clipboard.writeText(ladderPlanData.draft).then(()=>alert('Copied.'))" style="${btn}">Copy the message</button><button onclick="ladderPlanData=null;renderLadder()" style="${btn}">Close</button></div></div>`;
+}
+function ladderPlanUse(date,time){ ladderFormOpen('new'); ladderForm.date=date; ladderForm.time=time; ladderPlanData=null; renderLadder(); }
 let ladderArc=null;
 async function ladderArchiveLoad(){ if(ladderArc) return; try{ const r=await fetch('/api/ladder/archive',{headers:tttHeaders()}); ladderArc=r.ok?(await r.json()).seasons:[]; }catch(e){ ladderArc=[]; } renderLadder(); }
 function ladderArchiveCard(){
@@ -2795,12 +2814,12 @@ function renderLadder(){
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
   el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
-    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
+    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"> <button onclick="ladderPlan()" title="Rungs you may challenge, whether a legal five exists, and dates to propose" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🎯 Plan a challenge</button><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
     ${ladder.challengeRange?`<div style="font-size:12px;color:#9ca3af;margin:-6px 0 10px">🎯 You can challenge rungs <b style="color:#e5e7eb">${ladder.challengeRange.from}${ladder.challengeRange.to>ladder.challengeRange.from?' to '+ladder.challengeRange.to:''}</b> (up to seven above you). ${esc(ladder.challengeRange.note)}</div>`:''}
     ${staff&&ladder.activity&&['warn','zombie','removed'].includes(ladder.activity.state)?`<div class="card" style="padding:10px 14px;margin-bottom:10px;font-size:13px;border-color:rgba(251,191,36,0.4);color:#FBBF24">🧟 ${ladder.activity.state==='warn'?`No race for ${ladder.activity.days} days. At 21 the team counts as a zombie and at 35 it is removed: get a challenge out.`:ladder.activity.state==='zombie'?`No race for ${ladder.activity.days} days: a zombie team. At 35 days the ladder removes it.`:`No race for ${ladder.activity.days} days: the ladder may already have removed this team.`}</div>`:''}
     ${staff&&(ladder.shared||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:-4px 0 10px">⚠️ On more than one ladder roster (the league locks a rider to one team a season): ${ladder.shared.map(x=>esc(x.name)+' (also '+x.teams.map(esc).join(', ')+')').join('; ')}.</div>`:''}
     ${staff?`<label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:10px"><input type="checkbox" ${ladder.meta&&ladder.meta.auto===false?'':'checked'} onchange="ladderAutoSet(this.checked)"> <b>Automatic:</b> pick the line-up and a reserve three days before a match, and replace a starter who says they can't ride. The admin channel is told each time.</label>`:''}
-    ${ladderFormCard()}
+    ${ladderPlanCard()}${ladderFormCard()}
     ${up.length?up.map((m,i)=>ladderMatchCard(m,ladderOpen.has(m.id)||(i===0&&!ladderOpen.size&&!past.some(p=>ladderOpen.has(p.id))))).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No challenge is open.'+(staff?' Press <b>+ New challenge</b> when a team above you accepts.':'')+'</div>'}
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 8px">Past matches</div>${past.map(m=>ladderMatchCard(m,ladderOpen.has(m.id))).join('')}`:''}
     ${staff?ladderArchiveCard():''}
