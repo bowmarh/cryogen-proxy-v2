@@ -81,3 +81,28 @@ test('My week offers the pen button for a race an hour or less away', async () =
   const w = (await app.get('/api/me/week', { token: await app.memberSession(starter, { name: 'Starter' }) })).body.items.find(i => i.kind === 'Ladder');
   assert.deepEqual(w.pen, { kind: 'ladder', id: m.id });
 });
+
+test('ten minutes out, starters who are not in the pen are reported once and the reserve is asked to be ready; staff can swap the reserve in', async () => {
+  const m = await ladderMatch(10);
+  for (let i = 0; i < 6; i++) await app.post('/api/comms/link', { zwid: ID(i), discordId: `${1000 + i}`.padStart(18, '1') }, A);
+  await app.post('/api/comms/auto', { nudge: true }, A);
+  await app.post('/api/live/checkin', { kind: 'ladder', id: m.id, zwid: m.lineup[0] }, A);
+  app.world.discord.length = 0; world.dms = [];
+  await tick();
+  const warn = app.world.discord.filter(p => p.channel === 'admin').map(p => p.body.content).find(t => /not in the pen yet/.test(t));
+  assert.ok(warn, 'the admin channel is told');
+  assert.match(warn, /has been asked to be ready/);
+  assert.equal(world.dms.filter(d => /Please be ready to step in/.test(d.body.content)).length, 1, 'the reserve gets one message');
+  app.world.discord.length = 0;
+  await tick();
+  assert.ok(!app.world.discord.some(p => /not in the pen yet/.test(p.body.content)), 'once');
+
+  const ev = (await app.get('/api/live', A)).body.events[0];
+  assert.equal(ev.lateIds.length, 4); assert.equal(ev.bench.length, 1);
+  const out = ev.lateIds[0], inn = ev.bench[0].zwid;
+  assert.equal((await app.post('/api/live/swap', { kind: 'ladder', id: m.id, out, in: ev.lateIds[1] }, A)).status, 400, 'only someone on the bench can step in');
+  assert.equal((await app.post('/api/live/swap', { kind: 'ladder', id: m.id, out, in: inn }, { token: await app.memberSession(ID(0), { name: 'x' }) })).status, 401);
+  assert.equal((await app.post('/api/live/swap', { kind: 'ladder', id: m.id, out, in: inn }, A)).status, 200);
+  const after = (await app.get('/api/ladder', A)).body.matches[0];
+  assert.ok(after.lineup.includes(inn) && !after.lineup.includes(out));
+});

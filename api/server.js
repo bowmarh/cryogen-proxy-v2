@@ -2577,7 +2577,7 @@ async function runDigest(now = Date.now()){
 }
 
 // Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
-const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
+const live = require('../lib/live')({ discord, discordEscape, siteUrl: SITE_URL, adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
 
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({

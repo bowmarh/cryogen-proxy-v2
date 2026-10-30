@@ -1134,6 +1134,11 @@ function weekNewCard(d){
 }
 // Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
 setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);
+async function weekSwap(kind,id,out,inn){
+  if(!confirm('Swap them in? The line-up is changed straight away and the swap is not posted to Discord.')) return;
+  try{ const r=await fetch('/api/live/swap',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id, out, in:inn })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not swap.'); return; } }catch(e){ alert('Could not reach the server.'); return; }
+  loadWeek();
+}
 async function weekPen(kind,id,zwid,on){
   try{ const r=await fetch('/api/live/checkin',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id, zwid, in:on })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save that.'); return; } }catch(e){ alert('Could not reach the server.'); return; }
   loadWeek();
@@ -1145,7 +1150,8 @@ function weekLiveCard(d){
     ${ev.map(e=>{ const label=e.status==='started'?'started '+Math.abs(e.minutes)+' min ago':e.minutes>=90?'in '+Math.round(e.minutes/60)+' h':'in '+e.minutes+' min'; const col=e.status==='later'?'#9ca3af':e.late.length?'#FBBF24':'#10B981';
       return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(e.title)}</b><span style="font-size:12px;color:${col}">${esc(label)} · ${e.ready} of ${e.need} in the pen</span>${e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener" style="font-size:12px;color:#00D4FF">private event →</a>`:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${e.riders.map(r=>`<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid ${r.inPen?'rgba(16,185,129,0.5)':e.status!=='later'&&r.role!=='reserve'?'rgba(251,191,36,0.5)':'rgba(255,255,255,0.12)'};background:${r.inPen?'rgba(16,185,129,0.12)':'transparent'}">${ans[r.answer]||'·'} ${rn(r.name,r.zwid,'',true)}${r.role&&r.role!=='starter'?`<span style="color:#6b7280">${esc(r.role)}</span>`:''}<button title="${r.inPen?'Mark as not in the pen':'Mark as in the pen'}" onclick="weekPen('${esc(e.kind)}','${esc(e.id)}','${esc(r.zwid)}',${!r.inPen})" style="background:none;border:none;cursor:pointer;color:${r.inPen?'#34d399':'#6b7280'};padding:0">${r.inPen?'🏁':'○'}</button></span>`).join('')}</div>
-      ${e.status!=='later'&&e.late.length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⏳ Not in the pen yet: ${e.late.map(esc).join(', ')}</div>`:''}</div>`; }).join('')}</div>`;
+      ${e.status!=='later'&&e.late.length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⏳ Not in the pen yet: ${e.late.map(esc).join(', ')}</div>`:''}
+      ${e.status!=='later'&&e.lateIds.length&&e.bench.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${e.lateIds.flatMap((z,i)=>e.bench.slice(0,2).map(b=>`<button onclick="weekSwap('${esc(e.kind)}','${esc(e.id)}','${esc(z)}','${esc(b.zwid)}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(251,191,36,0.5)">🔁 ${esc(e.late[i])} → ${esc(b.name)}</button>`)).join('')}</div>`:''}</div>`; }).join('')}</div>`;
 }
 // One card per series: all fine, or the one thing that is next.
 function weekSeriesStrip(d){
