@@ -2210,9 +2210,28 @@ async function handleCover(coverRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// One event's finishers from ZwiftRacing.app (the organizer key stays on the server). Returns { results: [{ riderId, position, ... }], time, title }.
+// The API allows one results request a minute, so callers ask once per event and treat a 404 as "not published yet".
+async function fetchZrResults(id){
+  const key = process.env.ZWIFTRACING_API_KEY;
+  if (!key) throw new HttpError(503, 'ZWIFTRACING_API_KEY is not set in Vercel yet.');
+  if (!/^\d{1,12}$/.test(String(id || ''))) throw new HttpError(400, 'The event id is a number (the end of the Zwift event link).');
+  let r, data;
+  try {
+    r = await fetch(`https://api.zwiftracing.app/api/public/results/${id}`, { headers: { Authorization: key }, signal: AbortSignal.timeout(8000) });
+    try { data = JSON.parse(await r.text()); } catch (e) { data = null; }
+  } catch (e) {
+    throw new HttpError(e && e.name === 'TimeoutError' ? 504 : 502, e && e.name === 'TimeoutError' ? 'ZwiftRacing.app did not answer in time.' : 'ZwiftRacing.app could not be reached.');
+  }
+  if (r.status === 429) throw new HttpError(429, `ZwiftRacing.app allows one results request a minute. Try again${data && data.retryAfter ? ` in ${data.retryAfter} seconds` : ' in a minute'}.`);
+  if (r.status === 401) throw new HttpError(502, 'ZwiftRacing.app did not accept the key (401).');
+  if (!r.ok || !data || !Array.isArray(data.results)) throw new HttpError(404, 'ZwiftRacing.app has no results for that event id yet.');
+  return data;
+}
+
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
 const ladder = require('../lib/ladder')({
-  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
+  fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
 });
 async function handleLadder(ladderRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -2223,7 +2242,7 @@ async function handleLadder(ladderRoute, req, res){
 
 // DIRT Racing Series (lib/drs.js): a squad of eight in a vELO division, a fixed Tuesday calendar, the best four finishers score.
 const drs = require('../lib/drs')({
-  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
   // Raw vELO ratings from the club roster the dashboard already caches: no ZwiftRacing.app calls of its own, so no rate limits to respect.
   getRatings: async () => Object.fromEntries((await fetchRoster()).riders.map(r => [String(r.riderId), { name: r.name, rating: Math.round((r.race && r.race.current && r.race.current.rating) || 0), cat: (r.race && r.race.current && r.race.current.mixed && r.race.current.mixed.category) || '' }])),
 });
