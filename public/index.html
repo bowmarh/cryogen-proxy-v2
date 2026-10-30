@@ -575,7 +575,7 @@ function renderStaff(){
   el.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px;margin-top:12px"><div style="font-size:11px;font-weight:700;color:#00D4FF;margin-bottom:6px">🔑 Staff accounts</div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Each person signs in with their own username and password, and their name appears in the change log. The shared passwords keep working until you retire them.</div>
     ${staffList.map(u=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b style="flex:1">${esc(u.name)} <span style="color:#6b7280;font-weight:400">${esc(u.username)} · ${u.role==='admin'?'administrator':'moderator'}</span></b><button onclick="staffEdit('${esc(u.username)}')" style="${btn}">Edit</button><button onclick="staffRemove('${esc(u.username)}')" style="${btn}">Remove</button></div>`).join('')||'<div style="font-size:12px;color:#6b7280">No personal accounts yet.</div>'}
-    <button onclick="staffEdit('')" style="${btn};margin-top:8px">+ Add a person</button>${staffMsg?`<div style="font-size:12px;margin-top:6px;color:${staffMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(staffMsg)}</div>`:''}</div>`;
+    <button onclick="staffEdit('')" style="${btn};margin-top:8px">+ Add a person</button> <button onclick="pushKeys()" title="Makes the keys that switch on notifications for riders' devices" style="${btn};margin-top:8px">🔔 Make push keys</button>${staffMsg?`<div style="font-size:12px;margin-top:6px;color:${staffMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(staffMsg)}</div>`:''}</div>`;
 }
 async function staffEdit(username){
   const cur=(staffList||[]).find(u=>u.username===username)||{};
@@ -586,6 +586,11 @@ async function staffEdit(username){
   if(pw===null) return;
   try{ const r=await fetch('/api/staff',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ username:uname, name, role:roleIn, password:pw })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not save.'); staffMsg='✓ Saved.'; }catch(e){ staffMsg=e.message; }
   loadStaff();
+}
+async function pushKeys(){
+  if(!confirm('This makes a new key pair for notifications. Add the two values in Vercel (Settings, Environment Variables) as VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, then redeploy. Keep the private one secret. Changing keys later switches every device off. Continue?')) return;
+  try{ const r=await fetch('/api/push/generate-keys',{method:'POST',headers:tttHeaders(),body:'{}'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not make keys.');
+    prompt('Copy these two lines into Vercel as environment variables (the private key is a secret):','VAPID_PUBLIC_KEY='+d.publicKey+'\nVAPID_PRIVATE_KEY='+d.privateKey); }catch(e){ alert(e.message); }
 }
 async function staffRemove(username){
   if(!confirm('Remove '+username+'? They can no longer sign in (a session already open lasts until it expires).')) return;
@@ -993,8 +998,9 @@ function renderUpgrade(){
   <div style="margin-top:14px">${action}</div>${assocMsg?`<div style="margin-top:10px;font-size:13px;color:#f87171">${esc(assocMsg)}</div>`:''}</div>
   <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">Sign up for the TTT →</button><button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="showTab('rides',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>/Social Rides/.test(b.textContent)))">Find a ride →</button></div>
   <div class="discord-slot" style="margin-top:14px"></div>
+  <div class="push-slot" style="margin-top:14px"></div>
   <div class="cal-slot" style="margin-top:14px"></div>`;
-  fillDiscordSlots(); fillCalSlots();
+  fillDiscordSlots(); fillCalSlots(); fillPushSlots();
 }
 async function assocDiscord(joined){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/discord',{joined}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
 async function assocRequest(){ assocMsg=''; try{ assocData=await assocCall('POST','/api/assoc/request',{}); }catch(e){ assocMsg=e.message; } renderUpgrade(); }
@@ -1222,6 +1228,37 @@ async function dcCall(method,path,body){
   const msg={ linked:'✓ Your Discord is linked.', denied:'You did not allow Discord, so nothing was linked.', expired:'That sign-in link expired. Please try again.', failed:'Discord did not confirm your account. Please try again.' }[m[1]]||'';
   window.addEventListener('load',()=>{ myDiscordMsg=msg; });
 })();
+// Notifications on this device (web push): for riders who do not use Discord, or who want a nudge on their phone. Only shown when the club has push set up.
+let pushState=null;
+async function fillPushSlots(){
+  if(!document.querySelector('.push-slot')) return;
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||role!=='member'){ document.querySelectorAll('.push-slot').forEach(el=>el.innerHTML=''); return; }
+  try{ const r=await fetch('/api/push/status',{headers:tttHeaders()}); pushState=r.ok?await r.json():null; }catch(e){ pushState=null; }
+  if(pushState){ try{ const reg=await navigator.serviceWorker.ready; pushState.here=!!(await reg.pushManager.getSubscription()); }catch(e){ pushState.here=false; } }
+  renderPushSlots();
+}
+function renderPushSlots(){
+  const d=pushState; document.querySelectorAll('.push-slot').forEach(el=>{
+    if(!d||!d.configured){ el.innerHTML=''; return; }
+    const denied=typeof Notification!=='undefined'&&Notification.permission==='denied';
+    el.innerHTML=`<div class="card" style="padding:14px 16px"><div style="font-weight:800;margin-bottom:6px">🔔 Notifications on this device</div><div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Race reminders and line-up changes as a notification, even when the dashboard is closed. They respect the message kinds you switch off above.</div>
+      ${denied?'<div style="font-size:12px;color:#FBBF24">Notifications are blocked for this site in your browser settings.</div>':`<button onclick="pushToggle()" style="padding:6px 14px;font-size:12px;background:${d.here?'rgba(255,255,255,0.05)':'rgba(0,212,255,0.12)'};color:${d.here?'#e5e7eb':'#00D4FF'};border:1px solid ${d.here?'rgba(255,255,255,0.15)':'rgba(0,212,255,0.4)'};border-radius:6px;cursor:pointer">${d.here?'Turn off on this device':'Turn on for this device'}</button>`}</div>`;
+  });
+}
+async function pushToggle(){
+  try{
+    const reg=await navigator.serviceWorker.ready, existing=await reg.pushManager.getSubscription();
+    if(existing){ await fetch('/api/push/unsubscribe',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ endpoint:existing.endpoint })}); await existing.unsubscribe(); }
+    else{
+      if(await Notification.requestPermission()!=='granted') return renderPushSlots();
+      const pad='='.repeat((4-pushState.publicKey.length%4)%4), raw=atob((pushState.publicKey+pad).replace(/-/g,'+').replace(/_/g,'/'));
+      const sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0)) });
+      const j=sub.toJSON(), r=await fetch('/api/push/subscribe',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ endpoint:j.endpoint, keys:j.keys })});
+      if(!r.ok){ await sub.unsubscribe(); const d=await r.json().catch(()=>({})); alert(d.error||'Could not turn notifications on.'); }
+    }
+  }catch(e){ alert('Could not change notifications on this device: '+e.message); }
+  fillPushSlots();
+}
 async function fillDiscordSlots(){
   if(!document.querySelector('.discord-slot')) return;
   if(!myDiscord){ try{ myDiscord=await dcCall('GET','/api/me/discord'); }catch(e){ return; } }
@@ -3377,9 +3414,10 @@ function renderProfile(){
       <div style="font-size:11px;color:#4b5563;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}
     <div class="discord-slot" style="margin-top:16px"></div>
+    <div class="push-slot" style="margin-top:16px"></div>
     <div class="cal-slot" style="margin-top:16px"></div>`
   ;
-  fillDiscordSlots(); fillCalSlots();
+  fillDiscordSlots(); fillCalSlots(); fillPushSlots();
   loadMySeason();
   loadMyTtt();
   loadMyZrl();

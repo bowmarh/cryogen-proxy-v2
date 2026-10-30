@@ -175,6 +175,10 @@ function installFetch(world) {
       if (typeof world.zr.body === 'string') return new Response(world.zr.body, { status: world.zr.status || 200, headers: { 'Content-Type': 'text/html' } });
       return json(world.zr.body ?? {}, world.zr.status || 200);
     }
+    if (u.host === 'push.test') {   // a browser's push service: world.pushes collects { path, headers, body (Buffer) }; world.pushStatus answers (201 by default, 410 for a gone device)
+      (world.pushes = world.pushes || []).push({ path: u.pathname, headers: opts.headers || {}, body: Buffer.from(opts.body) });
+      return new Response('', { status: (world.pushStatus || {})[u.pathname] || 201 });
+    }
     if (u.host === 'api.anthropic.com') {   // the model behind the staff assistant: world.anthropic = { reply: <text the model answers>, status, seen: [] }
       const a = world.anthropic = world.anthropic || { reply: '{"reply":"","actions":[]}', status: 200, seen: [] };
       a.seen.push({ key: (opts.headers || {})['x-api-key'], body: JSON.parse(opts.body) });

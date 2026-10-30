@@ -2360,7 +2360,9 @@ async function handleAssoc(assocRoute, req, res){
 }
 
 // Staff messages to Discord (lib/comms.js): everyone in the club channel, or chosen members by DM (with a bot) or @mention.
+const push = require('../lib/webpush')({ redis, HttpError, requireRole, memberFromRequest, siteUrl: SITE_URL });
 const comms = require('../lib/comms')({
+  push,
   buttonsFor: (series, id) => discordInteractions.buttons(series, id),   // created just below
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord,
   templates: req => commsTemplates.build(req),
@@ -2731,6 +2733,9 @@ async function route(req, res){
 
   const assistantRoute = assistant.routes[`${req.method} ${pathname}`];
   if (assistantRoute) return sendJSON(res, 200, await assistantRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
+  const pushRoute = push.routes[`${req.method} ${pathname}`];
+  if (pushRoute) return sendJSON(res, 200, await pushRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
   const staffRoute = staff.routes[`${req.method} ${pathname}`];
   if (staffRoute) return sendJSON(res, 200, await staffRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
