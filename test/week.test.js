@@ -67,3 +67,9 @@ test('a moderator does not see platform problems, only the club ones', async () 
   assert.equal(forMod, 0);
   assert.ok(forAdmin > 0, 'the same page shows an admin the platform problems');
 });
+
+test('every series has one status line, and the next thing to do is named', async () => {
+  const r = (await app.get('/api/week', { token: admin })).body;
+  assert.deepEqual(r.series.map(s => s.id), ['zrl', 'ttt', 'ladder', 'drs']);
+  for (const s of r.series) { assert.ok(['ok', 'warn', 'todo', 'idle'].includes(s.state)); assert.ok(s.text.length > 5); assert.ok(s.go); }
+});

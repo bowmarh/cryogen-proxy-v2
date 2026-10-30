@@ -926,6 +926,7 @@ const TTT_ROUTES = {
         captains: Object.entries(plan.newCaptains).map(([id, key]) => ({ team: id, name: nameOf.get(key) || key })) };
     }
     await redis(plan.commands);
+    await recordTttAllocation(data, plan, 'staff').catch(e => console.error('Auto log:', e.message));
     return { ...tttView(await loadTtt(), roleFromRequest(req)), summary: plan.summary };
   },
 
@@ -1149,6 +1150,13 @@ function tttAllocation(data, velo){
   }
   commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
   return { placements, summary, commands, newCaptains, assign };
+}
+
+// The undo for an allocation: each rider's team places and the week (captains) as they were.
+function recordTttAllocation(data, plan, by){
+  const undo = Object.keys(plan.placements).map(key => (data.assign[key] && data.assign[key].length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(data.assign[key])] : ['HDEL', TTT_KEYS.assign, key]));
+  undo.push(['SET', TTT_KEYS.week, JSON.stringify(data.week)]);
+  return autoLog.record({ series: 'TTT', by, summary: `Allocated ${Object.keys(plan.placements).length} rider${Object.keys(plan.placements).length === 1 ? '' : 's'} to teams${Object.keys(plan.newCaptains).length ? ` and picked ${Object.keys(plan.newCaptains).length} captain${Object.keys(plan.newCaptains).length === 1 ? '' : 's'}` : ''}`, undo });
 }
 
 // ── Auto-assign planner ────────────────────────────────────
@@ -1503,7 +1511,7 @@ async function runTttSchedule(now = Date.now()){
         try {
           const fresh = await loadTtt();
           const plan = tttAllocation({ ...fresh, week: { ...fresh.week, open: false } }, await riderVelos(fresh.signups));
-          if (Object.keys(plan.placements).length || Object.keys(plan.newCaptains).length){ await redis(plan.commands); auto = plan.summary; assign = plan.assign; }
+          if (Object.keys(plan.placements).length || Object.keys(plan.newCaptains).length){ await redis(plan.commands); await recordTttAllocation(fresh, plan, 'automatic').catch(e => console.error('Auto log:', e.message)); auto = plan.summary; assign = plan.assign; }
         } catch (e) { console.error('TTT auto-allocate:', e.message); }
       }
       await postClosed(week, data.signups, assign, auto);
@@ -2193,7 +2201,10 @@ function serveStatic(res, reqPath){
 
 // ── ZRL (Zwift Racing League) ──────────────────────────────
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
+// What the automation changed, with an undo (lib/autolog.js).
+const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
 const zrl = require('../lib/zrl')({
+  autoLog,
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
   coverHonours: (since, now) => cover.honours(since, now),   // ride cover is created further down
@@ -2231,7 +2242,7 @@ async function fetchZrResults(id){
 
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
 const ladder = require('../lib/ladder')({
-  fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
+  autoLog, fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
 });
 async function handleLadder(ladderRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -2242,7 +2253,7 @@ async function handleLadder(ladderRoute, req, res){
 
 // DIRT Racing Series (lib/drs.js): a squad of eight in a vELO division, a fixed Tuesday calendar, the best four finishers score.
 const drs = require('../lib/drs')({
-  fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  autoLog, fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
   // Raw vELO ratings from the club roster the dashboard already caches: no ZwiftRacing.app calls of its own, so no rate limits to respect.
   getRatings: async () => Object.fromEntries((await fetchRoster()).riders.map(r => [String(r.riderId), { name: r.name, rating: Math.round((r.race && r.race.current && r.race.current.rating) || 0), cat: (r.race && r.race.current && r.race.current.mixed && r.race.current.mixed.category) || '' }])),
 });
@@ -2530,6 +2541,9 @@ async function route(req, res){
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
+
+  const autoRoute = autoLog.routes[`${req.method} ${pathname}`];
+  if (autoRoute) return sendJSON(res, 200, await autoRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
   const weekRoute = week.routes[`${req.method} ${pathname}`];
   if (weekRoute) return sendJSON(res, 200, await weekRoute(req));

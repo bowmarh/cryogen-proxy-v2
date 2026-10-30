@@ -1022,6 +1022,7 @@ async function loadWeek(){
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     weekData=d; weekErr='';
+    try{ const a=await fetch('/api/auto',{headers:tttHeaders()}); weekData.auto=a.ok?(await a.json()).entries:[]; }catch(e){ weekData.auto=[]; }
   }catch(e){ weekErr=e.message; }
   renderWeek();
 }
@@ -1043,9 +1044,28 @@ function renderWeek(){
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
+  ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
-  <div class="card" style="padding:14px 16px"><div style="font-weight:800">Coming up</div>${coming}</div>`;
+  <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
+  ${weekAutoCard(d)}`;
+}
+// One card per series: all fine, or the one thing that is next.
+function weekSeriesStrip(d){
+  if(!d.series) return '';
+  const ico={ok:'✅',warn:'🟡',todo:'⚪',idle:'·'}, col={ok:'#10B981',warn:'#FBBF24',todo:'#9ca3af',idle:'#6b7280'};
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:16px">${d.series.map(s=>`<button onclick="weekGo('${esc(s.go)}')" style="text-align:left;cursor:pointer;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid ${s.state==='ok'?'rgba(16,185,129,0.3)':s.state==='warn'?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.1)'};color:#e5e7eb"><div style="font-size:13px;font-weight:800">${ico[s.state]} ${esc(s.label)}</div><div style="font-size:12px;color:${col[s.state]};margin-top:4px">${esc(s.text)}</div></button>`).join('')}</div>`;
+}
+// What the automatic steps changed, newest first, each with a way back.
+function weekAutoCard(d){
+  const list=d.auto||[]; if(!list.length) return '';
+  return `<details class="card" style="padding:12px 16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">🤖 What the automation did <span style="font-size:12px;font-weight:600;color:#9ca3af">${list.length}</span></summary>
+    ${list.slice(0,20).map(e=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><div style="flex:1;min-width:0"><b>${esc(e.series)}</b> · ${esc(e.summary)}<div style="color:#6b7280">${esc(new Date(e.ts).toLocaleString(undefined,{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.by)}${e.undone?' · undone':''}</div></div>${e.undone?'':`<button onclick="weekUndo('${esc(e.id)}')" style="flex:none;padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e5e7eb;font-size:12px;cursor:pointer">Undo</button>`}</div>`).join('')}</details>`;
+}
+async function weekUndo(id){
+  if(!confirm('Put things back as they were before this step? Anything changed by hand since then on the same riders, teams or matches will be overwritten.')) return;
+  try{ const r=await fetch('/api/auto/undo',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ id })}); const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); }catch(e){ alert(e.message); return; }
+  zrlReady=null; try{ zrlData=null; }catch(e){} loadWeek();
 }
 
 
