@@ -2412,7 +2412,7 @@ function tttPlanCard(d){
     const sm=c.summary;
     body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">This would place <b style="color:#e5e7eb">${sm.placed}</b> rider${sm.placed===1?'':'s'}${sm.placed?` (${sm.preferred} in a team they asked for)`:''}, balancing the teams by vELO and keeping riders in the teams they chose where there is room. Nothing changes until you apply it, and you can move anyone afterwards.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:8px">${d.week.teams.filter(t=>by[t.id]).map(t=>`<div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px"><div style="font-weight:700;font-size:13px">${esc(t.name)} <span style="color:#6b7280;font-weight:400">+${by[t.id].length}</span></div><div style="font-size:12px;color:#9ca3af">${by[t.id].map(esc).join(', ')}</div></div>`).join('')}</div>
-      ${sm.outside.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">⚠️ Outside their choices (their teams were full): ${esc(sm.outside.join(', '))}</div>`:''}${sm.unplaced.length?`<div style="font-size:12px;color:#f87171;margin-bottom:6px">❌ Could not fit (all teams full): ${esc(sm.unplaced.join(', '))}</div>`:''}${sm.short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">Under 4 riders: ${esc(sm.short.join(', '))}</div>`:''}
+      ${sm.outside.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">⚠️ Outside their choices (their teams were full): ${esc(sm.outside.join(', '))}</div>`:''}${sm.unplaced.length?`<div style="font-size:12px;color:#f87171;margin-bottom:6px">❌ Could not fit (all teams full): ${esc(sm.unplaced.join(', '))}</div>`:''}${sm.short.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">Under 4 riders: ${esc(sm.short.join(', '))}</div>`:''}${sm.merged&&sm.merged.length?`<div style="font-size:12px;color:#9ca3af;margin-bottom:6px">↔️ Folded out of a team that would have been too small: ${esc(sm.merged.join(', '))}</div>`:''}${(c.captains||[]).length?`<div style="font-size:12px;color:#9ca3af;margin-bottom:6px">⭐ Captains (strongest volunteer): ${c.captains.map(x=>esc(tn[x.team]||x.team)+': '+esc(x.name)).join(', ')}</div>`:''}${sm.noCaptain&&sm.noCaptain.length?`<div style="font-size:12px;color:#FBBF24;margin-bottom:6px">⭐ No volunteer captain: ${esc(sm.noCaptain.join(', '))}</div>`:''}
       <button onclick="tttPlanApply()" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">✅ Apply this allocation</button> `;
   }
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(16,185,129,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">✨ Proposed allocation</div>${body}<button onclick="tttPlan=null;renderTtt()" style="${btn}">${c.plan&&c.plan.length?'Cancel':'Close'}</button></div>`;
@@ -2432,6 +2432,7 @@ function tttStaffPanel(d){
         <button onclick="tttWrite('/api/ttt/status',{published:${!w.published}})" style="${prim};background:${w.published?'rgba(255,255,255,0.05)':'rgba(0,212,255,0.12)'};color:${w.published?'#e5e7eb':'#00D4FF'};border:1px solid ${w.published?'rgba(255,255,255,0.18)':'rgba(0,212,255,0.4)'}">${w.published?'🙈 Unpublish line-ups':'📢 Publish line-ups'}</button>
       </div>
     </div>
+    <label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:10px"><input type="checkbox" ${w.autoAllocate!==false?'checked':''} onchange="tttWrite('/api/ttt/auto-settings',{allocate:this.checked})"> <b>Automatic:</b> suggest the teams (and volunteer captains) the moment sign-ups close, then tell the admin channel what is left. You check and publish.</label>
     ${tttImportCard()}${tttBoardCard()}${tttPlanCard(d)}${tttSummaryBox()}
     ${tttEditingTeams?tttTeamsEditor(w):''}
     ${d.signups.length?tttBoard(d):`<div style="font-size:13px;color:#9ca3af;padding:14px 0">No sign-ups yet. Riders sign up on this page, or press <b>Import from the sheet</b> to bring in the Google Form responses.</div>`}
@@ -4002,8 +4003,40 @@ function zrlReadyCard(){
   return `<details class="card" ${c.ready?'':'open'} style="padding:14px 16px;margin-bottom:14px;border-color:${c.ready?'rgba(16,185,129,0.3)':'rgba(251,191,36,0.3)'}">
     <summary style="cursor:pointer;font-size:14px;font-weight:800">${c.ready?'✅':'🏁'} ${esc(c.round)} readiness <span style="color:${col}">${c.done} of ${c.total}</span> <span style="font-size:12px;font-weight:400;color:#9ca3af">${when}</span></summary>
     <div style="height:6px;border-radius:99px;background:rgba(255,255,255,0.08);margin:10px 0"><div style="height:6px;border-radius:99px;width:${pct}%;background:${col}"></div></div>
-    ${c.items.map(i=>`<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><span>${i.state==='ok'?'✅':'⬜'}</span><div style="flex:1"><b>${esc(i.title)}</b><div style="font-size:12px;color:${i.state==='ok'?'#6b7280':'#FBBF24'}">${esc(i.detail)}</div></div>${i.state==='ok'?'':`<button onclick="zrlStaffGo('${i.go}')" style="padding:3px 10px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">Fix</button>`}</div>`).join('')}
+    ${c.items.map(i=>`<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:13px"><span>${i.state==='ok'?'✅':'⬜'}</span><div style="flex:1"><b>${esc(i.title)}</b><div style="font-size:12px;color:${i.state==='ok'?'#6b7280':'#FBBF24'}">${esc(i.detail)}</div></div>${i.state==='ok'?'':`${i.fix?`<button onclick="zrlFixPreview(['${i.id}'])" title="Works it out and shows you before changing anything" style="padding:3px 10px;font-size:12px;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.45);border-radius:6px;cursor:pointer">Fix it</button> `:''}<button onclick="zrlStaffGo('${i.go}')" style="padding:3px 10px;font-size:12px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4);border-radius:6px;cursor:pointer">${i.fix?'Open':'Fix'}</button>`}</div>`).join('')}
+    ${zrlFixPanel()}
+    ${c.items.some(i=>i.fix)?`<button onclick="zrlFixPreview(null)" style="margin:8px 8px 0 0;padding:5px 12px;font-size:12px;font-weight:700;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.45);border-radius:6px;cursor:pointer">✨ Fix everything I can</button>`:''}
+    <div style="margin-top:10px;font-size:12px;color:#9ca3af"><b>Automatic:</b>
+      <label style="margin-left:8px"><input type="checkbox" ${c.auto&&c.auto.place?'checked':''} onchange="zrlAutoSet('place',this.checked)"> place riders, volunteer captains and race times when sign-ups close</label>
+      <label style="margin-left:8px"><input type="checkbox" ${c.auto&&c.auto.lineups?'checked':''} onchange="zrlAutoSet('lineups',this.checked)"> fill line-ups from answers 2 days before a race</label></div>
     <button onclick="zrlReady=null;renderZrl2()" style="margin-top:8px;padding:4px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Refresh</button></details>`;
+}
+let zrlFixPlan=null;
+function zrlFixPanel(){
+  const f=zrlFixPlan; if(!f) return '';
+  const left=l=>l&&l.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24"><b>Still needs a person (${l.length}):</b><ul style="margin:4px 0 0 18px">${l.slice(0,10).map(x=>`<li>${esc(x.title)}: ${esc(x.detail)}</li>`).join('')}${l.length>10?'<li>…and more</li>':''}</ul></div>`:'';
+  if(f.done){ const d=f.done; return `<div style="margin:10px 0;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);font-size:12px"><b style="color:#34d399">Done.</b> ${d.steps.length?d.steps.map(s=>esc(s.title)+': '+s.count).join(' · '):'Nothing needed changing.'}${left(d.left)}<div><button onclick="zrlFixPlan=null;renderZrl2()" style="margin-top:8px;padding:3px 10px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Close</button></div></div>`; }
+  const p=f.plan;
+  return `<div style="margin:10px 0;padding:10px 12px;border-radius:8px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.25);font-size:12px">
+    ${p.total?`<b>${p.total} change${p.total===1?'':'s'} ready.</b> Nothing happens until you press Apply.${p.steps.map(s=>`<div style="margin-top:8px"><b>${esc(s.title)}</b> (${s.count})<div style="color:#9ca3af">${s.lines.map(esc).join('<br>')}${s.more?'<br>…and '+s.more+' more':''}</div></div>`).join('')}`:'<b>Nothing can be fixed automatically here.</b>'}${left(p.left)}
+    <div style="margin-top:10px">${p.total?`<button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlFixApply()">Apply ${p.total} change${p.total===1?'':'s'}</button> `:''}<button onclick="zrlFixPlan=null;renderZrl2()" style="padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Cancel</button></div></div>`;
+}
+async function zrlFixPreview(only){
+  let res,d; try{ res=await fetch('/api/zrl/fix',{method:'POST',headers:tttHeaders(),body:JSON.stringify(only?{only}:{})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  zrlFixPlan={ only, plan:d.plan }; renderZrl2();
+}
+async function zrlFixApply(){
+  const f=zrlFixPlan; if(!f||!f.plan) return;
+  let res,d; try{ res=await fetch('/api/zrl/fix',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ ...(f.only?{only:f.only}:{}), apply:true })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
+  zrlFixPlan={ done:d.applied }; zrlReady=null; zrlPlan=null; loadZrl();
+}
+async function zrlAutoSet(what,on){
+  const cur=(zrlReady&&zrlReady.auto)||{ place:true, lineups:true };
+  const body={ place:cur.place, lineups:cur.lineups }; body[what]=on;
+  try{ await fetch('/api/zrl/auto-settings',{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)}); }catch(e){ alert('Could not save that.'); }
+  zrlReady=null; renderZrl2();
 }
 let zrlLog=null, zrlLogQ='';
 function zrlLogRefilter(){ const el=document.getElementById('zrl-log-body'); if(!el) return; const tmp=document.createElement('div'); tmp.innerHTML=zrlLogCard(); const n=tmp.querySelector('#zrl-log-body'); if(n) el.innerHTML=n.innerHTML; }
