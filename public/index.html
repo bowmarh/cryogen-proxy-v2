@@ -2528,7 +2528,10 @@ async function loadLadder(){
 }
 async function ladderPost(path,body){
   let res,d; try{ res=await fetch('/api/ladder/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify({ team:ladderTeam, ...(body||{}) })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
-  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  if(!res.ok){
+    if(res.status===409&&/one race a team a day/.test(d.error||'')&&!(body&&body.force)&&confirm(d.error+'\n\nSave it anyway?')) return ladderPost(path,{ ...(body||{}), force:true });
+    alert(d.error||('Request failed ('+res.status+')')); return false;
+  }
   if(d.matches){ ladder=d; ladderTeam=d.team.id; }
   renderLadder(); return d;
 }
@@ -2588,14 +2591,15 @@ function ladderMatchCard(m,open){
       <span style="font-size:11px;font-weight:700;color:${status[1]}">${status[0]}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
     <div style="padding:0 14px 14px">
       <div style="font-size:12px;color:#9ca3af">${m.challenger==='us'?'We challenged, so we choose the route.':'They challenged us: they choose the route.'}${m.at?` · <b style="color:#e5e7eb">${esc(ladderWhen(m.at))}</b>`:' · date and time still to agree on Discord with their captain'}</div>
-      ${route?`<div style="font-size:13px;margin-top:4px">🗺️ ${esc(route)}</div>`:''}
+      ${route?`<div style="font-size:13px;margin-top:4px">🗺️ ${esc(route)}${m.powerUps?' · ⚡ '+esc(m.powerUps):''}</div>`:''}
+      ${staff&&(m.routeWarnings||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">⚠️ ${m.routeWarnings.map(esc).join(' ')}</div>`:''}${staff&&(m.sameDay||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">⚠️ Another match the same day (v ${m.sameDay.map(esc).join(', ')}): the ladder allows one race a team a day.</div>`:''}
       <div style="margin-top:4px">${link}</div>
       ${m.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(m.notes)}</div>`:''}
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${(m.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:4px 0">⚠️ At the same time as another team: ${m.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+' v '+esc(c.opponent)+')').join(', ')}</div>`:''}${result}
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 2px">Our five</div>${lineup}${m.reserveInfo?`<div style="font-size:12px;color:#9ca3af;margin:2px 0">Reserve: <b style="color:#e5e7eb">${esc(m.reserveInfo.name)}</b> ${ladderCatBadge(m.reserveInfo.cat)}</div>`:''}${(m.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:4px 0">⚠️ At the same time as another team: ${m.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+' v '+esc(c.opponent)+')').join(', ')}</div>`:''}${result}
       ${m.upcoming?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you ride? <span style="font-weight:400;text-transform:none;color:#9ca3af">${m.counts.yes} yes · ${m.counts.maybe} maybe · ${m.counts.no} no</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:'<div style="font-size:12px;color:#6b7280">Only riders on the ladder roster answer. Ask the captains to add you.</div>'}`:''}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('ladder-'+m.id,waLadderText(m),'Share')}
-        ${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
+        ${m.upcoming&&m.status!=='challenge'?`<button onclick="ladderAuto('${esc(m.id)}')" title="Picks the strongest legal five from the riders' answers, plus a reserve, and saves it" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick it for me</button>`:''}${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
         ${m.lineup&&m.lineup.length===L.lineup&&m.status!=='cancelled'?`<button onclick="ladderResultOpen('${esc(m.id)}')" style="${btn}">🏆 ${m.result?'Edit':'Enter'} result</button>`:''}
         ${m.result?`<button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('ladder-res-'+m.id,waLadderResultText(m),'Share result')}`:''}
         <button onclick="ladderFormOpen('${esc(m.id)}')" style="${btn}">✏️ Edit</button>
@@ -2635,6 +2639,12 @@ async function ladderSuggest(id){
   if(!res.ok){ ladderBuild.msg=d.error||'No suggestion.'; renderLadder(); return; }
   ladderBuild.picked=new Set(d.zwids); ladderBuild.msg='Suggested: the strongest legal five by vELO rating, leaving out anyone who said no. Change anyone you like, then save.'; renderLadder();
 }
+async function ladderAuto(id){
+  const d=await ladderPost('auto-lineup',{ match:id }); if(!d) return;
+  const m=d.matches.find(x=>x.id===id); ladderOpen.add(id); renderLadder();
+  if(m&&m.reserveInfo) { /* the card now shows the five and the reserve */ }
+}
+async function ladderAutoSet(on){ await ladderPost('meta',{ auto:on }); }
 async function ladderBuildSave(id){ if(await ladderPost('lineup',{ match:id, zwids:[...ladderBuild.picked] })) ladderBuild=null, renderLadder(); }
 function ladderResultOpen(id){ ladderResult={ match:id }; ladderBuild=null; ladderOpen.add(id); renderLadder(); }
 function ladderResultForm(m){
@@ -2658,7 +2668,7 @@ async function ladderResultSave(id){
 function ladderFormOpen(id){
   const m=id==='new'?null:ladder.matches.find(x=>x.id===id);
   const p=m&&m.at?new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(m.at)).reduce((o,x)=>(o[x.type]=x.value,o),{}):null;
-  ladderForm={ id:m&&m.id, opponent:m?m.opponent:'', challenger:m?m.challenger:'us', routeName:m?m.route.name:'', routeKm:m&&m.route.km||'', routeMinutes:m&&m.route.minutes||45, date:p?`${p.year}-${p.month}-${p.day}`:'', time:p?`${p.hour}:${p.minute}`:'', eventLink:m&&m.eventLink!=='hidden'?m.eventLink:'', notes:m?m.notes:'' };
+  ladderForm={ id:m&&m.id, opponent:m?m.opponent:'', challenger:m?m.challenger:'us', routeName:m?m.route.name:'', routeKm:m&&m.route.km||'', routeMinutes:m&&m.route.minutes||45, powerUps:m?m.powerUps||'':'', date:p?`${p.year}-${p.month}-${p.day}`:'', time:p?`${p.hour}:${p.minute}`:'', eventLink:m&&m.eventLink!=='hidden'?m.eventLink:'', notes:m?m.notes:'' };
   renderLadder();
 }
 function ladderFormCard(){
@@ -2672,6 +2682,7 @@ function ladderFormCard(){
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
       <input id="lf-route" ${inp}width:200px" placeholder="Route (15-25 km, about 45 min)" maxlength="80" value="${esc(f.routeName)}"/>
       <input id="lf-km" ${inp}width:80px" placeholder="km" inputmode="decimal" value="${esc(f.routeKm)}"/><input id="lf-min" ${inp}width:80px" placeholder="minutes" inputmode="numeric" value="${esc(f.routeMinutes)}"/>
+      <input id="lf-pu" ${inp}width:200px" placeholder="1 or 2 power-ups (Feather…)" maxlength="80" value="${esc(f.powerUps||'')}"/>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
       <input id="lf-date" type="date" ${inp}width:150px" value="${esc(f.date)}"/><input id="lf-time" ${inp}width:80px" placeholder="19:30" maxlength="5" value="${esc(f.time)}"/><span style="font-size:11px;color:#6b7280">UK time</span>
@@ -2683,7 +2694,7 @@ function ladderFormCard(){
 }
 async function ladderFormSave(){
   const g=id=>document.getElementById(id).value.trim(), f=ladderForm;
-  const ok=await ladderPost('match',{ id:f.id, opponent:g('lf-opp'), challenger:g('lf-ch'), routeName:g('lf-route'), routeKm:g('lf-km'), routeMinutes:g('lf-min'), date:g('lf-date'), time:g('lf-time'), eventLink:g('lf-link'), notes:g('lf-notes'), clearTime:!g('lf-date')&&!g('lf-time') });
+  const ok=await ladderPost('match',{ id:f.id, opponent:g('lf-opp'), challenger:g('lf-ch'), routeName:g('lf-route'), routeKm:g('lf-km'), routeMinutes:g('lf-min'), powerUps:g('lf-pu'), date:g('lf-date'), time:g('lf-time'), eventLink:g('lf-link'), notes:g('lf-notes'), clearTime:!g('lf-date')&&!g('lf-time') });
   if(ok){ ladderForm=null; renderLadder(); }
 }
 function ladderRosterCard(){
@@ -2716,6 +2727,10 @@ function renderLadder(){
   el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
     ${staff?`<button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button>`:''}</div>
+    ${ladder.challengeRange?`<div style="font-size:12px;color:#9ca3af;margin:-6px 0 10px">🎯 You can challenge rungs <b style="color:#e5e7eb">${ladder.challengeRange.from}${ladder.challengeRange.to>ladder.challengeRange.from?' to '+ladder.challengeRange.to:''}</b> (up to seven above you). ${esc(ladder.challengeRange.note)}</div>`:''}
+    ${staff&&ladder.activity&&['warn','zombie','removed'].includes(ladder.activity.state)?`<div class="card" style="padding:10px 14px;margin-bottom:10px;font-size:13px;border-color:rgba(251,191,36,0.4);color:#FBBF24">🧟 ${ladder.activity.state==='warn'?`No race for ${ladder.activity.days} days. At 21 the team counts as a zombie and at 35 it is removed: get a challenge out.`:ladder.activity.state==='zombie'?`No race for ${ladder.activity.days} days: a zombie team. At 35 days the ladder removes it.`:`No race for ${ladder.activity.days} days: the ladder may already have removed this team.`}</div>`:''}
+    ${staff&&(ladder.shared||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:-4px 0 10px">⚠️ On more than one ladder roster (the league locks a rider to one team a season): ${ladder.shared.map(x=>esc(x.name)+' (also '+x.teams.map(esc).join(', ')+')').join('; ')}.</div>`:''}
+    ${staff?`<label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:10px"><input type="checkbox" ${ladder.meta&&ladder.meta.auto===false?'':'checked'} onchange="ladderAutoSet(this.checked)"> <b>Automatic:</b> pick the line-up and a reserve three days before a match, and replace a starter who says they can't ride. The admin channel is told each time.</label>`:''}
     ${ladderFormCard()}
     ${up.length?up.map((m,i)=>ladderMatchCard(m,ladderOpen.has(m.id)||(i===0&&!ladderOpen.size&&!past.some(p=>ladderOpen.has(p.id))))).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No challenge is open.'+(staff?' Press <b>+ New challenge</b> when a team above you accepts.':'')+'</div>'}
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 8px">Past matches</div>${past.map(m=>ladderMatchCard(m,ladderOpen.has(m.id))).join('')}`:''}
@@ -2724,7 +2739,7 @@ function renderLadder(){
 }
 async function ladderSetRung(){ const v=prompt('Which rung of the ladder is the club on? (leave empty to clear)',(ladder.meta&&ladder.meta.rung)||''); if(v===null) return; await ladderPost('meta',{ rung:v.trim() }); }
 
-// ── DIRT Racing Series (DRS): squad of up to ten, fixed calendar, best four score, vELO buffer ─────────
+// ── DIRT Racing Series (DRS): squad of eight, fixed calendar, best four score, vELO buffer ─────────
 let drsTeam='', drs=null, drsErr='', drsOpen=new Set(), drsSetup=false, drsStageForm=null, drsRoles=null, drsResult=null;
 async function loadDrs(){
   try{
@@ -2738,7 +2753,10 @@ async function loadDrs(){
 }
 async function drsPost(path,body){
   let res,d; try{ res=await fetch('/api/drs/'+path,{method:'POST',headers:tttHeaders(),body:JSON.stringify({ team:drsTeam, ...(body||{}) })}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return false; }
-  if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return false; }
+  if(!res.ok){
+    if(res.status===409&&/locked/.test(d.error||'')&&!(body&&body.force)&&confirm(d.error+'\n\nGo ahead anyway?')) return drsPost(path,{ ...(body||{}), force:true });
+    alert(d.error||('Request failed ('+res.status+')')); return false;
+  }
   if(d.staff!==undefined){ drs=d; drsTeam=d.team.id; }
   renderDrs(); return d;
 }
@@ -2794,24 +2812,35 @@ function drsStageCard(st,open){
     <span style="font-size:11px;font-weight:700;color:${st.status==='played'?'#10B981':st.status==='cancelled'?'#6b7280':'#FBBF24'}">${st.status==='played'?'Played':st.status==='cancelled'?'Cancelled':'Upcoming'}</span><span style="color:#6b7280;font-size:11px">▾</span></summary>
     <div style="padding:0 14px 14px"><div style="font-size:13px"><b>${esc(drsWhen(st.startMs))}</b> <span style="color:#6b7280">· ${esc(s.slot||'squad slot')}</span></div><div style="margin-top:4px">${link}</div>${lock}
       ${st.notes?`<div style="font-size:12px;color:#9ca3af;margin-top:4px">${esc(st.notes)}</div>`:''}
-      <div style="font-size:12px;color:#d1d5db;margin-top:8px">💡 ${esc(st.tactics)} No PowerUps: pure racecraft and drafting.</div>
+      <div style="font-size:12px;color:#d1d5db;margin-top:8px">💡 ${esc(st.tactics)} One power-up leaves the pen with you for the whole race: keep it for the finish or a key segment.</div>
       ${(st.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⚠️ At the same time as another team's stage: ${st.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+', stage '+esc(c.stage)+')').join(', ')}</div>`:''}
+      ${up?drsAnswerBlock(st,staff):''}
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
       ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>esc(names[z])).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>esc(names[z])).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
-        ${up?`<button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
+        ${up?`<button onclick="drsAutoRoles('${esc(st.id)}')" title="From the riders' answers, keeping anyone near the vELO cap out of the scoring four" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
         <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
         <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
       ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}${drsResult&&drsResult.stage===st.id?drsResultForm(st):''}`:''}</div></details>`;
 }
 function drsToggle(id,open){ if(open) drsOpen.add(id); else drsOpen.delete(id); }
+// Squad riders say whether they can race a stage; staff see who said what and whether enough can race to score.
+function drsAnswerBlock(st,staff){
+  const inSquad=drs.me&&drs.me.inSquad, c=st.counts||{yes:0,maybe:0,no:0,none:0};
+  const mine=inSquad?['yes','maybe','no'].map(v=>`<button onclick="drsPost('availability',{stage:'${esc(st.id)}',status:'${st.myAvailability===v?'':v}'})" style="padding:7px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${st.myAvailability===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${st.myAvailability===v?'rgba(0,212,255,0.18)':'transparent'};color:${st.myAvailability===v?'#00D4FF':'#d1d5db'}">${{yes:'✅ I can race',maybe:'🤔 Maybe',no:'❌ I can\'t'}[v]}</button>`).join(''):'';
+  const names=Object.fromEntries(drs.squad.map(r=>[r.zwid,r.name]));
+  const who=staff&&st.availability?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">${Object.entries(st.availability).map(([z,a])=>`${{yes:'✅',maybe:'🤔',no:'❌','':'·'}[a]} ${esc(names[z]||z)}`).join(' &nbsp; ')}</div>`:'';
+  return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you race? <span style="font-weight:400;text-transform:none;color:#9ca3af">${c.yes} yes · ${c.maybe} maybe · ${c.no} no · ${c.none} not answered</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:''}${who}${st.dnqRisk&&staff?`<div style="font-size:12px;color:#f87171;margin-top:6px">⚠️ Fewer than ${drs.season.scorers} riders can race: the team would not score.</div>`:''}`;
+}
+async function drsAutoRoles(id){ if(await drsPost('roles',{ stage:id, auto:true })){ drsOpen.add(id); renderDrs(); } }
+async function drsAutoSet(on){ await drsPost('auto',{ on }); }
 function drsRolesOpen(id){ const st=drs.stages.find(x=>x.id===id), has=Object.values(st.roles||{}).includes('scorer'); drsRoles={ stage:id, picked:new Set(has?Object.keys(st.roles).filter(z=>st.roles[z]==='scorer'):st.suggestedScorers) }; drsResult=null; drsOpen.add(id); renderDrs(); }
 function drsRolesForm(st){
   const s=drs.season, picked=drsRoles.picked, btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
   return `<div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Scoring ${s.scorers} <span style="font-weight:400;color:#9ca3af">${picked.size} picked</span></div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Only the best ${s.scorers} of our finishers score, so the others work for them: closing gaps, pacing climbs and leading out. Suggested: the ${s.scorers} highest vELO.</div>
-    ${drs.squad.map(r=>{ const on=picked.has(r.zwid), blocked=!on&&picked.size>=s.scorers; return `<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;${blocked?'opacity:.4':''}"><input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="drsRoleTick('${esc(r.zwid)}',this.checked)"/><span style="flex:1;font-size:13px;font-weight:600">${esc(r.name)}</span><span style="font-size:11px;color:#6b7280">${r.rating||''}</span></label>`; }).join('')}
+    ${drs.squad.map(r=>{ const on=picked.has(r.zwid), blocked=!on&&picked.size>=s.scorers; return `<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;${blocked?'opacity:.4':''}"><input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="drsRoleTick('${esc(r.zwid)}',this.checked)"/><span style="flex:1;font-size:13px;font-weight:600">${esc(r.name)}</span>${['danger','breach','entry-over'].includes(r.state)?'<span title="Close to the vELO cap: a big finish could force an upgrade" style="font-size:11px;color:#FBBF24">⚠️ near cap</span>':''}<span style="font-size:11px;color:#6b7280">${r.rating||''}</span><span title="Their answer" style="font-size:12px">${{yes:'✅',maybe:'🤔',no:'❌','':'·'}[((st.availability||{})[r.zwid])||'']}</span></label>`; }).join('')}
     <div style="display:flex;gap:6px;margin-top:8px"><button onclick="drsRolesSave('${esc(st.id)}')" style="${btn};background:rgba(16,185,129,0.14);color:#10B981;border-color:rgba(16,185,129,0.4)">Save the plan</button><button onclick="drsRoles=null;renderDrs()" style="${btn}">Close</button></div></div>`;
 }
 function drsRoleTick(z,on){ if(on) drsRoles.picked.add(z); else drsRoles.picked.delete(z); renderDrs(); }
@@ -2858,7 +2887,8 @@ function drsSetupCard(){
       ${lab('Time slot name')}<input id="dz-slot" ${inp}width:140px" maxlength="60" placeholder="Tuesday EU" value="${esc(s.slot||'')}"/></label>
       ${lab('Start time')}<input id="dz-time" ${inp}width:80px" maxlength="5" placeholder="19:30" value="${esc(s.time||'19:30')}"/></label>
       ${lab('Time zone')}<input id="dz-tz" ${inp}width:140px" placeholder="Europe/London" value="${esc(s.tz||'Europe/London')}"/></label></div>
-    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of up to ${s.squadMax||10}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:8px">The DRS rules are built in: squad of ${s.squadMax||8}, the best ${s.scorers||4} finishers score, ${s.buffer||35} points of buffer above the threshold, alerts within ${s.alertWithin||10} points of the cap, and a ${s.spikeLimit||50}-point jump is flagged. Change them in the API if the series changes.</div>
+    ${drs.season?`<label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:8px"><input type="checkbox" ${s.autoRoles===false?'':'checked'} onchange="drsAutoSet(this.checked)"> <b>Automatic:</b> two days before a stage, pick the scoring four from the riders' answers and the vELO buffer, and post the audit to the admin channel.</label>`:''}
     <div style="display:flex;gap:6px"><button onclick="drsSetupSave()" style="${btn};background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save</button>${drs.season?`<button onclick="drsSetup=false;renderDrs()" style="${btn}">Close</button>`:''}</div></div>`;
 }
 async function drsSetupSave(){
@@ -2871,7 +2901,7 @@ async function drsCalendarPaste(){
 }
 function drsHelpCard(){
   return `<details class="card" style="padding:12px 16px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">❓ How the DIRT Racing Series works</summary><ol style="font-size:13px;color:#d1d5db;margin:8px 0 0 18px;padding:0;line-height:1.7">
-    <li><b>Squad:</b> up to ten riders in a vELO division. Each must be at or below the division's threshold before their first race.</li>
+    <li><b>Squad:</b> eight riders in a vELO division (locked in once they have started a stage). Each must be at or below the division's threshold before their first race.</li>
     <li><b>Calendar:</b> a fixed run of Tuesday stages (scratch, points, individual time trial and team time trial), all in the squad's time slot for the season.</li>
     <li><b>Lock:</b> the squad must be final in the DRS portal 24 hours before a stage, so Race Control can run its checks. You get a reminder, and the stage card shows the lock time.</li>
     <li><b>Race:</b> all eight can race but only the best four finishers score. Name the scoring four; the rest ride support. No PowerUps.</li>

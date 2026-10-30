@@ -150,6 +150,7 @@ test('posting goes to the ladder channel with the line-up and the private link, 
 
 test('the scheduled tick warns about a missing line-up, reminds the day before and two hours before, each once', async () => {
   await addAll(5);
+  await post('meta', { auto: false });   // this test is about the warning; automatic picking has its own tests
   const tick = () => app.call('GET', '/api/cron/tick', { headers: { Authorization: 'Bearer cron-secret' } });
   const t = inHours(20);
   const m = await newMatch({ date: t.date, time: t.time, eventLink: 'https://www.zwift.com/events/view/5' });

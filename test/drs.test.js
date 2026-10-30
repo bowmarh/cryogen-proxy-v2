@@ -1,5 +1,5 @@
 'use strict';
-// DIRT Racing Series: a squad of ten in a vELO division, a fixed calendar, only the best four finishers score, the 35-point buffer above the
+// DIRT Racing Series: a squad of eight in a vELO division, a fixed calendar, only the best four finishers score, the 35-point buffer above the
 // division threshold, and the reminders before the 24-hour lock.
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -46,10 +46,10 @@ test('the season is validated and the cap is the threshold plus the buffer', asy
   assert.equal((await post('season', { ...SEASON, time: '7pm' })).status, 400);
   assert.equal((await post('season', { ...SEASON, tz: 'Mars/Base' })).status, 400);
   const s = (await post('season', SEASON)).body.season;
-  assert.deepEqual([s.threshold, s.buffer, s.cap, s.squadMax, s.scorers, s.alertWithin, s.spikeLimit], [1500, 35, 1535, 10, 4, 10, 50]);
+  assert.deepEqual([s.threshold, s.buffer, s.cap, s.squadMax, s.scorers, s.alertWithin, s.spikeLimit], [1500, 35, 1535, 8, 4, 10, 50]);
 });
 
-test('the squad holds ten, and a rider above the threshold cannot be nominated before their first race ', async () => {
+test('the squad holds eight, and a rider above the threshold cannot be nominated before their first race ', async () => {
   await post('season', SEASON);
   for (const i of [0, 1, 2, 7, 8, 9]) assert.equal((await post('squad', { zwid: ID(i) })).status, 200);
   const over = await post('squad', { zwid: ID(5) });
@@ -58,10 +58,9 @@ test('the squad holds ten, and a rider above the threshold cannot be nominated b
   assert.equal((await post('squad', { zwid: ID(5), force: true })).status, 200, 'staff can force it');
   assert.equal((await post('squad', { zwid: ID(3), force: true })).status, 200);
   assert.equal((await post('squad', { zwid: ID(1) })).status, 200, 'already in: nothing changes');
-  for (const i of [4, 6]) assert.equal((await post('squad', { zwid: ID(i), force: true })).status, 200);   // now ten
   const full = await post('squad', { zwid: ID(10), name: 'Nobody' });
   assert.equal(full.status, 409);
-  assert.match(full.body.error, /full \(10 riders\)/);
+  assert.match(full.body.error, /full \(8 riders\)/);
   assert.equal((await post('squad', { zwid: '999999' })).status, 404, 'unknown riders are refused before the size check');
   await post('squad', { zwid: ID(9), remove: true });
   assert.equal((await post('squad', { zwid: 'x' })).status, 400);
@@ -127,8 +126,10 @@ test('the scoring four can be named for a stage; everyone else is support', asyn
   const roles = (await post('roles', { stage: st.id, scorers: [0, 1, 2, 3].map(ID) })).body.stages[0].roles;
   assert.deepEqual([roles[ID(0)], roles[ID(7)]], ['scorer', 'support']);
   const s = (await get()).body.stages[0];
-  assert.equal(s.suggestedScorers.length, 4, 'a suggestion: the four highest-rated');
-  assert.equal(s.suggestedScorers[0], ID(3), 'highest vELO first');
+  assert.equal(s.suggestedScorers.length, 4, 'a suggestion of four');
+  const near = (await get()).body.squad.find(r => r.zwid === ID(3));
+  assert.ok(['danger', 'entry-over', 'breach'].includes(near.state), 'the highest rated rider is at or near the cap');
+  assert.ok(!s.suggestedScorers.includes(ID(3)), 'so they are not put up to score when others are free');
 });
 
 test('posting a stage puts the time, private link, plan and squad in the DRS channel', async () => {
@@ -143,7 +144,8 @@ test('posting a stage puts the time, private link, plan and squad in the DRS cha
   assert.match(t, /Private event link:\*\* https:\/\/www\.zwift\.com\/events\/view\/9\?eventSecret=dd/);
   assert.match(t, /Scoring four:\*\* Dirt 3, Dirt 2, Dirt 1, Dirt 0/);
   assert.match(t, /Support:\*\* Dirt 7/);
-  assert.match(t, /No PowerUps/);
+  assert.match(t, /One power-up leaves the pen with you/);
+  assert.match(t, /Never change height or weight/);
   assert.equal((await post('post', { stage: st.id })).status, 429);
 });
 
