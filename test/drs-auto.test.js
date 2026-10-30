@@ -142,6 +142,7 @@ test('My week offers the Ladder and DIRT answers inline', async () => {
 
 test('a rating climbing towards the cap is forecast, shown on the squad row, and warned about once a week before it is in the alert zone', async () => {
   const st = await setup(24 * 14);   // a stage in two weeks
+  await post('result', { stage: st.id, results: { [ID(3)]: { pos: 5, pts: 96 } } });   // they have raced, so the buffer applies to them
   await post('stage', { type: 'scratch', date: ymd(Date.now() + 21 * 86400000) });
   await post('stage', { type: 'scratch', date: ymd(Date.now() + 28 * 86400000) });
   // Dirt 3 is 1520 (cap 1535); give them a climb of 10 a week over the last two weeks
@@ -151,7 +152,8 @@ test('a rating climbing towards the cap is forecast, shown on the squad row, and
   assert.ok(row.projected > 1535);
   const flat = (await get()).body.squad.find(r => r.zwid === ID(0));
   assert.equal(flat.forecast, ''); assert.equal(flat.stagesToCap, null);
-  assert.ok((await tick()).includes('drs-forecast'));
+  const ranF = await tick();
+  assert.ok(ranF.includes('drs-forecast'));
   assert.match(adminPosts().join('\n'), /Dirt 3.*climbing about 10 a week.*cap of 1535 is likely to be reached in about 2 stages/s);
   assert.ok(!(await tick()).includes('drs-forecast'), 'once a week');
   void st;
