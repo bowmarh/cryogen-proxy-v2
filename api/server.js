@@ -1585,7 +1585,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2519,6 +2519,7 @@ async function publicClub(now = Date.now()){
 // "Ask the club" (lib/assistant.js): plain words to a short plan from a fixed menu, shown to staff and run only when they confirm. Needs ANTHROPIC_API_KEY.
 const assistant = require('../lib/assistant')({ redis, HttpError, requireRole, adminReq: () => syncReq(), zrl, ladder, drs, autoLog });
 
+const lifecycle = require('../lib/lifecycle')({ redis, requireRole, tidy, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });   // members who have gone quiet
 const projection = require('../lib/projection')({ requireRole, adminReq: () => syncReq(), zrl, ladder, drs });   // the season outlook
 
 // New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
@@ -2728,6 +2729,9 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const lifecycleRoute = lifecycle.routes[`${req.method} ${pathname}`];
+  if (lifecycleRoute) return sendJSON(res, 200, await lifecycleRoute(req));
+
   const projectionRoute = projection.routes[`${req.method} ${pathname}`];
   if (projectionRoute) return sendJSON(res, 200, await projectionRoute(req));
 
