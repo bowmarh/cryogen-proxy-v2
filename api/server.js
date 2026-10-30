@@ -619,6 +619,17 @@ function parseResults(body, teams){
 const TTT_ROUTES = {
   'GET /api/ttt': async () => {},
 
+  // Staff: the TTT thank-you for the current season (or every week if no season is set): team wins, riders with the most podiums, and who rode the most weeks.
+  'GET /api/ttt/recognition': async req => { requireRole(req, ['admin', 'mod']); return tttRecognition(); },
+  'POST /api/ttt/post-recognition': async req => {
+    requireRole(req, ['admin', 'mod']);
+    const r = await tttRecognition();
+    const [claimed] = await redis([['HSETNX', TTT_KEYS.sent, `recognition:${Math.floor(Date.now() / 300000)}`, new Date().toISOString()]]);
+    if (!claimed) throw new HttpError(429, 'That was posted a moment ago.');
+    for (const m of r.messages) await discord('public', { content: m });
+    return { posted: r.messages.length };
+  },
+
   'POST /api/ttt/results': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const weekId = String(body.weekId || '');
@@ -1150,6 +1161,35 @@ function tttAllocation(data, velo){
   }
   commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
   return { placements, summary, commands, newCaptains, assign };
+}
+
+async function tttRecognition(){
+  const ids = (await redis([['HKEYS', TTT_KEYS.archive]]))[0] || [];
+  const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => { try { return x ? JSON.parse(x) : null; } catch (e) { return null; } }).filter(Boolean) : [];
+  const cur = await loadTtt();
+  if (cur.week && Object.keys(cur.week.results || {}).length) snaps.push({ week: cur.week, signups: cur.signups, assign: cur.assign });
+  const seasons = await loadSeasons(), since = seasons.length ? seasons[seasons.length - 1].start : '';
+  const weeks = snaps.filter(x => x.week && x.week.published && (!since || x.week.date >= since) && Object.keys(x.week.results || {}).length);
+  if (!weeks.length) throw new HttpError(409, 'No TTT week has results yet, so there is nothing to recognise.');
+  const wins = {}, riders = {};
+  for (const w of weeks) {
+    for (const t of w.week.teams) { const r = (w.week.results || {})[t.id]; if (r && r.position === 1) wins[t.name] = (wins[t.name] || 0) + 1; }
+    for (const sg of w.signups || []) {
+      const mine = ((w.assign || {})[sg.name.toLowerCase()] || []).filter(id => w.week.teams.some(t => t.id === id));
+      if (!mine.length) continue;
+      const r = riders[sg.name] = riders[sg.name] || { weeks: 0, podiums: 0 };
+      r.weeks++;
+      if (mine.some(id => { const x = (w.week.results || {})[id]; return x && x.position && x.position <= 3; })) r.podiums++;
+    }
+  }
+  const sections = [`📊 **${weeks.length} week${weeks.length === 1 ? '' : 's'} of team time trials.**`];
+  const winners = Object.entries(wins).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (winners.length) sections.push(`🏆 **Team wins**\n${winners.map(([n, c]) => `• ${discordEscape(n)}: ${c}`).join('\n')}`);
+  const pod = Object.entries(riders).filter(([, r]) => r.podiums > 0).sort((a, b) => b[1].podiums - a[1].podiums || a[0].localeCompare(b[0])).slice(0, 5);
+  if (pod.length) sections.push(`🥇 **On the podium with their team**\n${pod.map(([n, r]) => `• ${discordEscape(n)}: ${r.podiums} time${r.podiums === 1 ? '' : 's'}`).join('\n')}`);
+  const most = Object.entries(riders).sort((a, b) => b[1].weeks - a[1].weeks || a[0].localeCompare(b[0])).slice(0, 5);
+  if (most.length && weeks.length >= 2) sections.push(`🏁 **Most weeks ridden**\n${most.map(([n, r]) => `• ${discordEscape(n)}: ${r.weeks} of ${weeks.length}`).join('\n')}`);
+  return { weeks: weeks.length, messages: [`🎉 **TTT recognition${seasons.length ? ': ' + discordEscape(seasons[seasons.length - 1].name) : ''}**\nThank you to everyone who rode, captained and filled the teams.\n\n${sections.join('\n\n')}\n\n${SITE_URL} → 🏁 TTT Season`] };
 }
 
 // The undo for an allocation: each rider's team places and the week (captains) as they were.
