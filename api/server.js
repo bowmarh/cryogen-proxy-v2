@@ -2370,7 +2370,7 @@ async function handleComms(route, req, res){
 }
 
 // The staff rider profile (lib/profile.js): teams across the club, Discord link, and staff notes and details.
-const profile = require('../lib/profile')({ redis, HttpError, requireRole, memberFromRequest, text, zrl, ladder, drs, comms });
+const profile = require('../lib/profile')({ redis, HttpError, requireRole, memberFromRequest, text, zrl, ladder, drs, comms, tttArchive: TTT_KEYS.archive });
 async function handleProfile(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
