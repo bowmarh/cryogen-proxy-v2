@@ -1882,7 +1882,7 @@ const isStaffUI=()=>role==='admin'||role==='mod';
 function rn(name,id,key,hoverOnly){
   const n=esc(name==null?'':String(name));
   if(!isStaffUI()||(!id&&!key)||!name) return n;
-  return `<span class="rn" data-rid="${esc(String(id||''))}" data-rkey="${esc(String(key||''))}" ${hoverOnly?'data-h="1"':'title="Hover for a quick look, click for the profile"'}>${n}</span>`;
+  return `<span class="rname" data-rid="${esc(String(id||''))}" data-rkey="${esc(String(key||''))}" ${hoverOnly?'data-h="1"':'title="Hover for a quick look, click for the profile"'}>${n}</span>`;
 }
 function rnName(name,hoverOnly){
   if(!isStaffUI()||!name) return esc(name==null?'':String(name));
@@ -1890,10 +1890,10 @@ function rnName(name,hoverOnly){
   return r?rn(name,r.id,'',hoverOnly):esc(String(name));
 }
 (function(){
-  const st=document.createElement('style'); st.textContent='.rn{cursor:help;border-bottom:1px dotted rgba(0,212,255,0.45)}.rn:not([data-h]){cursor:pointer}'; document.head.appendChild(st);
-  document.addEventListener('mouseover',e=>{ const t=e.target.closest&&e.target.closest('.rn'); if(t) rpHover(t,t.dataset.rid,t.dataset.rkey); });
-  document.addEventListener('mouseout',e=>{ if(e.target.closest&&e.target.closest('.rn')) rpHoverHide(); });
-  document.addEventListener('click',e=>{ const t=e.target.closest&&e.target.closest('.rn'); if(t&&!t.dataset.h){ e.preventDefault(); openRider(t.dataset.rid,t.dataset.rkey); } });
+  const st=document.createElement('style'); st.textContent='.rname{cursor:help;border-bottom:1px dotted rgba(0,212,255,0.45)}.rname:not([data-h]){cursor:pointer}'; document.head.appendChild(st);
+  document.addEventListener('mouseover',e=>{ const t=e.target.closest&&e.target.closest('.rname'); if(t) rpHover(t,t.dataset.rid,t.dataset.rkey); });
+  document.addEventListener('mouseout',e=>{ if(e.target.closest&&e.target.closest('.rname')) rpHoverHide(); });
+  document.addEventListener('click',e=>{ const t=e.target.closest&&e.target.closest('.rname'); if(t&&!t.dataset.h){ e.preventDefault(); openRider(t.dataset.rid,t.dataset.rkey); } });
 })();
 async function riderSave(){
   const g=id=>document.getElementById(id).value.trim(); let by=''; try{ by=localStorage.getItem('cgStaffName')||''; }catch(e){}
@@ -2795,6 +2795,35 @@ async function ladderImport(id){
   const p=d.preview, lines=Object.entries(p.positions).sort((a,b)=>a[1]-b[1]).map(([z,pos])=>ordinal(pos)+' '+p.names[z]).join(', ');
   if(confirm('Result from Zwift: '+(p.won?'we win':'they win')+' '+p.ourPoints+'–'+p.theirPoints+'.\n'+lines+(p.lineupChanged?'\n(The five who raced differ from the line-up; it will be updated.)':'')+'\n\nSave it?')) await ladderPost('result-import',{ match:id, event, apply:true });
 }
+// Results from a pasted table (ZRL team results, DIRT stage points): shows what was understood first, and saves only when asked.
+let tableCfg=null;
+function tableImportOpen(cfg){
+  tableCfg=cfg;
+  let m=document.getElementById('tableModal');
+  if(!m){ m=document.createElement('div'); m.id='tableModal'; m.className='modal-bg'; m.onclick=e=>{ if(e.target===m) tableImportClose(); }; document.body.appendChild(m); }
+  m.style.display='flex'; tableImportRender('');
+}
+function tableImportClose(){ const m=document.getElementById('tableModal'); if(m) m.style.display='none'; tableCfg=null; }
+function tableImportRender(body){
+  const m=document.getElementById('tableModal'); if(!m||!tableCfg) return;
+  const btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  m.innerHTML=`<div class="card" style="max-width:640px;width:94%;max-height:90vh;overflow:auto;padding:18px 20px"><div style="font-size:16px;font-weight:800;margin-bottom:6px">${esc(tableCfg.title)}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${esc(tableCfg.hint)} The first row should name the columns. Nothing is saved until you press Save.</div>
+    <textarea id="table-text" class="inp" style="width:100%;min-height:150px;font-family:monospace;font-size:12px" placeholder="Paste the table here">${esc((document.getElementById('table-text')||{}).value||'')}</textarea>
+    <div style="margin:8px 0;display:flex;gap:8px"><button onclick="tableImportRun(false)" style="${btn}">Preview</button><button onclick="tableImportClose()" style="${btn}">Close</button></div>${body}</div>`;
+}
+async function tableImportRun(apply){
+  const csv=(document.getElementById('table-text')||{}).value||''; if(!csv.trim()){ alert('Paste the table first.'); return; }
+  let res,d; try{ res=await fetch(tableCfg.path,{method:'POST',headers:tttHeaders(),body:JSON.stringify({ ...tableCfg.extra, csv, apply })}); d=await res.json(); }catch(e){ alert('Could not reach the server.'); return; }
+  if(!res.ok){ tableImportRender(`<div style="font-size:12px;color:#f87171">${esc(d.error||'Could not read that.')}</div>`); return; }
+  if(apply){ const cb=tableCfg.done; tableImportClose(); if(cb) cb(); alert('Saved.'); return; }
+  const p=d.preview, rows=(p.rows||p.riders||[]);
+  tableImportRender(`<div style="font-size:12px;margin-top:6px"><b>${rows.length}</b> row${rows.length===1?'':'s'} understood:</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:4px">${rows.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:3px 6px">${esc(r.name)}</td><td style="padding:3px 6px;color:#9ca3af">${r.pos?'P'+esc(r.pos):''}</td><td style="padding:3px 6px;color:#9ca3af">${(r.points??r.pts)!=null&&(r.points??r.pts)!==''?esc(r.points??r.pts)+' pts':''}</td></tr>`).join('')}</table>
+    ${p.teamPoints!=null?`<div style="font-size:12px;margin-top:6px">Team points would be <b>${esc(p.teamPoints)}</b>${(p.scorers||[]).length?' from '+p.scorers.map(esc).join(', '):''}.</div>`:''}
+    ${(p.skipped||[]).length?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">Not ours, left out: ${p.skipped.map(esc).join(', ')}</div>`:''}${(p.missing||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">Not in the table: ${p.missing.map(esc).join(', ')}</div>`:''}
+    <button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px;margin-top:10px" onclick="tableImportRun(true)">Save these</button>`);
+}
 // The end-of-season thank-you for a series: shows what would be posted, and posts it when staff confirm.
 async function recognitionPost(base,team){
   let d;
@@ -3011,12 +3040,12 @@ function drsStageCard(st,open){
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
       ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>rn(names[z],z)+(staff&&st.scorerWhy&&st.scorerWhy[z]?` <span title="Why: ${esc(st.scorerWhy[z])}" style="font-size:11px;color:#6b7280;cursor:help">ⓘ</span>`:'')).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>rn(names[z],z)).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
       ${!staff&&drs.captain&&up?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)"><span style="font-size:11px;color:#9ca3af;align-self:center">👑 Captain tools</span>
-        <button onclick="drsAutoRoles('${esc(st.id)}')" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button><button onclick="drsImport('${esc(st.id)}')" style="${btn}">📥 Read places from Zwift</button></div>
+        <button onclick="drsAutoRoles('${esc(st.id)}')" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button><button onclick="drsImport('${esc(st.id)}')" style="${btn}">📥 Read places from Zwift</button><button onclick="drsPoints('${esc(st.id)}')" style="${btn}">📋 Paste a points table</button></div>
         ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}`:''}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
         ${up?`<button onclick="drsAutoRoles('${esc(st.id)}')" title="From the riders' answers, keeping anyone near the vELO cap out of the scoring four" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
-        <button onclick="drsImport('${esc(st.id)}')" title="Reads the squad's finishing places from ZwiftRacing.app" style="${btn}">📥 Read places from Zwift</button><button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
+        <button onclick="drsImport('${esc(st.id)}')" title="Reads the squad's finishing places from ZwiftRacing.app" style="${btn}">📥 Read places from Zwift</button><button onclick="drsPoints('${esc(st.id)}')" title="Stage points from a pasted table of the DRS results" style="${btn}">📋 Paste a points table</button><button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
         <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
       ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}${drsResult&&drsResult.stage===st.id?drsResultForm(st):''}`:''}</div></details>`;
 }
@@ -3036,6 +3065,8 @@ async function drsImport(id){
   const p=d.preview;
   if(confirm('Found '+p.riders.length+' of the squad: '+p.riders.map(r=>'P'+r.pos+' '+r.name+(r.scores?' ⭐':'')).join(', ')+'.'+(p.pointsPending?'\nPoints are not included: enter them from the DRS results afterwards.':'')+'\n\nSave these places?')) await drsPost('result-import',{ stage:id, event, apply:true });
 }
+function drsPoints(id){ tableImportOpen({ title:'Stage points', hint:'Paste the DRS results table (rider name or Zwift ID, position and/or points).', path:'/api/drs/points-import', extra:{ stage:id, team:drsTeam }, done:()=>{ drsOpen.add(id); loadDrsAgain(); } }); }
+function loadDrsAgain(){ fetch('/api/drs?team='+encodeURIComponent(drsTeam||''),{headers:tttHeaders()}).then(r=>r.json()).then(d=>{ if(d&&d.staff!==undefined){ drs=d; renderDrs(); } }).catch(()=>{}); }
 async function drsSetCaptains(){
   const cur=((drs.season&&drs.season.captains)||[]).join(', ');
   const v=prompt('Captains of this team: Zwift IDs of squad riders, separated by commas (up to three). They can pick the scoring four, answer for riders, post and read places for this team only.',cur); if(v===null) return;
@@ -4119,7 +4150,7 @@ function zrlResultsTab(d,st){
       <td style="padding:5px 4px"><select class="inp rx" onchange="zrlResAuto(this)" style="width:auto"><option value="">Normal</option><option value="ineligible" ${en.flag==='ineligible'?'selected':''}>Ineligible rider (−50%)</option><option value="dnq" ${en.flag==='dnq'?'selected':''}>DNQ (0)</option></select></td>
       <td style="padding:5px 4px"><input class="inp rs" type="number" min="0" step="any" placeholder="Points" value="${esc(en.pts??'')}" style="width:80px"/></td>
       <td style="padding:5px 0 5px 4px"><input class="inp rn" maxlength="80" placeholder="Note (staff only)" value="${esc(en.note||'')}" style="width:100%;min-width:110px"/></td><td style="padding:5px 0 5px 4px"><button title="Work out the team's rider points" onclick="zrlCalcOpen('${esc(t.id)}')" style="${btn}">🧮</button></td></tr>`; }).join('')||`<tr><td style="padding:10px;color:#6b7280;font-size:13px">No teams have riders yet.</td></tr>`}</tbody></table>
-    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button><button onclick="zrlPostRace()" style="${btn};margin:10px 0 0 8px">📣 Post race ${zrlResWeek+1} to Discord</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlRecogCard()}${zrlEvCard()}${zrlZrCard()}`;
+    <button onclick="zrlResultsSave()" style="${btn};margin-top:10px;background:rgba(0,212,255,0.12);color:#00D4FF;border-color:rgba(0,212,255,0.4)">Save race ${zrlResWeek+1}</button><button onclick="tableImportOpen({ title:'Team results for race '+(zrlResWeek+1), hint:'Paste the standings table (team, position and/or points, and how many teams started if you have it).', path:'/api/zrl/results-import', extra:{ week:zrlResWeek }, done:zrlStandLoad })" style="${btn};margin:10px 0 0 8px">📋 Paste a results table</button><button onclick="zrlPostRace()" style="${btn};margin:10px 0 0 8px">📣 Post race ${zrlResWeek+1} to Discord</button></div>${zrlCalcCard()}${zrlStandingsHtml()}${zrlStandings0()?zrlShareBar():''}${zrlRecogCard()}${zrlEvCard()}${zrlZrCard()}`;
 }
 let zrlCalc=null;
 function zrlCalcOpen(teamId){
