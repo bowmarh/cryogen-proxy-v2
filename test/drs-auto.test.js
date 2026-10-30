@@ -115,3 +115,46 @@ test('switching automatic roles off keeps the four for the staff; the season edi
   assert.deepEqual((await get()).body.stages[0].roles, {}, 'no roles set');
   assert.ok(adminPosts().some(t => /audit/.test(t) && !/picked automatically/.test(t)));
 });
+
+test('a scoring rider who says no is replaced in the four at once, the newcomer is told, and the plan is logged', async () => {
+  const st = await setup(100);
+  const roles = (await post('roles', { stage: st.id, auto: true })).body.stages[0].roles;
+  const scorer = Object.keys(roles).find(z => roles[z] === 'scorer'), support = Object.keys(roles).filter(z => roles[z] === 'support');
+  app.world.discord.length = 0;
+  const after = (await post('availability', { stage: st.id, zwid: scorer, status: 'no' })).body.stages[0].roles;
+  assert.equal(after[scorer], 'support');
+  assert.equal(Object.values(after).filter(r => r === 'scorer').length, 4);
+  assert.ok(support.some(z => after[z] === 'scorer'), 'a support rider comes in');
+  assert.match(adminPosts().join('\n'), /can't race, so the scoring four were picked again/);
+  const log = (await app.get('/api/auto', { token: admin })).body.entries;
+  assert.ok(log.some(e => /scoring four picked again/.test(e.summary)));
+});
+
+test('My week offers the Ladder and DIRT answers inline', async () => {
+  const st = await setup(60);
+  const rider = await app.memberSession(ID(2), { name: 'Dirt 2' });
+  const w = (await app.get('/api/me/week', { token: rider })).body.items.find(i => i.kind === 'DIRT Series');
+  assert.deepEqual([w.state, w.avail.series, w.avail.id, w.avail.mine], ['todo', 'drs', st.id, '']);
+  await post('availability', { stage: st.id, status: 'yes' }, rider);
+  const w2 = (await app.get('/api/me/week', { token: rider })).body.items.find(i => i.kind === 'DIRT Series');
+  assert.deepEqual([w2.state, w2.avail.mine], ['in', 'yes']);
+});
+
+test('a rating climbing towards the cap is forecast, shown on the squad row, and warned about once a week before it is in the alert zone', async () => {
+  const st = await setup(24 * 14);   // a stage in two weeks
+  await post('result', { stage: st.id, results: { [ID(3)]: { pos: 5, pts: 96 } } });   // they have raced, so the buffer applies to them
+  await post('stage', { type: 'scratch', date: ymd(Date.now() + 21 * 86400000) });
+  await post('stage', { type: 'scratch', date: ymd(Date.now() + 28 * 86400000) });
+  // Dirt 3 is 1520 (cap 1535); give them a climb of 10 a week over the last two weeks
+  app.world.db['cg:drs:ratings'] = { [ID(3)]: JSON.stringify({ history: [{ r: 1500, at: Date.now() - 14 * 86400000 }, { r: 1520, at: Date.now() }] }) };
+  const row = (await get()).body.squad.find(r => r.zwid === ID(3));
+  assert.equal(row.trend, 10); assert.equal(row.forecast, 'breach'); assert.equal(row.stagesToCap, 2);
+  assert.ok(row.projected > 1535);
+  const flat = (await get()).body.squad.find(r => r.zwid === ID(0));
+  assert.equal(flat.forecast, ''); assert.equal(flat.stagesToCap, null);
+  const ranF = await tick();
+  assert.ok(ranF.includes('drs-forecast'));
+  assert.match(adminPosts().join('\n'), /Dirt 3.*climbing about 10 a week.*cap of 1535 is likely to be reached in about 2 stages/s);
+  assert.ok(!(await tick()).includes('drs-forecast'), 'once a week');
+  void st;
+});

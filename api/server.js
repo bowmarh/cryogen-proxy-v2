@@ -619,6 +619,17 @@ function parseResults(body, teams){
 const TTT_ROUTES = {
   'GET /api/ttt': async () => {},
 
+  // Staff: the TTT thank-you for the current season (or every week if no season is set): team wins, riders with the most podiums, and who rode the most weeks.
+  'GET /api/ttt/recognition': async req => { requireRole(req, ['admin', 'mod']); return tttRecognition(); },
+  'POST /api/ttt/post-recognition': async req => {
+    requireRole(req, ['admin', 'mod']);
+    const r = await tttRecognition();
+    const [claimed] = await redis([['HSETNX', TTT_KEYS.sent, `recognition:${Math.floor(Date.now() / 300000)}`, new Date().toISOString()]]);
+    if (!claimed) throw new HttpError(429, 'That was posted a moment ago.');
+    for (const m of r.messages) await discord('public', { content: m });
+    return { posted: r.messages.length };
+  },
+
   'POST /api/ttt/results': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const weekId = String(body.weekId || '');
@@ -1152,6 +1163,35 @@ function tttAllocation(data, velo){
   return { placements, summary, commands, newCaptains, assign };
 }
 
+async function tttRecognition(){
+  const ids = (await redis([['HKEYS', TTT_KEYS.archive]]))[0] || [];
+  const snaps = ids.length ? (await redis(ids.map(id => ['HGET', TTT_KEYS.archive, id]))).map(x => { try { return x ? JSON.parse(x) : null; } catch (e) { return null; } }).filter(Boolean) : [];
+  const cur = await loadTtt();
+  if (cur.week && Object.keys(cur.week.results || {}).length) snaps.push({ week: cur.week, signups: cur.signups, assign: cur.assign });
+  const seasons = await loadSeasons(), since = seasons.length ? seasons[seasons.length - 1].start : '';
+  const weeks = snaps.filter(x => x.week && x.week.published && (!since || x.week.date >= since) && Object.keys(x.week.results || {}).length);
+  if (!weeks.length) throw new HttpError(409, 'No TTT week has results yet, so there is nothing to recognise.');
+  const wins = {}, riders = {};
+  for (const w of weeks) {
+    for (const t of w.week.teams) { const r = (w.week.results || {})[t.id]; if (r && r.position === 1) wins[t.name] = (wins[t.name] || 0) + 1; }
+    for (const sg of w.signups || []) {
+      const mine = ((w.assign || {})[sg.name.toLowerCase()] || []).filter(id => w.week.teams.some(t => t.id === id));
+      if (!mine.length) continue;
+      const r = riders[sg.name] = riders[sg.name] || { weeks: 0, podiums: 0 };
+      r.weeks++;
+      if (mine.some(id => { const x = (w.week.results || {})[id]; return x && x.position && x.position <= 3; })) r.podiums++;
+    }
+  }
+  const sections = [`📊 **${weeks.length} week${weeks.length === 1 ? '' : 's'} of team time trials.**`];
+  const winners = Object.entries(wins).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (winners.length) sections.push(`🏆 **Team wins**\n${winners.map(([n, c]) => `• ${discordEscape(n)}: ${c}`).join('\n')}`);
+  const pod = Object.entries(riders).filter(([, r]) => r.podiums > 0).sort((a, b) => b[1].podiums - a[1].podiums || a[0].localeCompare(b[0])).slice(0, 5);
+  if (pod.length) sections.push(`🥇 **On the podium with their team**\n${pod.map(([n, r]) => `• ${discordEscape(n)}: ${r.podiums} time${r.podiums === 1 ? '' : 's'}`).join('\n')}`);
+  const most = Object.entries(riders).sort((a, b) => b[1].weeks - a[1].weeks || a[0].localeCompare(b[0])).slice(0, 5);
+  if (most.length && weeks.length >= 2) sections.push(`🏁 **Most weeks ridden**\n${most.map(([n, r]) => `• ${discordEscape(n)}: ${r.weeks} of ${weeks.length}`).join('\n')}`);
+  return { weeks: weeks.length, messages: [`🎉 **TTT recognition${seasons.length ? ': ' + discordEscape(seasons[seasons.length - 1].name) : ''}**\nThank you to everyone who rode, captained and filled the teams.\n\n${sections.join('\n\n')}\n\n${SITE_URL} → 🏁 TTT Season`] };
+}
+
 // The undo for an allocation: each rider's team places and the week (captains) as they were.
 function recordTttAllocation(data, plan, by){
   const undo = Object.keys(plan.placements).map(key => (data.assign[key] && data.assign[key].length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(data.assign[key])] : ['HDEL', TTT_KEYS.assign, key]));
@@ -1536,7 +1576,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2423,9 +2463,92 @@ async function handleSync(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// The public club page (public/club.html): season tables, results and next races, with no rider names, no private links and nothing about people.
+// Off until an administrator turns it on; while it is off the address answers 404.
+const PUBLIC_KEY = 'cg:public:settings';
+const publicOn = async () => { try { return !!JSON.parse((await redis([['GET', PUBLIC_KEY]]))[0] || 'null').on; } catch (e) { return false; } };
+async function publicClub(now = Date.now()){
+  const staff = syncReq(), out = { name: 'CRYO-GEN', generated: new Date(now).toISOString(), ladder: [], drs: [], next: [] };
+  const day = ms => new Date(ms).toISOString().slice(0, 10);
+  try {
+    for (const t of (await ladder.view(staff, undefined, now)).teams) {
+      const v = await ladder.view(staff, t.id, now), rec = v.record;
+      out.ladder.push({ team: t.name, rung: (v.meta && v.meta.rung) || null, played: rec.played, won: rec.won, lost: rec.lost, pointsFor: rec.pointsFor, pointsAgainst: rec.pointsAgainst,
+        recent: v.matches.filter(m => m.status === 'played' && m.result).slice(0, 5).map(m => ({ opponent: m.opponent, date: m.at ? day(m.at) : '', won: m.result.won, score: `${m.result.ourPoints}-${m.result.theirPoints}` })) });
+      for (const m of v.matches) if (m.status === 'scheduled' && m.at && m.at > now) out.next.push({ series: 'Ladder', title: `${t.name} v ${m.opponent}`, at: m.at });
+    }
+  } catch (e) { /* a series that cannot be read is left out */ }
+  try {
+    for (const t of (await drs.view(staff, undefined, now)).teams) {
+      const v = await drs.view(staff, t.id, now); if (!v.season) continue;
+      out.drs.push({ team: t.name, division: v.season.division, season: v.season.name, played: v.record.played, teamPoints: v.record.teamPoints,
+        stages: v.stages.map(s => ({ n: s.n, date: s.date, type: v.types[s.type] || s.type, route: s.route || '', played: s.status === 'played', teamPoints: s.result ? s.result.teamPoints : null })) });
+      for (const s of v.stages) if (s.status === 'upcoming' && s.startMs > now) out.next.push({ series: 'DIRT Series', title: `${t.name} · stage ${s.n}${s.route ? ' · ' + s.route : ''}`, at: s.startMs });
+    }
+  } catch (e) { /* ditto */ }
+  try {
+    const z = await zrl.load();
+    if (z.round) {
+      out.zrl = { round: z.round.name, start: z.round.start, weeks: z.round.weeks, teams: z.round.teams.filter(t => z.signups.some(x => x.in && (z.assign[x.key] || []).includes(t.id))).map(t => ({ name: t.name, division: t.division || '', league: t.league || '' })) };
+      for (let i = 0; i < z.round.weeks; i++) { const ms = Date.parse(`${z.round.start}T00:00:00Z`) + i * 7 * 86400000; if (ms > now - 86400000) out.next.push({ series: 'ZRL', title: `${z.round.name} · race ${i + 1}`, at: ms, dayOnly: true }); }
+    }
+  } catch (e) { /* ditto */ }
+  try {
+    const t = await loadTtt();
+    if (t.week && t.week.date && Date.parse(`${t.week.date}T00:00:00Z`) > now - 86400000) { out.ttt = { title: t.week.title || 'Weekly TTT', date: t.week.date }; out.next.push({ series: 'TTT', title: t.week.title || 'Weekly TTT', at: Date.parse(`${t.week.date}T00:00:00Z`), dayOnly: true }); }
+  } catch (e) { /* ditto */ }
+  out.next = out.next.filter(x => x.at < now + 21 * 86400000).sort((a, b) => a.at - b.at).slice(0, 12).map(x => ({ ...x, date: day(x.at), at: x.dayOnly ? null : x.at }));
+  return out;
+}
+
+// New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
+const onboarding = require('../lib/onboarding')({
+  redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
+  // Everyone who is on a team or has signed up somewhere right now: ZRL sign-ups, the Ladder rosters, DIRT squads and this week's TTT.
+  teamSets: async () => {
+    const [zs, lr, ds, ts] = await redis([['HGETALL', zrl.KEYS.signups], ['HGETALL', ladder.KEYS.roster], ['HGETALL', drs.KEYS.squad], ['HGETALL', TTT_KEYS.signups]]);
+    const out = new Set(), vals = raw => { const o = []; for (let i = 0; i < (raw || []).length; i += 2) { try { o.push([raw[i], JSON.parse(raw[i + 1])]); } catch (e) { /* skip */ } } return o; };
+    for (const [, v] of vals(zs)) if (v.zwid && v.in !== false) out.add(String(v.zwid));
+    for (const [f, v] of vals(lr)) out.add(String((v && v.zwid) || f.split('|').pop()));
+    for (const [f, v] of vals(ds)) out.add(String((v && v.zwid) || f.split('|').pop()));
+    for (const [, v] of vals(ts)) if (v.zwid && v.available !== false) out.add(String(v.zwid));
+    return out;
+  },
+});
+
+// The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
+const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
+async function runDigest(now = Date.now()){
+  const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
+  let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }   // off until an administrator turns it on
+  if (!on) return [];
+  const uk = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23', hour: 'numeric' }).format(new Date(now));
+  if (Number(uk) < Number(process.env.DIGEST_FROM_HOUR || 7)) return [];   // the env var exists so tests do not depend on the time of day
+  const day = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  const w = await week.build(syncReq(), now, 'admin');
+  const urgent = w.attention.filter(a => a.level === 'fail' || a.level === 'warn'), todo = w.attention.filter(a => a.level === 'todo');
+  const soon = w.upcoming.filter(u => u.atMs <= now + 36 * 3600000 && u.atMs >= now - 3 * 3600000);
+  const did = (await autoLog.list()).filter(e => Date.parse(e.ts) >= now - 24 * 3600000 && !e.undone);
+  if (!urgent.length && !todo.length && !soon.length && !did.length) return [];
+  const [claimed] = await redis([['HSETNX', DIGEST_KEYS.sent, day, new Date(now).toISOString()]]);
+  if (!claimed) return [];
+  const lines = [`☀️ **Good morning: the club today, ${new Date(now).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'long', day: 'numeric', month: 'long' })}**`];
+  if (urgent.length) lines.push(`**Needs attention (${urgent.length}${todo.length ? `, and ${todo.length} to do` : ''})**\n${urgent.slice(0, 8).map(a => `${a.level === 'fail' ? '🔴' : '🟡'} ${discordEscape(a.title)}: ${discordEscape(a.detail)}`).join('\n')}${urgent.length > 8 ? `\n…and ${urgent.length - 8} more` : ''}`);
+  else if (todo.length) lines.push(`**To do (${todo.length})**\n${todo.slice(0, 5).map(a => `⚪ ${discordEscape(a.title)}`).join('\n')}`);
+  else lines.push('✅ Nothing needs attention.');
+  if (soon.length) lines.push(`**On today and tomorrow**\n${soon.slice(0, 8).map(u => `• ${discordEscape(u.kind)}: ${discordEscape(u.title)}${u.timed ? ` at ${new Date(u.atMs).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })} UK` : ''}`).join('\n')}`);
+  if (did.length) lines.push(`**The automation did ${did.length} thing${did.length === 1 ? '' : 's'} in the last day**\n${did.slice(0, 5).map(e => `🤖 ${discordEscape(e.series)}: ${discordEscape(e.summary)}`).join('\n')}\nUndo any of it on This week.`);
+  lines.push(`${SITE_URL} → 📌 This week`);
+  await discord('admin', { content: lines.join('\n\n').slice(0, 1900) });
+  return ['digest'];
+}
+
+// Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
+const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
-  requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
+  onboarding, requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
   assocList: req => assoc.routes['GET /api/assoc/list'](req),
 });
 
@@ -2446,7 +2569,7 @@ async function handleCalendar(route, req, res){
 }
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS, syncKeys: sheetSync.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS, syncKeys: sheetSync.KEYS, extraHashes: [onboarding.KEY, live.KEY] });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2528,6 +2651,15 @@ async function route(req, res){
 
   if (pathname === '/api/discord/callback' && req.method === 'GET') return handleDiscordCallback(req, res);
 
+  if (pathname === '/api/public/club' && req.method === 'GET'){
+    if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
+    return sendJSON(res, 200, await publicClub());
+  }
+  if (pathname === '/api/public/settings'){
+    const role = requireRole(req, ['admin', 'mod']);
+    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
+    return sendJSON(res, 200, { on: await publicOn(), canChange: role === 'admin' });
+  }
   const calFeed = /^\/api\/cal\/([A-Za-z0-9_-]+)\.ics$/.exec(pathname);
   if (calFeed && req.method === 'GET'){
     const ics = await calendar.feed(calFeed[1]);
@@ -2544,6 +2676,19 @@ async function route(req, res){
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
+
+  if (pathname === '/api/digest' && (req.method === 'GET' || req.method === 'POST')) {
+    const role = requireRole(req, ['admin', 'mod']);
+    if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on === true })]]); return sendJSON(res, 200, { on: body.on === true, canChange: true }); }
+    const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
+    let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
+    return sendJSON(res, 200, { on, canChange: role === 'admin' });
+  }
+  const onboardRoute = onboarding.routes[`${req.method} ${pathname}`];
+  if (onboardRoute) return sendJSON(res, 200, await onboardRoute(req));
+
+  const liveRoute = live.routes[`${req.method} ${pathname}`];
+  if (liveRoute) return sendJSON(res, 200, await liveRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
   const autoRoute = autoLog.routes[`${req.method} ${pathname}`];
   if (autoRoute) return sendJSON(res, 200, await autoRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));

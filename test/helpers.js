@@ -253,7 +253,7 @@ async function startApp(world, { host = 'localhost', port = 0 } = {}) {
       const raw = await res.text();
       let parsed = raw;
       try { parsed = JSON.parse(raw); } catch (e) { /* not JSON */ }
-      return { status: res.status, body: parsed, location: res.headers.get('location') };
+      return { status: res.status, body: parsed, location: res.headers.get('location'), headers: Object.fromEntries(res.headers) };
     },
     get: (path, opts) => app.call('GET', path, opts),
     post: (path, body, opts = {}) => app.call('POST', path, { ...opts, body: body === undefined ? {} : body }),

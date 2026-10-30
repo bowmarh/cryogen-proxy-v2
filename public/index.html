@@ -982,13 +982,26 @@ async function assocDecline(zwid){
 
 
 // ── My week (riders): your own next seven days ──────────────────────────────────────────
-let myWeek=null;
+let myWeek=null; const myWeekPen=new Set();
+async function myWeekPenTap(kind,id){
+  try{ const r=await fetch('/api/live/checkin',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save that.'); return; } }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  myWeekPen.add(kind+':'+id); renderMyWeek();
+}
 async function loadMyWeek(){
   const el=document.getElementById('myweek-card'); if(!el||role!=='member') return;
   try{
     const r=await fetch('/api/me/week',{headers:tttHeaders()}); if(!r.ok) return;
     myWeek=await r.json(); renderMyWeek();
   }catch(e){ /* the dashboard works without it */ }
+}
+// Ladder and DIRT answers from My week; a starter who says no is replaced by the reserve (or the next best rider) automatically.
+async function myWeekAnswer(series,id,status){
+  const path=series==='ladder'?'/api/ladder/availability':'/api/drs/availability', body=series==='ladder'?{ match:id, status }:{ stage:id, status };
+  try{
+    const r=await fetch(path,{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save your answer.'); return; }
+  }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  loadMyWeek();
 }
 async function myWeekAvail(week,status,team){
   try{
@@ -1004,8 +1017,11 @@ function renderMyWeek(){
   const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
   const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
-  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
-  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
+  // "I'm in the pen": shown from an hour before to forty-five minutes after a start, for a race the rider is in.
+  const penBtn=u=>{ if(!u.pen||!u.timed) return ''; const mins=(u.atMs-Date.now())/60000; if(mins>60||mins<-45) return ''; const done=myWeekPen.has(u.pen.kind+':'+u.pen.id);
+    return `<div style="margin-top:6px"><button ${done?'disabled':''} onclick="myWeekPenTap('${esc(u.pen.kind)}','${esc(u.pen.id)}')" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(16,185,129,0.5);background:${done?'rgba(16,185,129,0.2)':'transparent'};color:#34d399">${done?'✅ Your captain can see you are in the pen':'🏁 I\'m in the pen'}</button></div>`; };
+  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="${u.avail.series?`myWeekAnswer('${u.avail.series}','${esc(u.avail.id)}','${u.avail.mine===v?'':v}')`:`myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')`}" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
+  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}${penBtn(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
   el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
 }
 
@@ -1023,6 +1039,9 @@ async function loadWeek(){
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     weekData=d; weekErr='';
+    try{ const g=await fetch('/api/public/settings',{headers:tttHeaders()}); weekData.pub=g.ok?await g.json():null; }catch(e){ weekData.pub=null; }
+    try{ const g=await fetch('/api/digest',{headers:tttHeaders()}); weekData.digest=g.ok?await g.json():null; }catch(e){ weekData.digest=null; }
+    try{ const l=await fetch('/api/live',{headers:tttHeaders()}); weekData.live=l.ok?(await l.json()).events:[]; }catch(e){ weekData.live=[]; }
     try{ const a=await fetch('/api/auto',{headers:tttHeaders()}); weekData.auto=a.ok?(await a.json()).entries:[]; }catch(e){ weekData.auto=[]; }
   }catch(e){ weekErr=e.message; }
   renderWeek();
@@ -1045,11 +1064,38 @@ function renderWeek(){
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
+  ${weekLiveCard(d)}
+  ${weekNewCard(d)}
   ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
-  ${weekAutoCard(d)}`;
+  ${weekAutoCard(d)}
+  ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}
+  ${d.pub?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:8px"><input type="checkbox" ${d.pub.on?'checked':''} ${d.pub.canChange?'':'disabled'} onchange="weekPublicSet(this.checked)"> <b>Public club page:</b> show season tables, results and next races (team results only: no rider names, no private links) at <a href="/club.html" target="_blank" rel="noopener" style="color:#00D4FF">/club.html</a>. Off until you tick it.</label>`:''}`;
+}
+async function weekPublicSet(on){ try{ await fetch('/api/public/settings',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
+async function weekDigestSet(on){ try{ await fetch('/api/digest',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
+// New members and what each still has to do (Discord, a category, a team); the app messages those it can after three and ten days.
+function weekNewCard(d){
+  const list=(d.newMembers||[]).slice(0,12); if(!list.length) return '';
+  return `<details class="card" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👋 New members <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.newMembers.length} in the last month</span></summary>
+    ${list.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><b style="min-width:150px">${rn(m.name,m.zwid)}</b><span style="color:#6b7280;min-width:70px">${m.days===0?'today':m.days+' day'+(m.days===1?'':'s')}</span>${m.steps.map(s=>`<span style="color:${s.done?'#10B981':'#FBBF24'}">${s.done?'✅':'⬜'} ${esc(s.label)}</span>`).join('')}</div>`).join('')}</details>`;
+}
+// Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
+setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);
+async function weekPen(kind,id,zwid,on){
+  try{ const r=await fetch('/api/live/checkin',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id, zwid, in:on })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save that.'); return; } }catch(e){ alert('Could not reach the server.'); return; }
+  loadWeek();
+}
+function weekLiveCard(d){
+  const ev=d.live||[]; if(!ev.length) return '';
+  const ans={yes:'✅',maybe:'🤔',no:'❌','':'·'};
+  return `<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:rgba(0,212,255,0.35)"><div style="font-weight:800;margin-bottom:4px">🏁 Race day <span style="font-size:12px;font-weight:600;color:#9ca3af">${ev.length} on in the next day</span></div>
+    ${ev.map(e=>{ const label=e.status==='started'?'started '+Math.abs(e.minutes)+' min ago':e.minutes>=90?'in '+Math.round(e.minutes/60)+' h':'in '+e.minutes+' min'; const col=e.status==='later'?'#9ca3af':e.late.length?'#FBBF24':'#10B981';
+      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(e.title)}</b><span style="font-size:12px;color:${col}">${esc(label)} · ${e.ready} of ${e.need} in the pen</span>${e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener" style="font-size:12px;color:#00D4FF">private event →</a>`:''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${e.riders.map(r=>`<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid ${r.inPen?'rgba(16,185,129,0.5)':e.status!=='later'&&r.role!=='reserve'?'rgba(251,191,36,0.5)':'rgba(255,255,255,0.12)'};background:${r.inPen?'rgba(16,185,129,0.12)':'transparent'}">${ans[r.answer]||'·'} ${rn(r.name,r.zwid,'',true)}${r.role&&r.role!=='starter'?`<span style="color:#6b7280">${esc(r.role)}</span>`:''}<button title="${r.inPen?'Mark as not in the pen':'Mark as in the pen'}" onclick="weekPen('${esc(e.kind)}','${esc(e.id)}','${esc(r.zwid)}',${!r.inPen})" style="background:none;border:none;cursor:pointer;color:${r.inPen?'#34d399':'#6b7280'};padding:0">${r.inPen?'🏁':'○'}</button></span>`).join('')}</div>
+      ${e.status!=='later'&&e.late.length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⏳ Not in the pen yet: ${e.late.map(esc).join(', ')}</div>`:''}</div>`; }).join('')}</div>`;
 }
 // One card per series: all fine, or the one thing that is next.
 function weekSeriesStrip(d){
@@ -2480,6 +2526,7 @@ function tttStaffPanel(d){
     ${d.signups.length?tttBoard(d):`<div style="font-size:13px;color:#9ca3af;padding:14px 0">No sign-ups yet. Riders sign up on this page, or press <b>Import from the sheet</b> to bring in the Google Form responses.</div>`}
     <details style="margin-top:14px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#9ca3af">More tools</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button onclick="recognitionPost('/api/ttt')" class="tab" title="Preview and post the season thank-you">🎉 Season recognition</button>
         <button onclick="tttWrite('/api/ttt/status',{open:${!w.open}})" class="tab">${w.open?'🔒 Close sign-ups':'🔓 Reopen sign-ups'}</button>
         <button onclick="if(confirm('Remove every rider from every team? You can then auto-allocate again from scratch.'))tttWrite('/api/ttt/clear-assign')" class="tab">🧹 Clear all teams</button>
         <button onclick="tttEditingTeams=!tttEditingTeams;renderTtt()" class="tab">✏️ Edit teams</button>
@@ -2623,7 +2670,7 @@ function ladderMatchCard(m,open){
   const link=m.eventLink&&m.eventLink!=='hidden'&&/^https:\/\//i.test(m.eventLink)?`<a href="${esc(m.eventLink)}" target="_blank" rel="noopener" style="color:#00D4FF;font-size:13px">Open the private Zwift event →</a>`:m.eventLink==='hidden'?'<span style="font-size:12px;color:#6b7280">The private event link is shown to riders on the ladder roster.</span>':'<span style="font-size:12px;color:#6b7280">Private event link: still to come</span>';
   const route=m.route&&(m.route.name||m.route.km||m.route.minutes)?[m.route.name,m.route.km?m.route.km+' km':'',m.route.minutes?'about '+m.route.minutes+' min':''].filter(Boolean).join(' · '):'';
   const mine=m.onRoster?['yes','maybe','no'].map(v=>`<button onclick="ladderPost('availability',{match:'${esc(m.id)}',status:'${m.myAvailability===v?'':v}'})" style="padding:7px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${m.myAvailability===v?'rgba(0,212,255,0.7)':'rgba(255,255,255,0.18)'};background:${m.myAvailability===v?'rgba(0,212,255,0.18)':'transparent'};color:${m.myAvailability===v?'#00D4FF':'#d1d5db'}">${{yes:'✅ I can ride',maybe:'🤔 Maybe',no:'❌ I can\'t'}[v]}</button>`).join(''):'';
-  const lineup=m.lineupInfo.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${m.lineupInfo.map(r=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:13px;font-weight:600">${ladderCatBadge(r.cat)} ${rn(r.name,r.zwid)}${m.result&&m.result.positions?` <span style="color:#00D4FF">${ordinal(m.result.positions[r.zwid])}</span>`:''}</div>`).join('')}</div>
+  const lineup=m.lineupInfo.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${m.lineupInfo.map(r=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:13px;font-weight:600">${ladderCatBadge(r.cat)} ${rn(r.name,r.zwid)}${r.why?` <span title="${esc(r.why)}" style="font-size:11px;color:#6b7280;cursor:help">ⓘ</span>`:''}${m.result&&m.result.positions?` <span style="color:#00D4FF">${ordinal(m.result.positions[r.zwid])}</span>`:''}</div>`).join('')}</div>
     <div style="font-size:12px;color:${chk.ok&&chk.complete?'#10B981':'#FBBF24'}">${chk.ok&&chk.complete?`✅ Legal line-up: ${esc(chk.window.from)}${chk.window.from!==chk.window.to?' to '+esc(chk.window.to):''} (${chk.window.ranks} rank${chk.window.ranks===1?'':'s'}, three allowed)`:chk.ok?`${m.lineupInfo.length} of ${L.lineup} riders picked`:esc(chk.issues.join(' '))}</div>`:'<div style="font-size:13px;color:#9ca3af;margin:6px 0">The line-up has not been picked yet.</div>';
   const result=m.result?`<div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:${m.result.won?'rgba(16,185,129,0.1)':'rgba(248,113,113,0.1)'};font-size:14px;font-weight:800">${m.result.won?'🏆 Won':'Lost'} ${m.result.ourPoints}–${m.result.theirPoints}</div>`:'';
   return `<details class="card" ${open?'open':''} ontoggle="ladderToggle('${esc(m.id)}',this.open)" style="padding:0;margin-bottom:10px">
@@ -2694,6 +2741,32 @@ async function ladderImport(id){
   const p=d.preview, lines=Object.entries(p.positions).sort((a,b)=>a[1]-b[1]).map(([z,pos])=>ordinal(pos)+' '+p.names[z]).join(', ');
   if(confirm('Result from Zwift: '+(p.won?'we win':'they win')+' '+p.ourPoints+'–'+p.theirPoints+'.\n'+lines+(p.lineupChanged?'\n(The five who raced differ from the line-up; it will be updated.)':'')+'\n\nSave it?')) await ladderPost('result-import',{ match:id, event, apply:true });
 }
+// The end-of-season thank-you for a series: shows what would be posted, and posts it when staff confirm.
+async function recognitionPost(base,team){
+  let d;
+  try{ const r=await fetch(base+'/recognition'+(team?'?team='+encodeURIComponent(team):''),{headers:tttHeaders()}); d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not build it.'); }catch(e){ alert(e.message); return; }
+  if(!confirm('This would be posted to the club channel:\n\n'+d.messages.join('\n\n').replace(/\*\*/g,'')+'\n\nPost it?')) return;
+  try{ const r=await fetch(base+'/post-recognition',{method:'POST',headers:tttHeaders(),body:JSON.stringify(team?{ team }:{})}); const x=await r.json(); if(!r.ok) throw new Error(x.error||'Could not post.'); alert('Posted.'); }catch(e){ alert(e.message); }
+}
+let ladderPlanData=null;
+async function ladderPlan(){
+  try{ const r=await fetch('/api/ladder/planner?team='+encodeURIComponent(ladderTeam||''),{headers:tttHeaders()}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not plan.'); ladderPlanData=d; }catch(e){ alert(e.message); return; }
+  renderLadder();
+}
+function ladderPlanCard(){
+  const p=ladderPlanData; if(!p) return '';
+  const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(0,212,255,0.3)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">🎯 Plan a challenge for ${esc(p.team)}</div>
+    <div style="font-size:13px;margin-bottom:4px">${p.range?`You may challenge rungs <b>${p.range.from}${p.range.to>p.range.from?' to '+p.range.to:''}</b> (up to seven above you; zombie teams do not count towards the seven).`:'Set the rung to see the range.'}</div>
+    <div style="font-size:13px;margin-bottom:4px;color:${p.canField?'#10B981':'#f87171'}">${p.canField?'✅ A legal five exists ('+esc(p.window)+').':'❌ No legal five yet.'}${p.activity&&p.activity.days!=null&&p.activity.state!=='active'?` Last raced ${p.activity.days} days ago.`:''}${p.bestDay?` Riders say yes most on <b>${esc(p.bestDay.weekday)}s</b> (${p.bestDay.yesRate}%).`:''}</div>
+    ${(p.issues||[]).map(i=>`<div style="font-size:12px;color:#FBBF24">⚠️ ${esc(i)}</div>`).join('')}
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:10px 0 4px">Dates to propose</div>
+    ${p.slots.map(s=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0"><span style="flex:1">${esc(s.label)}</span><button onclick="ladderPlanUse('${esc(s.date)}','${esc(s.time)}')" style="${btn}">Use this date</button></div>`).join('')||'<div style="font-size:12px;color:#9ca3af">No free day found in the next 12 days.</div>'}
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:10px 0 4px">Draft message for their captain</div>
+    <textarea readonly style="width:100%;min-height:80px;font-size:12px;background:#0f1623;color:#e5e7eb;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:8px">${esc(p.draft)}</textarea>
+    <div style="margin-top:8px;display:flex;gap:6px"><button onclick="navigator.clipboard&&navigator.clipboard.writeText(ladderPlanData.draft).then(()=>alert('Copied.'))" style="${btn}">Copy the message</button><button onclick="ladderPlanData=null;renderLadder()" style="${btn}">Close</button></div></div>`;
+}
+function ladderPlanUse(date,time){ ladderFormOpen('new'); ladderForm.date=date; ladderForm.time=time; ladderPlanData=null; renderLadder(); }
 let ladderArc=null;
 async function ladderArchiveLoad(){ if(ladderArc) return; try{ const r=await fetch('/api/ladder/archive',{headers:tttHeaders()}); ladderArc=r.ok?(await r.json()).seasons:[]; }catch(e){ ladderArc=[]; } renderLadder(); }
 function ladderArchiveCard(){
@@ -2786,12 +2859,12 @@ function renderLadder(){
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
   el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
-    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
+    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"> <button onclick="recognitionPost('/api/ladder',ladderTeam)" title="Preview and post the end-of-season thank-you" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🎉 Recognition</button><button onclick="ladderPlan()" title="Rungs you may challenge, whether a legal five exists, and dates to propose" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🎯 Plan a challenge</button><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
     ${ladder.challengeRange?`<div style="font-size:12px;color:#9ca3af;margin:-6px 0 10px">🎯 You can challenge rungs <b style="color:#e5e7eb">${ladder.challengeRange.from}${ladder.challengeRange.to>ladder.challengeRange.from?' to '+ladder.challengeRange.to:''}</b> (up to seven above you). ${esc(ladder.challengeRange.note)}</div>`:''}
     ${staff&&ladder.activity&&['warn','zombie','removed'].includes(ladder.activity.state)?`<div class="card" style="padding:10px 14px;margin-bottom:10px;font-size:13px;border-color:rgba(251,191,36,0.4);color:#FBBF24">🧟 ${ladder.activity.state==='warn'?`No race for ${ladder.activity.days} days. At 21 the team counts as a zombie and at 35 it is removed: get a challenge out.`:ladder.activity.state==='zombie'?`No race for ${ladder.activity.days} days: a zombie team. At 35 days the ladder removes it.`:`No race for ${ladder.activity.days} days: the ladder may already have removed this team.`}</div>`:''}
     ${staff&&(ladder.shared||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:-4px 0 10px">⚠️ On more than one ladder roster (the league locks a rider to one team a season): ${ladder.shared.map(x=>esc(x.name)+' (also '+x.teams.map(esc).join(', ')+')').join('; ')}.</div>`:''}
     ${staff?`<label style="display:block;font-size:12px;color:#9ca3af;margin-bottom:10px"><input type="checkbox" ${ladder.meta&&ladder.meta.auto===false?'':'checked'} onchange="ladderAutoSet(this.checked)"> <b>Automatic:</b> pick the line-up and a reserve three days before a match, and replace a starter who says they can't ride. The admin channel is told each time.</label>`:''}
-    ${ladderFormCard()}
+    ${ladderPlanCard()}${ladderFormCard()}
     ${up.length?up.map((m,i)=>ladderMatchCard(m,ladderOpen.has(m.id)||(i===0&&!ladderOpen.size&&!past.some(p=>ladderOpen.has(p.id))))).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No challenge is open.'+(staff?' Press <b>+ New challenge</b> when a team above you accepts.':'')+'</div>'}
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 8px">Past matches</div>${past.map(m=>ladderMatchCard(m,ladderOpen.has(m.id))).join('')}`:''}
     ${staff?ladderArchiveCard():''}
@@ -2841,7 +2914,7 @@ function drsSquadCard(){
     return `<div style="display:grid;grid-template-columns:minmax(120px,1.2fr) 70px minmax(110px,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)">
       <div style="font-size:13px;font-weight:700">${rn(r.name,r.zwid)}${r.spike?` <span title="Jumped ${r.change} points" style="font-size:11px;color:#f87171">▲${r.change}</span>`:r.change?` <span style="font-size:11px;color:#6b7280">${r.change>0?'+':''}${r.change}</span>`:''}</div>
       <div style="font-size:14px;font-weight:800">${r.rating||'—'}</div>
-      <div>${drsBar(r,s)}<div style="font-size:11px;margin-top:3px;color:${st[1]}">${st[0]}${r.rating&&r.state!=='entry-over'?` · ${r.remaining>=0?r.remaining+' below the cap':(-r.remaining)+' over the cap'}`:r.state==='entry-over'?` · ${r.rating-s.threshold} over`:''}</div></div>
+      <div>${drsBar(r,s)}<div style="font-size:11px;margin-top:3px;color:${st[1]}">${st[0]}${r.rating&&r.state!=='entry-over'?` · ${r.remaining>=0?r.remaining+' below the cap':(-r.remaining)+' over the cap'}`:r.state==='entry-over'?` · ${r.rating-s.threshold} over`:''}</div>${r.trend?`<div title="Points a week over the last 60 days; the projection is for the last stage still to come" style="font-size:11px;margin-top:1px;color:${r.forecast==='breach'?'#f87171':r.forecast==='danger'?'#FBBF24':'#6b7280'}">${r.trend>0?'📈 +':'📉 '}${r.trend}/week${r.projected&&r.projected!==r.rating?' → about '+r.projected:''}${r.stagesToCap?' · cap in ~'+r.stagesToCap+' stage'+(r.stagesToCap===1?'':'s'):''}</div>`:''}</div>
       <div>${staff?`<button title="Take out of the squad" onclick="if(confirm('Take ${esc(r.name).replace(/'/g,'')} out of the squad?'))drsPost('squad',{zwid:'${esc(r.zwid)}',remove:true})" style="${btn}">✕</button>`:''}</div></div>`; }).join('');
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:14px;font-weight:800">Squad <span style="font-weight:400;color:${drs.squad.length>=s.squadMax?'#FBBF24':'#9ca3af'}">${drs.squad.length} of ${s.squadMax}</span></div>
     <div style="font-size:11px;color:#6b7280">Threshold ${s.threshold} · cap ${s.cap} (${s.buffer} above) · all ${s.squadMax} can race, the best ${s.scorers} score</div></div>
@@ -2877,7 +2950,7 @@ function drsStageCard(st,open){
       ${(st.clashes||[]).length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⚠️ At the same time as another team's stage: ${st.clashes.map(c=>esc(c.name)+' ('+esc(c.team)+', stage '+esc(c.stage)+')').join(', ')}</div>`:''}
       ${up?drsAnswerBlock(st,staff):''}
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 4px">The plan</div>
-      ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>rn(names[z],z)).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>rn(names[z],z)).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
+      ${sc.length?`<div style="font-size:13px">🎯 <b>Scoring ${s.scorers}:</b> ${sc.map(z=>rn(names[z],z)+(staff&&st.scorerWhy&&st.scorerWhy[z]?` <span title="Why: ${esc(st.scorerWhy[z])}" style="font-size:11px;color:#6b7280;cursor:help">ⓘ</span>`:'')).join(', ')}</div><div style="font-size:13px;margin-top:2px">🛡️ <b>Support:</b> ${sp.length?sp.map(z=>rn(names[z],z)).join(', '):'—'}</div>`:`<div style="font-size:12px;color:#9ca3af">No plan yet. ${staff?'Pick the scoring four below: the rest ride in support.':''}</div>`}${res}
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
         ${up?`<button onclick="drsAutoRoles('${esc(st.id)}')" title="From the riders' answers, keeping anyone near the vELO cap out of the scoring four" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
@@ -2987,7 +3060,7 @@ function renderDrs(){
   const up=drs.stages.filter(x=>x.upcoming), past=drs.stages.filter(x=>!x.upcoming);
   el.innerHTML=`${teamBar('drs')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">${esc(s.name)} · ${esc(s.division)} · ${esc(s.slot||'squad slot')} ${esc(s.time)} (${esc(s.tz)})${rec.played?` · ${rec.played} stage${rec.played===1?'':'s'}, ${rec.teamPoints} team points`:''}</p></div>
-    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="drsSetup=!drsSetup;renderDrs()" style="${sec}">⚙️ Season</button><button onclick="drsStageOpen('new')" style="${btn}">+ Add a stage</button></div>`:''}</div>
+    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="drsSetup=!drsSetup;renderDrs()" style="${sec}">⚙️ Season</button><button onclick="recognitionPost('/api/drs',drsTeam)" title="Preview and post the end-of-season thank-you" style="${sec}">🎉 Recognition</button><button onclick="drsStageOpen('new')" style="${btn}">+ Add a stage</button></div>`:''}</div>
     ${staff&&drsSetup?drsSetupCard():''}${drsStageForm_()}${drsSquadCard()}
     ${up.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:6px 0 8px">Coming up</div>${up.map((st,i)=>drsStageCard(st,drsOpen.has(st.id)||(i===0&&!drsOpen.size))).join('')}`:`<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af;margin-bottom:10px">No stage is coming up.${staff?' Add the calendar below.':''}</div>`}
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:14px 0 8px">Played and past</div>${past.map(st=>drsStageCard(st,drsOpen.has(st.id))).join('')}`:''}

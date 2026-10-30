@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CRYO-GEN: races and results</title>
+<meta name="description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060a14;color:#e5e7eb;font-family:system-ui,sans-serif;min-height:100vh;padding:0 16px 48px}
+.wrap{max-width:860px;margin:0 auto}
+header{padding:28px 0 18px}
+h1{font-size:26px;font-weight:900;color:#00D4FF;letter-spacing:.5px}
+.sub{font-size:13px;color:#6b7280;margin-top:4px}
+h2{font-size:16px;font-weight:800;margin:26px 0 8px}
+.card{background:#0f1623;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:14px}
+.row:first-child{border-top:none}
+.tag{font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 8px;border-radius:99px;background:rgba(0,212,255,0.12);color:#00D4FF}
+.muted{color:#9ca3af;font-size:12px}
+.win{color:#10B981;font-weight:700}.loss{color:#f87171;font-weight:700}
+.big{font-size:22px;font-weight:900}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+footer{margin-top:34px;font-size:12px;color:#6b7280}
+a{color:#00D4FF}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>CRYO-GEN</h1><div class="sub" id="sub">Races and results</div></header>
+  <div id="root"><div class="card muted">Loading…</div></div>
+  <footer>Team CRYO-GEN, a Zwift racing club. This page shows team results only. <a href="/">Club members sign in here</a>.</footer>
+</div>
+<script>
+const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(date,at)=>at?new Date(at).toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(date+'T12:00:00Z').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+(async()=>{
+  const root=document.getElementById('root');
+  let d; try{ const r=await fetch('/api/public/club'); if(!r.ok){ root.innerHTML='<div class="card muted">This page is not switched on yet.</div>'; return; } d=await r.json(); }catch(x){ root.innerHTML='<div class="card muted">Could not load the page. Please try again later.</div>'; return; }
+  let h='';
+  if(d.next.length) h+=`<h2>Next races</h2><div class="card">${d.next.map(n=>`<div class="row"><span class="tag">${e(n.series)}</span><b>${e(n.title)}</b><span class="muted">${e(fmt(n.date,n.at))}</span></div>`).join('')}</div>`;
+  if(d.ladder.length) h+=`<h2>Zwift Club Ladder</h2><div class="grid">${d.ladder.map(t=>`<div class="card"><b>${e(t.team)}</b>${t.rung?` <span class="muted">rung ${e(t.rung)}</span>`:''}<div class="big">${t.won}–${t.lost}</div><div class="muted">${t.played} played · points ${t.pointsFor}–${t.pointsAgainst}</div>${t.recent.map(m=>`<div class="row"><span class="${m.won?'win':'loss'}">${m.won?'Won':'Lost'} ${e(m.score)}</span><span>v ${e(m.opponent)}</span><span class="muted">${e(m.date)}</span></div>`).join('')}</div>`).join('')}</div>`;
+  if(d.drs.length) h+=`<h2>DIRT Racing Series</h2>${d.drs.map(t=>`<div class="card"><b>${e(t.team)}</b> <span class="muted">${e(t.division)} · ${e(t.season)}</span><div class="big">${t.teamPoints} points</div><div class="muted">${t.played} stage${t.played===1?'':'s'} raced</div>${t.stages.map(s=>`<div class="row"><span class="muted">Stage ${s.n}</span><span>${e(s.type)}${s.route?' · '+e(s.route):''}</span><span class="muted">${e(fmt(s.date))}</span>${s.played?`<span class="win">${s.teamPoints==null?'raced':s.teamPoints+' pts'}</span>`:''}</div>`).join('')}</div>`).join('')}`;
+  if(d.zrl) h+=`<h2>Zwift Racing League</h2><div class="card"><b>${e(d.zrl.round)}</b> <span class="muted">${d.zrl.weeks} races from ${e(fmt(d.zrl.start))}</span>${d.zrl.teams.length?`<div class="muted" style="margin-top:6px">${d.zrl.teams.map(t=>e(t.name)).join(' · ')}</div>`:''}</div>`;
+  if(d.ttt) h+=`<h2>Team time trials</h2><div class="card"><b>${e(d.ttt.title)}</b> <span class="muted">${e(fmt(d.ttt.date))}</span></div>`;
+  root.innerHTML=h||'<div class="card muted">Nothing to show yet.</div>';
+})();
+</script>
+</body>
+</html>

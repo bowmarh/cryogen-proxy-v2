@@ -126,3 +126,34 @@ test('route guidance, one race a day, power-ups, the challenge range and riders 
   await post('roster', { zwid: ID(0), team: other });
   assert.deepEqual((await view()).shared.map(x => x.zwid), [ID(0)]);
 });
+
+test('past results nudge the pick, and the pick says why', async () => {
+  const { suggest } = require('../lib/ladder')({ redis() {}, HttpError: Error, text() {}, requireRole() {}, roleFromRequest() {}, memberFromRequest() {}, discord() {}, discordEscape: x => x, getRiders() {}, siteUrl: '' });
+  const c = (zwid, rating, form) => ({ zwid, cat: 'Ruby', rating, pref: 0, form });
+  const six = [c('a', 2000), c('b', 1999), c('c', 1998), c('d', 1997), c('e', 1996), c('f', 1975, { races: 5, avg: 9.5 })];
+  assert.ok(suggest(six).zwids.includes('f'), 'a rider averaging 9.5 points a race beats one rated 20 higher');
+  assert.ok(!suggest([...six.slice(0, 5), c('f', 1975, { races: 1, avg: 10 })]).zwids.includes('f'), 'one race is not enough to count');
+
+  for (let i = 0; i < 7; i++) await post('roster', { zwid: ID(i) });
+  const m = await match(100);
+  await post('availability', { match: m.id, zwid: ID(1), status: 'yes' });
+  const s = (await app.get(`/api/ladder/suggest?match=${m.id}`, { token: admin })).body;
+  assert.match(s.why[s.zwids[0]], /vELO \d+/);
+  await post('auto-lineup', { match: m.id });
+  assert.ok((await app.get('/api/ladder', { token: admin })).body.matches[0].lineupInfo.every(r => r.why), 'each rider carries a reason');
+});
+
+test('the challenge planner gives the range, whether a legal five exists, free dates and a draft', async () => {
+  const empty = (await app.get('/api/ladder/planner', { token: admin })).body;
+  assert.equal(empty.canField, false); assert.ok(empty.issues.some(i => /Fewer than five/.test(i)));
+  await post('meta', { rung: 12 });
+  for (let i = 0; i < 6; i++) await post('roster', { zwid: ID(i) });
+  const m = await match(7 * 24);   // a match a week away takes that day off the list
+  const p = (await app.get('/api/ladder/planner', { token: admin })).body;
+  assert.equal(p.canField, true); assert.deepEqual(p.range, { from: 5, to: 11 });
+  assert.equal(p.slots.length, 3);
+  const taken = new Date(m.at).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  assert.ok(p.slots.every(s => s.date !== taken && s.time && s.label));
+  assert.match(p.draft, /would like to challenge \[your team\].*one or two power-ups/);
+  assert.equal((await app.get('/api/ladder/planner')).status, 401);
+});
