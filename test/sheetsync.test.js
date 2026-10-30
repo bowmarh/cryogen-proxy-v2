@@ -37,7 +37,7 @@ test('who may see it and change it; nothing is on to begin with', async () => {
   assert.equal((await get(await app.memberSession('1002', { name: 'Rider Two' }))).status, 401);
   const v = (await get(mod)).body;
   assert.deepEqual([v.google.configured, v.google.email, v.canChange], [true, 'sync@cryogen-test.iam.gserviceaccount.com', false]);
-  assert.deepEqual(Object.keys(v.series), ['ttt', 'zrl']);
+  assert.deepEqual(Object.keys(v.series), ['ttt', 'zrl', 'ladder', 'drs']);
   assert.equal(v.series.ttt.sheetId, TTT_SHEET); assert.equal(v.series.zrl.sheetId, ZRL_SHEET);
   assert.deepEqual([v.series.ttt.settings, v.series.zrl.settings], [{ pull: false, push: false }, { pull: false, push: false }]);
   assert.equal((await settings({ series: 'ttt', push: true }, mod)).status, 403, 'administrators only');
@@ -163,4 +163,23 @@ test('automatic runs: off by default, run when switched on, at most every ten mi
   assert.ok(tab.some(r => r[3] === 'Rider 0'), 'the tick published the change');
   const health = (await app.get('/api/health', A)).body.checks.find(c => c.id === 'sheetsync');
   assert.equal(health.status, 'ok');
+});
+
+test('the Ladder and the DIRT Series are published to their mirror tabs only: nothing can be pulled, and the tabs hold the matches, stages and rosters', async () => {
+  const v = (await app.get('/api/sync', { token: admin })).body.series;
+  assert.deepEqual([v.ladder.canPull, v.drs.canPull, v.zrl.canPull], [false, false, true]);
+  assert.equal((await app.post('/api/sync/settings', { series: 'ladder', pull: true }, { token: admin })).status, 400);
+  assert.equal((await app.post('/api/sync/run', { series: 'drs', direction: 'pull' }, { token: admin })).status, 400);
+  await app.post('/api/ladder/roster', { zwid: '1002' }, { token: admin });
+  await app.post('/api/ladder/match', { opponent: 'Team Rocket', challenger: 'us' }, { token: admin });
+  await app.post('/api/drs/season', { name: 'A', division: 'Platinum', threshold: 5000, time: '19:30', tz: 'Europe/London' }, { token: admin });
+  await app.post('/api/drs/squad', { zwid: '1002', force: true }, { token: admin });
+  await app.post('/api/drs/stage', { type: 'scratch', route: 'Loop', date: '2026-11-03' }, { token: admin });
+  for (const id of ['ladder', 'drs']) assert.equal((await app.post('/api/sync/settings', { series: id, push: true }, { token: admin })).status, 200);
+  for (const id of ['ladder', 'drs']) assert.equal((await app.post('/api/sync/run', { series: id, direction: 'push' }, { token: admin })).status, 200);
+  const tab = n => app.world.gs.tabs[n] || null;
+  void tab;
+  const written = JSON.stringify(app.world.gs);
+  assert.match(written, /CRYO-GEN App Ladder/); assert.match(written, /Team Rocket/);
+  assert.match(written, /CRYO-GEN App DIRT/); assert.match(written, /Loop/);
 });

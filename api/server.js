@@ -2411,6 +2411,9 @@ const sheetSync = require('../lib/sheetsync')({
     ttt: { label: 'TTT', mirrorTab: 'CRYO-GEN App TTT', pullTab: SHEET_TABS['ttt-sheet'], sheetId: () => SHEET_ID, rows: tttMirrorRows, pull: tttPull },
     zrl: { label: 'ZRL', mirrorTab: 'CRYO-GEN App ZRL', pullTab: 'TEAM LIST', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => zrl.mirrorRows(),
       pull: async sheetId => (await zrl.routes['POST /api/zrl/sync-board'](syncReq(), { tab: 'TEAM LIST', sheet: sheetId })).sync },
+    // The Ladder and the DIRT Series are published to a mirror tab only for now (the sheet cannot change the app), in the club's ZRL workbook until another is chosen.
+    ladder: { label: 'Ladder', mirrorTab: 'CRYO-GEN App Ladder', pullTab: '', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => ladder.mirrorRows(), pull: null },
+    drs: { label: 'DIRT Series', mirrorTab: 'CRYO-GEN App DIRT', pullTab: '', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => drs.mirrorRows(), pull: null },
   },
 });
 async function handleSync(route, req, res){
