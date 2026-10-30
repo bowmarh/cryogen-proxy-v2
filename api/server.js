@@ -2349,6 +2349,7 @@ async function handleAssoc(assocRoute, req, res){
 
 // Staff messages to Discord (lib/comms.js): everyone in the club channel, or chosen members by DM (with a bot) or @mention.
 const comms = require('../lib/comms')({
+  buttonsFor: (series, id) => discordInteractions.buttons(series, id),   // created just below
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord,
   templates: req => commsTemplates.build(req),
   nudges: now => commsTemplates.nudges(now),
@@ -2516,6 +2517,26 @@ const onboarding = require('../lib/onboarding')({
   },
 });
 
+// Yes / Maybe / No buttons under Discord reminders (lib/discord-interactions.js): Discord posts each tap, signed, to /api/discord/interactions.
+const discordInteractions = require('../lib/discord-interactions')({
+  zwidOfDiscord: id => comms.zwidOfDiscord(id),
+  // The answer is saved by the same route a rider's own tap in the dashboard uses, as that rider (a member token made here, inside this process only).
+  answer: async (zwid, series, id, status) => {
+    const req = { headers: { authorization: `Bearer ${signToken('member', { zwid, name: zwid })}` } };
+    if (series === 'zrl') { const [week, team] = id.split(':'); await zrl.routes['POST /api/zrl/availability'](req, { week: Number(week), team, status }); }
+    else if (series === 'ladder') await ladder.routes['POST /api/ladder/availability'](req, { match: id, status });
+    else await drs.routes['POST /api/drs/availability'](req, { stage: id, status });
+  },
+});
+function readRawBody(req, limit = 20000){
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', c => { body += c; if (body.length > limit){ reject(new HttpError(413, 'request too large')); req.destroy(); } });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
 // The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
 async function runDigest(now = Date.now()){
@@ -2677,6 +2698,10 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  if (pathname === '/api/discord/interactions' && req.method === 'POST'){
+    const out = await discordInteractions.handle(await readRawBody(req), req.headers);
+    return sendJSON(res, out.status, out.body);
+  }
   if (pathname === '/api/digest' && (req.method === 'GET' || req.method === 'POST')) {
     const role = requireRole(req, ['admin', 'mod']);
     if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on === true })]]); return sendJSON(res, 200, { on: body.on === true, canChange: true }); }
