@@ -2204,7 +2204,7 @@ function serveStatic(res, reqPath){
 // What the automation changed, with an undo (lib/autolog.js).
 const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
 const zrl = require('../lib/zrl')({
-  autoLog,
+  autoLog, notify: (...a) => comms.notify(...a),   // comms is created further down
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
   coverHonours: (since, now) => cover.honours(since, now),   // ride cover is created further down
@@ -2242,7 +2242,7 @@ async function fetchZrResults(id){
 
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
 const ladder = require('../lib/ladder')({
-  autoLog, fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
+  autoLog, notify: (...a) => comms.notify(...a), fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
 });
 async function handleLadder(ladderRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -2253,7 +2253,7 @@ async function handleLadder(ladderRoute, req, res){
 
 // DIRT Racing Series (lib/drs.js): a squad of eight in a vELO division, a fixed Tuesday calendar, the best four finishers score.
 const drs = require('../lib/drs')({
-  autoLog, fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  autoLog, notify: (...a) => comms.notify(...a), fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
   // Raw vELO ratings from the club roster the dashboard already caches: no ZwiftRacing.app calls of its own, so no rate limits to respect.
   getRatings: async () => Object.fromEntries((await fetchRoster()).riders.map(r => [String(r.riderId), { name: r.name, rating: Math.round((r.race && r.race.current && r.race.current.rating) || 0), cat: (r.race && r.race.current && r.race.current.mixed && r.race.current.mixed.category) || '' }])),
 });
