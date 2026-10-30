@@ -115,3 +115,27 @@ test('switching automatic roles off keeps the four for the staff; the season edi
   assert.deepEqual((await get()).body.stages[0].roles, {}, 'no roles set');
   assert.ok(adminPosts().some(t => /audit/.test(t) && !/picked automatically/.test(t)));
 });
+
+test('a scoring rider who says no is replaced in the four at once, the newcomer is told, and the plan is logged', async () => {
+  const st = await setup(100);
+  const roles = (await post('roles', { stage: st.id, auto: true })).body.stages[0].roles;
+  const scorer = Object.keys(roles).find(z => roles[z] === 'scorer'), support = Object.keys(roles).filter(z => roles[z] === 'support');
+  app.world.discord.length = 0;
+  const after = (await post('availability', { stage: st.id, zwid: scorer, status: 'no' })).body.stages[0].roles;
+  assert.equal(after[scorer], 'support');
+  assert.equal(Object.values(after).filter(r => r === 'scorer').length, 4);
+  assert.ok(support.some(z => after[z] === 'scorer'), 'a support rider comes in');
+  assert.match(adminPosts().join('\n'), /can't race, so the scoring four were picked again/);
+  const log = (await app.get('/api/auto', { token: admin })).body.entries;
+  assert.ok(log.some(e => /scoring four picked again/.test(e.summary)));
+});
+
+test('My week offers the Ladder and DIRT answers inline', async () => {
+  const st = await setup(60);
+  const rider = await app.memberSession(ID(2), { name: 'Dirt 2' });
+  const w = (await app.get('/api/me/week', { token: rider })).body.items.find(i => i.kind === 'DIRT Series');
+  assert.deepEqual([w.state, w.avail.series, w.avail.id, w.avail.mine], ['todo', 'drs', st.id, '']);
+  await post('availability', { stage: st.id, status: 'yes' }, rider);
+  const w2 = (await app.get('/api/me/week', { token: rider })).body.items.find(i => i.kind === 'DIRT Series');
+  assert.deepEqual([w2.state, w2.avail.mine], ['in', 'yes']);
+});
