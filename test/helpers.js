@@ -108,6 +108,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'LPUSH': { const l = (db[key] = db[key] || []); for (const v of a) l.unshift(v); return l.length; }
     case 'LTRIM': { const l = db[key] || []; const to = Number(a[1]); db[key] = l.slice(Number(a[0]), to < 0 ? l.length + to + 1 : to + 1); return 'OK'; }
     case 'LRANGE': { const l = db[key] || []; const to = Number(a[1]); return l.slice(Number(a[0]), to < 0 ? l.length + to + 1 : to + 1); }
+    case 'LSET': { const l = db[key] || []; l[Number(a[0])] = a[1]; return 'OK'; }
     default: throw new Error(`unsupported redis command ${cmd}`);
   }
 }

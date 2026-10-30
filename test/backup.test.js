@@ -77,3 +77,24 @@ test('old copies are pruned; the health row reports the last automatic copy', as
   const manual = (await backups()).body.backups.filter(b => b.kind === 'manual');
   assert.equal(manual.length, 10, 'ten manual copies are kept');
 });
+
+test('the weekly restore test passes on a good copy, writes nothing, shows in health, and fails on an empty or damaged one', async () => {
+  const world = app.world;
+  void world;
+  await app.post('/api/zrl/round', { name: 'R', start: h.ymd(8), closes: h.ymd(10) }, { token: admin });
+  await tick();   // takes the daily copy and the first test
+  const ok = (await app.post('/api/admin/backup-verify', {}, { token: admin })).body;
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.ok(ok.commands > 0 && ok.backupItems > 0);
+  const live = JSON.stringify(app.world.db['cg:zrl:round']);
+  await app.post('/api/admin/backup-verify', {}, { token: admin });
+  assert.equal(JSON.stringify(app.world.db['cg:zrl:round']), live, 'nothing was restored');
+  const health = (await app.get('/api/health', { token: admin })).body.checks.find(c => c.id === 'backup');
+  assert.match(health.detail, /Restore test passed/);
+  const field = Object.keys(app.world.db['cg:backup']).find(f => f.startsWith('auto:'));
+  app.world.db['cg:backup'][field] = 'not a backup';
+  const bad = (await app.post('/api/admin/backup-verify', {}, { token: admin })).body;
+  assert.equal(bad.ok, false); assert.match(bad.problems[0], /could not be read/);
+  assert.equal((await app.get('/api/health', { token: admin })).body.checks.find(c => c.id === 'backup').status, 'warn');
+  assert.equal((await app.post('/api/admin/backup-verify', {}, { token: await app.login('mod') })).status, 403);
+});

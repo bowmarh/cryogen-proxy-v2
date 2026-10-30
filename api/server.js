@@ -926,6 +926,7 @@ const TTT_ROUTES = {
         captains: Object.entries(plan.newCaptains).map(([id, key]) => ({ team: id, name: nameOf.get(key) || key })) };
     }
     await redis(plan.commands);
+    await recordTttAllocation(data, plan, 'staff').catch(e => console.error('Auto log:', e.message));
     return { ...tttView(await loadTtt(), roleFromRequest(req)), summary: plan.summary };
   },
 
@@ -1149,6 +1150,13 @@ function tttAllocation(data, velo){
   }
   commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
   return { placements, summary, commands, newCaptains, assign };
+}
+
+// The undo for an allocation: each rider's team places and the week (captains) as they were.
+function recordTttAllocation(data, plan, by){
+  const undo = Object.keys(plan.placements).map(key => (data.assign[key] && data.assign[key].length ? ['HSET', TTT_KEYS.assign, key, JSON.stringify(data.assign[key])] : ['HDEL', TTT_KEYS.assign, key]));
+  undo.push(['SET', TTT_KEYS.week, JSON.stringify(data.week)]);
+  return autoLog.record({ series: 'TTT', by, summary: `Allocated ${Object.keys(plan.placements).length} rider${Object.keys(plan.placements).length === 1 ? '' : 's'} to teams${Object.keys(plan.newCaptains).length ? ` and picked ${Object.keys(plan.newCaptains).length} captain${Object.keys(plan.newCaptains).length === 1 ? '' : 's'}` : ''}`, undo });
 }
 
 // ── Auto-assign planner ────────────────────────────────────
@@ -1503,7 +1511,7 @@ async function runTttSchedule(now = Date.now()){
         try {
           const fresh = await loadTtt();
           const plan = tttAllocation({ ...fresh, week: { ...fresh.week, open: false } }, await riderVelos(fresh.signups));
-          if (Object.keys(plan.placements).length || Object.keys(plan.newCaptains).length){ await redis(plan.commands); auto = plan.summary; assign = plan.assign; }
+          if (Object.keys(plan.placements).length || Object.keys(plan.newCaptains).length){ await redis(plan.commands); await recordTttAllocation(fresh, plan, 'automatic').catch(e => console.error('Auto log:', e.message)); auto = plan.summary; assign = plan.assign; }
         } catch (e) { console.error('TTT auto-allocate:', e.message); }
       }
       await postClosed(week, data.signups, assign, auto);
@@ -1528,7 +1536,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2193,7 +2201,10 @@ function serveStatic(res, reqPath){
 
 // ── ZRL (Zwift Racing League) ──────────────────────────────
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
+// What the automation changed, with an undo (lib/autolog.js).
+const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
 const zrl = require('../lib/zrl')({
+  autoLog, notify: (...a) => comms.notify(...a),   // comms is created further down
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
   coverHonours: (since, now) => cover.honours(since, now),   // ride cover is created further down
@@ -2210,9 +2221,28 @@ async function handleCover(coverRoute, req, res){
   sendJSON(res, 200, result);
 }
 
+// One event's finishers from ZwiftRacing.app (the organizer key stays on the server). Returns { results: [{ riderId, position, ... }], time, title }.
+// The API allows one results request a minute, so callers ask once per event and treat a 404 as "not published yet".
+async function fetchZrResults(id){
+  const key = process.env.ZWIFTRACING_API_KEY;
+  if (!key) throw new HttpError(503, 'ZWIFTRACING_API_KEY is not set in Vercel yet.');
+  if (!/^\d{1,12}$/.test(String(id || ''))) throw new HttpError(400, 'The event id is a number (the end of the Zwift event link).');
+  let r, data;
+  try {
+    r = await fetch(`https://api.zwiftracing.app/api/public/results/${id}`, { headers: { Authorization: key }, signal: AbortSignal.timeout(8000) });
+    try { data = JSON.parse(await r.text()); } catch (e) { data = null; }
+  } catch (e) {
+    throw new HttpError(e && e.name === 'TimeoutError' ? 504 : 502, e && e.name === 'TimeoutError' ? 'ZwiftRacing.app did not answer in time.' : 'ZwiftRacing.app could not be reached.');
+  }
+  if (r.status === 429) throw new HttpError(429, `ZwiftRacing.app allows one results request a minute. Try again${data && data.retryAfter ? ` in ${data.retryAfter} seconds` : ' in a minute'}.`);
+  if (r.status === 401) throw new HttpError(502, 'ZwiftRacing.app did not accept the key (401).');
+  if (!r.ok || !data || !Array.isArray(data.results)) throw new HttpError(404, 'ZwiftRacing.app has no results for that event id yet.');
+  return data;
+}
+
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
 const ladder = require('../lib/ladder')({
-  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
+  autoLog, notify: (...a) => comms.notify(...a), fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, getRiders: async () => (await fetchRoster()).riders, siteUrl: SITE_URL,
 });
 async function handleLadder(ladderRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -2223,7 +2253,7 @@ async function handleLadder(ladderRoute, req, res){
 
 // DIRT Racing Series (lib/drs.js): a squad of eight in a vELO division, a fixed Tuesday calendar, the best four finishers score.
 const drs = require('../lib/drs')({
-  redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
+  autoLog, notify: (...a) => comms.notify(...a), fetchZrResults, redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
   // Raw vELO ratings from the club roster the dashboard already caches: no ZwiftRacing.app calls of its own, so no rate limits to respect.
   getRatings: async () => Object.fromEntries((await fetchRoster()).riders.map(r => [String(r.riderId), { name: r.name, rating: Math.round((r.race && r.race.current && r.race.current.rating) || 0), cat: (r.race && r.race.current && r.race.current.mixed && r.race.current.mixed.category) || '' }])),
 });
@@ -2340,7 +2370,7 @@ async function handleComms(route, req, res){
 }
 
 // The staff rider profile (lib/profile.js): teams across the club, Discord link, and staff notes and details.
-const profile = require('../lib/profile')({ redis, HttpError, requireRole, memberFromRequest, text, zrl, ladder, drs, comms });
+const profile = require('../lib/profile')({ redis, HttpError, requireRole, memberFromRequest, text, zrl, ladder, drs, comms, tttArchive: TTT_KEYS.archive });
 async function handleProfile(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2381,6 +2411,9 @@ const sheetSync = require('../lib/sheetsync')({
     ttt: { label: 'TTT', mirrorTab: 'CRYO-GEN App TTT', pullTab: SHEET_TABS['ttt-sheet'], sheetId: () => SHEET_ID, rows: tttMirrorRows, pull: tttPull },
     zrl: { label: 'ZRL', mirrorTab: 'CRYO-GEN App ZRL', pullTab: 'TEAM LIST', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => zrl.mirrorRows(),
       pull: async sheetId => (await zrl.routes['POST /api/zrl/sync-board'](syncReq(), { tab: 'TEAM LIST', sheet: sheetId })).sync },
+    // The Ladder and the DIRT Series are published to a mirror tab only for now (the sheet cannot change the app), in the club's ZRL workbook until another is chosen.
+    ladder: { label: 'Ladder', mirrorTab: 'CRYO-GEN App Ladder', pullTab: '', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => ladder.mirrorRows(), pull: null },
+    drs: { label: 'DIRT Series', mirrorTab: 'CRYO-GEN App DIRT', pullTab: '', sheetId: () => process.env.ZRL_SHEET_ID || ZRL_SHEET_DEFAULT, rows: () => drs.mirrorRows(), pull: null },
   },
 });
 async function handleSync(route, req, res){
@@ -2511,6 +2544,9 @@ async function route(req, res){
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
+
+  const autoRoute = autoLog.routes[`${req.method} ${pathname}`];
+  if (autoRoute) return sendJSON(res, 200, await autoRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
   const weekRoute = week.routes[`${req.method} ${pathname}`];
   if (weekRoute) return sendJSON(res, 200, await weekRoute(req));

@@ -353,7 +353,7 @@ table{width:100%;border-collapse:collapse}
       <div id="backup-box" style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px;flex-wrap:wrap">
           <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">💾 Backups</div>
-          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
+          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupVerify()" title="Unpacks the newest daily copy and checks a restore would work; nothing is changed" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Test restore</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
         </div>
         <div id="backup-panel" style="font-size:12px;color:#6b7280">Loading…</div>
       </div>
@@ -579,10 +579,10 @@ function renderSync(){
       const st=s.state||{}, pu=st.push, pl=st.pull;
       const line=(label,x,ok)=>x?`<div style="font-size:11px;color:${x.ok?'#9ca3af':'#f87171'}">${label}: ${x.ok?esc(ok(x)):'failed, '+esc(x.error)} · ${esc(when(x.at))}</div>`:`<div style="font-size:11px;color:#6b7280">${label}: not run yet</div>`;
       const tog=(key,label)=>`<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center;margin-right:12px;${admin?'cursor:pointer':'opacity:.6'}"><input type="checkbox" ${s.settings[key]?'checked':''} ${admin?'':'disabled'} onchange="syncToggle('${id}','${key}',this.checked)"/> ${label}</label>`;
-      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:800;font-size:13px;margin-bottom:2px">${esc(s.label)} <span style="font-weight:400;font-size:11px;color:#6b7280">· ${esc(s.pullTab)} tab in <a href="https://docs.google.com/spreadsheets/d/${esc(s.sheetId)}/edit" target="_blank" rel="noopener" style="color:#6b7280">${esc(s.sheetId.slice(0,8))}…</a> · writes “${esc(s.mirrorTab)}”</span></div>
-        ${line('Sheet → app',pl,x=>Object.entries(x.summary||{}).filter(([,v])=>typeof v==='number').map(([k,v])=>v+' '+k).join(', ')||'done')}${line('App → sheet',pu,x=>x.rows+' rows written')}
-        <div style="margin:6px 0">${tog('pull','Keep the app in step with the sheet (sheet wins)')}${tog('push','Keep the mirror tab up to date')}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap"><button ${syncBusy?'disabled':''} onclick="syncRun('${id}','pull')" style="${btn}">${syncBusy===id+'pull'?'Reading…':'Pull from the sheet now'}</button><button ${syncBusy?'disabled':''} onclick="syncRun('${id}','push')" style="${btn}">${syncBusy===id+'push'?'Writing…':'Publish to the sheet now'}</button>${admin?`<button onclick="syncSheet('${id}',${s.customSheet})" style="${btn};background:none;color:#9ca3af;border-color:rgba(255,255,255,0.15)">Change sheet</button>`:''}</div></div>`;
+      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:800;font-size:13px;margin-bottom:2px">${esc(s.label)} <span style="font-weight:400;font-size:11px;color:#6b7280">· ${s.canPull?esc(s.pullTab)+' tab in':'sheet'} <a href="https://docs.google.com/spreadsheets/d/${esc(s.sheetId)}/edit" target="_blank" rel="noopener" style="color:#6b7280">${esc(s.sheetId.slice(0,8))}…</a> · writes “${esc(s.mirrorTab)}”</span></div>
+        ${s.canPull?line('Sheet → app',pl,x=>Object.entries(x.summary||{}).filter(([,v])=>typeof v==='number').map(([k,v])=>v+' '+k).join(', ')||'done'):''}${line('App → sheet',pu,x=>x.rows+' rows written')}
+        <div style="margin:6px 0">${s.canPull?tog('pull','Keep the app in step with the sheet (sheet wins)'):''}${tog('push','Keep the mirror tab up to date')}${s.canPull?'':'<span style="font-size:11px;color:#6b7280">published to the sheet only</span>'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${s.canPull?`<button ${syncBusy?'disabled':''} onclick="syncRun('${id}','pull')" style="${btn}">${syncBusy===id+'pull'?'Reading…':'Pull from the sheet now'}</button>`:''}<button ${syncBusy?'disabled':''} onclick="syncRun('${id}','push')" style="${btn}">${syncBusy===id+'push'?'Writing…':'Publish to the sheet now'}</button>${admin?`<button onclick="syncSheet('${id}',${s.customSheet})" style="${btn};background:none;color:#9ca3af;border-color:rgba(255,255,255,0.15)">Change sheet</button>`:''}</div></div>`;
     };
     body=google+Object.entries(d.series).map(([id,s])=>row(id,s)).join('')+`<div style="font-size:11px;color:#6b7280;margin-top:8px">The sheet wins: with “keep in step” on, a change made only in the app is replaced at the next sync. The app never writes to your own tabs, only its mirror tab, which is replaced each time. Runs happen every 15 minutes, and when staff open the TTT or ZRL page.</div>`;
   }
@@ -828,6 +828,7 @@ async function loadBackups(){
       <button data-id="${esc(b.id)}" onclick="backupDownload(this.dataset.id)" style="${btn}">Download</button><button data-id="${esc(b.id)}" onclick="backupRestore(this.dataset.id)" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Restore</button></div>`).join(''):'No copies yet. One is taken each day by the scheduled run.';
   }catch(e){ el.innerHTML=`<span style="color:#f87171">${esc(e.message)}</span>`; }
 }
+async function backupVerify(){ try{ const r=await backupCall('/api/admin/backup-verify',{}); alert(r.ok?'Restore test passed: the newest copy unpacks and holds '+r.backupItems+' items ('+r.liveItems+' live). Nothing was changed.':'Restore test FAILED:\n'+r.problems.join('\n')); }catch(e){ alert(e.message); } loadBackups(); }
 async function backupNow(){ try{ await backupCall('/api/admin/backup-now',{}); }catch(e){ alert(e.message); } loadBackups(); }
 async function backupDownload(id){
   try{
@@ -1022,6 +1023,7 @@ async function loadWeek(){
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     weekData=d; weekErr='';
+    try{ const a=await fetch('/api/auto',{headers:tttHeaders()}); weekData.auto=a.ok?(await a.json()).entries:[]; }catch(e){ weekData.auto=[]; }
   }catch(e){ weekErr=e.message; }
   renderWeek();
 }
@@ -1043,9 +1045,28 @@ function renderWeek(){
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
+  ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
-  <div class="card" style="padding:14px 16px"><div style="font-weight:800">Coming up</div>${coming}</div>`;
+  <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
+  ${weekAutoCard(d)}`;
+}
+// One card per series: all fine, or the one thing that is next.
+function weekSeriesStrip(d){
+  if(!d.series) return '';
+  const ico={ok:'✅',warn:'🟡',todo:'⚪',idle:'·'}, col={ok:'#10B981',warn:'#FBBF24',todo:'#9ca3af',idle:'#6b7280'};
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:16px">${d.series.map(s=>`<button onclick="weekGo('${esc(s.go)}')" style="text-align:left;cursor:pointer;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid ${s.state==='ok'?'rgba(16,185,129,0.3)':s.state==='warn'?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.1)'};color:#e5e7eb"><div style="font-size:13px;font-weight:800">${ico[s.state]} ${esc(s.label)}</div><div style="font-size:12px;color:${col[s.state]};margin-top:4px">${esc(s.text)}</div></button>`).join('')}</div>`;
+}
+// What the automatic steps changed, newest first, each with a way back.
+function weekAutoCard(d){
+  const list=d.auto||[]; if(!list.length) return '';
+  return `<details class="card" style="padding:12px 16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">🤖 What the automation did <span style="font-size:12px;font-weight:600;color:#9ca3af">${list.length}</span></summary>
+    ${list.slice(0,20).map(e=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><div style="flex:1;min-width:0"><b>${esc(e.series)}</b> · ${esc(e.summary)}<div style="color:#6b7280">${esc(new Date(e.ts).toLocaleString(undefined,{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.by)}${e.undone?' · undone':''}</div></div>${e.undone?'':`<button onclick="weekUndo('${esc(e.id)}')" style="flex:none;padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e5e7eb;font-size:12px;cursor:pointer">Undo</button>`}</div>`).join('')}</details>`;
+}
+async function weekUndo(id){
+  if(!confirm('Put things back as they were before this step? Anything changed by hand since then on the same riders, teams or matches will be overwritten.')) return;
+  try{ const r=await fetch('/api/auto/undo',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ id })}); const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); }catch(e){ alert(e.message); return; }
+  zrlReady=null; try{ zrlData=null; }catch(e){} loadWeek();
 }
 
 
@@ -1677,6 +1698,8 @@ function renderRider(){
     const z=t.zrl||{};
     teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#6b7280;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#4b5563">Not linked</span>'}</div>`;
   }
+  if(d&&d.career){ const c=d.career, bits=[c.zrl.rounds?`${c.zrl.rounds} ZRL round${c.zrl.rounds===1?'':'s'}`:'', c.ttt.weeks?`${c.ttt.weeks} TTT week${c.ttt.weeks===1?'':'s'}`:'', c.ladder.races?`Ladder: ${c.ladder.races} race${c.ladder.races===1?'':'s'}, ${c.ladder.wins} won, ${c.ladder.points} pts, best ${ordinal(c.ladder.best)}`:'', c.drs.stages?`DIRT: ${c.drs.stages} stage${c.drs.stages===1?'':'s'}, scored in ${c.drs.scored}, ${c.drs.points} pts${c.drs.best?', best P'+c.drs.best:''}`:''].filter(Boolean);
+    teams+=`<div style="font-size:13px;margin:8px 0 2px"><span style="color:#9ca3af;display:inline-block;width:92px">Career</span>${bits.length?esc(bits.join(' · ')):'<span style="color:#4b5563">nothing on record yet</span>'}</div>`; }
   const detForm=d&&rpId?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div><label class="lbl">Time zone / when they ride</label><input id="pf-tz" style="${inp}" maxlength="40" value="${esc(det.tz||'')}" placeholder="e.g. UK evenings"/></div>
       <div><label class="lbl">Preferred team</label><input id="pf-pref" style="${inp}" maxlength="80" value="${esc(det.prefTeam||'')}"/></div>
@@ -2600,6 +2623,7 @@ function ladderMatchCard(m,open){
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('ladder-'+m.id,waLadderText(m),'Share')}
         ${m.upcoming&&m.status!=='challenge'?`<button onclick="ladderAuto('${esc(m.id)}')" title="Picks the strongest legal five from the riders' answers, plus a reserve, and saves it" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick it for me</button>`:''}${m.upcoming?`<button onclick="ladderBuildOpen('${esc(m.id)}')" style="${prim}">🧩 Pick the line-up</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'callout'}).then(r=>r&&alert('Posted: call for riders.'))" style="${btn}">📣 Call for riders</button><button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'lineup'}).then(r=>r&&alert('Posted: line-up and private link.'))" style="${btn}">🏁 Post line-up and link</button>`:''}
+        ${m.status==='scheduled'&&m.at&&m.at<Date.now()?`<button onclick="ladderImport('${esc(m.id)}')" title="Reads the finishing places from ZwiftRacing.app" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">📥 Read result from Zwift</button>`:''}
         ${m.lineup&&m.lineup.length===L.lineup&&m.status!=='cancelled'?`<button onclick="ladderResultOpen('${esc(m.id)}')" style="${btn}">🏆 ${m.result?'Edit':'Enter'} result</button>`:''}
         ${m.result?`<button onclick="ladderPost('post',{match:'${esc(m.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('ladder-res-'+m.id,waLadderResultText(m),'Share result')}`:''}
         <button onclick="ladderFormOpen('${esc(m.id)}')" style="${btn}">✏️ Edit</button>
@@ -2643,6 +2667,23 @@ async function ladderAuto(id){
   const d=await ladderPost('auto-lineup',{ match:id }); if(!d) return;
   const m=d.matches.find(x=>x.id===id); ladderOpen.add(id); renderLadder();
   if(m&&m.reserveInfo) { /* the card now shows the five and the reserve */ }
+}
+async function ladderImport(id){
+  const m=ladder.matches.find(x=>x.id===id); let event;
+  if(!/events\/view\/\d+/.test(m.eventLink||'')){ event=prompt('Zwift event id (the number at the end of the event link):'); if(!event) return; }
+  const d=await ladderPost('result-import',{ match:id, event }); if(!d||!d.preview) return;
+  const p=d.preview, lines=Object.entries(p.positions).sort((a,b)=>a[1]-b[1]).map(([z,pos])=>ordinal(pos)+' '+p.names[z]).join(', ');
+  if(confirm('Result from Zwift: '+(p.won?'we win':'they win')+' '+p.ourPoints+'–'+p.theirPoints+'.\n'+lines+(p.lineupChanged?'\n(The five who raced differ from the line-up; it will be updated.)':'')+'\n\nSave it?')) await ladderPost('result-import',{ match:id, event, apply:true });
+}
+let ladderArc=null;
+async function ladderArchiveLoad(){ if(ladderArc) return; try{ const r=await fetch('/api/ladder/archive',{headers:tttHeaders()}); ladderArc=r.ok?(await r.json()).seasons:[]; }catch(e){ ladderArc=[]; } renderLadder(); }
+function ladderArchiveCard(){
+  return `<details class="card" ${ladderArc?'open':''} ontoggle="if(this.open)ladderArchiveLoad()" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📚 Past seasons</summary>${ladderArc===null?'<div style="font-size:12px;color:#9ca3af;margin-top:8px">Loading…</div>':ladderArc.length?`<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Season</th><th>Team</th><th>Played</th><th>Won–lost</th><th>Points</th></tr></thead><tbody>${ladderArc.map(a=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(a.name)}</td><td>${esc(a.team)}</td><td>${a.played}</td><td>${a.won}–${a.lost}</td><td>${a.pointsFor}–${a.pointsAgainst}</td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:#9ca3af;margin-top:8px">No season has been closed yet.</div>'}</details>`;
+}
+async function ladderCloseSeason(){
+  const name=prompt('Name this season (for example Autumn 2026). Its record and roster are kept in the archive.'); if(!name) return;
+  const clear=confirm('Clear this team\'s matches now so the next season starts clean?\n\nOK = archive and clear. Cancel = archive only (keep the matches on the page).');
+  if(await ladderPost('season-close',{ name:name.trim(), clear })){ ladderArc=null; ladderArchiveLoad(); }
 }
 async function ladderAutoSet(on){ await ladderPost('meta',{ auto:on }); }
 async function ladderBuildSave(id){ if(await ladderPost('lineup',{ match:id, zwids:[...ladderBuild.picked] })) ladderBuild=null, renderLadder(); }
@@ -2726,7 +2767,7 @@ function renderLadder(){
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.4)';
   el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#6b7280">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:#00D4FF;font-size:12px">set rung</a>`:''}</p></div>
-    ${staff?`<button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button>`:''}</div>
+    ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
     ${ladder.challengeRange?`<div style="font-size:12px;color:#9ca3af;margin:-6px 0 10px">🎯 You can challenge rungs <b style="color:#e5e7eb">${ladder.challengeRange.from}${ladder.challengeRange.to>ladder.challengeRange.from?' to '+ladder.challengeRange.to:''}</b> (up to seven above you). ${esc(ladder.challengeRange.note)}</div>`:''}
     ${staff&&ladder.activity&&['warn','zombie','removed'].includes(ladder.activity.state)?`<div class="card" style="padding:10px 14px;margin-bottom:10px;font-size:13px;border-color:rgba(251,191,36,0.4);color:#FBBF24">🧟 ${ladder.activity.state==='warn'?`No race for ${ladder.activity.days} days. At 21 the team counts as a zombie and at 35 it is removed: get a challenge out.`:ladder.activity.state==='zombie'?`No race for ${ladder.activity.days} days: a zombie team. At 35 days the ladder removes it.`:`No race for ${ladder.activity.days} days: the ladder may already have removed this team.`}</div>`:''}
     ${staff&&(ladder.shared||[]).length?`<div style="font-size:12px;color:#FBBF24;margin:-4px 0 10px">⚠️ On more than one ladder roster (the league locks a rider to one team a season): ${ladder.shared.map(x=>esc(x.name)+' (also '+x.teams.map(esc).join(', ')+')').join('; ')}.</div>`:''}
@@ -2734,6 +2775,7 @@ function renderLadder(){
     ${ladderFormCard()}
     ${up.length?up.map((m,i)=>ladderMatchCard(m,ladderOpen.has(m.id)||(i===0&&!ladderOpen.size&&!past.some(p=>ladderOpen.has(p.id))))).join(''):'<div class="card" style="padding:14px 16px;font-size:13px;color:#9ca3af">No challenge is open.'+(staff?' Press <b>+ New challenge</b> when a team above you accepts.':'')+'</div>'}
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:16px 0 8px">Past matches</div>${past.map(m=>ladderMatchCard(m,ladderOpen.has(m.id))).join('')}`:''}
+    ${staff?ladderArchiveCard():''}
     ${rec.riders.length?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📊 Rider points</summary><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Rider</th><th>Races</th><th>Points</th><th>Average</th><th>Best</th></tr></thead><tbody>${rec.riders.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(r.name)}</td><td>${r.races}</td><td>${r.points}</td><td>${r.avg}</td><td>${r.best?ordinal(r.best):'—'}</td></tr>`).join('')}</tbody></table></details>`:''}
     ${ladderRosterCard()}${ladderHelpCard()}`;
 }
@@ -2820,7 +2862,7 @@ function drsStageCard(st,open){
       ${staff?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06)">
         ${waBtn('drs-'+st.id,waDrsText(st),'Share')}
         ${up?`<button onclick="drsAutoRoles('${esc(st.id)}')" title="From the riders' answers, keeping anyone near the vELO cap out of the scoring four" style="${prim};background:rgba(16,185,129,0.15);color:#34d399;border-color:rgba(16,185,129,0.45)">⚡ Pick the four for me</button><button onclick="drsRolesOpen('${esc(st.id)}')" style="${prim}">🎯 Pick the scoring four</button><button onclick="drsPost('post',{stage:'${esc(st.id)}'}).then(r=>r&&alert('Posted to Discord.'))" style="${btn}">🏁 Post to Discord</button>`:''}
-        <button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
+        <button onclick="drsImport('${esc(st.id)}')" title="Reads the squad's finishing places from ZwiftRacing.app" style="${btn}">📥 Read places from Zwift</button><button onclick="drsResultOpen('${esc(st.id)}')" style="${btn}">🏆 ${st.result?'Edit':'Enter'} result</button>${st.result?`<button onclick="drsPost('post',{stage:'${esc(st.id)}',kind:'result'}).then(r=>r&&alert('Result posted to Discord.'))" style="${btn}">📣 Post result</button>${waBtn('drs-res-'+st.id,waDrsResultText(st),'Share result')}`:''}<button onclick="drsStageOpen('${esc(st.id)}')" style="${btn}">✏️ Edit</button>
         <button onclick="if(confirm('Delete this stage?'))drsPost('stage-remove',{id:'${esc(st.id)}'})" style="${btn}">Delete</button></div>
       ${drsRoles&&drsRoles.stage===st.id?drsRolesForm(st):''}${drsResult&&drsResult.stage===st.id?drsResultForm(st):''}`:''}</div></details>`;
 }
@@ -2832,6 +2874,13 @@ function drsAnswerBlock(st,staff){
   const names=Object.fromEntries(drs.squad.map(r=>[r.zwid,r.name]));
   const who=staff&&st.availability?`<div style="font-size:12px;color:#9ca3af;margin-top:6px">${Object.entries(st.availability).map(([z,a])=>`${{yes:'✅',maybe:'🤔',no:'❌','':'·'}[a]} ${esc(names[z]||z)}`).join(' &nbsp; ')}</div>`:'';
   return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:12px 0 6px">Can you race? <span style="font-weight:400;text-transform:none;color:#9ca3af">${c.yes} yes · ${c.maybe} maybe · ${c.no} no · ${c.none} not answered</span></div>${mine?`<div style="display:flex;gap:6px;flex-wrap:wrap">${mine}</div>`:''}${who}${st.dnqRisk&&staff?`<div style="font-size:12px;color:#f87171;margin-top:6px">⚠️ Fewer than ${drs.season.scorers} riders can race: the team would not score.</div>`:''}`;
+}
+async function drsImport(id){
+  const st=drs.stages.find(x=>x.id===id); let event;
+  if(!/events\/view\/\d+/.test(st.eventLink||'')){ event=prompt('Zwift event id (the number at the end of the event link):'); if(!event) return; }
+  const d=await drsPost('result-import',{ stage:id, event }); if(!d||!d.preview) return;
+  const p=d.preview;
+  if(confirm('Found '+p.riders.length+' of the squad: '+p.riders.map(r=>'P'+r.pos+' '+r.name+(r.scores?' ⭐':'')).join(', ')+'.'+(p.pointsPending?'\nPoints are not included: enter them from the DRS results afterwards.':'')+'\n\nSave these places?')) await drsPost('result-import',{ stage:id, event, apply:true });
 }
 async function drsAutoRoles(id){ if(await drsPost('roles',{ stage:id, auto:true })){ drsOpen.add(id); renderDrs(); } }
 async function drsAutoSet(on){ await drsPost('auto',{ on }); }
@@ -2925,7 +2974,13 @@ function renderDrs(){
     ${past.length?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:14px 0 8px">Played and past</div>${past.map(st=>drsStageCard(st,drsOpen.has(st.id))).join('')}`:''}
     ${rec.riders.length?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📊 Rider points (best ${s.scorers} score)</summary><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Rider</th><th>Stages</th><th>Scored in</th><th>Points</th><th>Best</th></tr></thead><tbody>${rec.riders.map(r=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(r.name)}</td><td>${r.stages}</td><td>${r.scored}</td><td>${r.points}</td><td>${r.best?ordinal(r.best):'—'}</td></tr>`).join('')}</tbody></table></details>`:''}
     ${staff?`<details class="card" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📅 Paste the calendar</summary><div style="font-size:12px;color:#9ca3af;margin:8px 0">One stage a line: <code>date | type | route | km</code> (type: scratch, points, itt or ttt).</div><textarea id="dc-lines" class="inp" rows="5" placeholder="2026-11-03 | scratch | Route name | 28&#10;2026-11-10 | points | Route name | 30&#10;2026-11-17 | ttt | Route name | 25" style="font-size:12px;font-family:monospace"></textarea><button onclick="drsCalendarPaste()" style="margin-top:8px;padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">Add these stages</button></details>`:''}
+    ${staff?drsArchiveCard():''}
     ${drsHelpCard()}`;
+}
+let drsArc=null;
+async function drsArchiveLoad(){ if(drsArc) return; try{ const r=await fetch('/api/drs/archive',{headers:tttHeaders()}); drsArc=r.ok?(await r.json()).seasons:[]; }catch(e){ drsArc=[]; } renderDrs(); }
+function drsArchiveCard(){
+  return `<details class="card" ${drsArc?'open':''} ontoggle="if(this.open)drsArchiveLoad()" style="padding:12px 16px;margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:800">📚 Past seasons</summary>${drsArc===null?'<div style="font-size:12px;color:#9ca3af;margin-top:8px">Loading…</div>':drsArc.length?`<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:#6b7280;font-size:10px;text-transform:uppercase;text-align:left"><th style="padding:3px 6px">Season</th><th>Team</th><th>Division</th><th>Stages</th><th>Team points</th></tr></thead><tbody>${drsArc.map(a=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px;font-weight:600">${esc(a.name)}</td><td>${esc(a.team)}</td><td>${esc(a.division)}</td><td>${a.played}</td><td>${a.teamPoints}</td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:#9ca3af;margin-top:8px">No season has been archived yet. A reset keeps the finished season here.</div>'}</details>`;
 }
 
 // ── Rides ──────────────────────────────────────────────────
