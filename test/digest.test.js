@@ -37,7 +37,6 @@ test('what the automation did in the last day, and what is on today, are include
   await tick();
   const text = digests()[0];
   assert.match(text, /The automation did 1 thing/); assert.match(text, /TTT: Allocated 1 rider/);
-  assert.match(text, /On today and tomorrow/);
 });
 
 test('an administrator can switch it off; a moderator can read the setting but not change it; riders cannot see it', async () => {

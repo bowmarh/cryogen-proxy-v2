@@ -73,7 +73,10 @@ test('problems are explained: no key, a sheet not shared, a bad key, a missing t
   delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   let r = await run({ series: 'ttt', direction: 'push' });
   assert.equal(r.status, 409); assert.match(r.body.error, /GOOGLE_SERVICE_ACCOUNT_JSON/);
-  assert.equal((await settings({ series: 'ttt', push: true })).status, 409, 'publishing cannot be turned on without the key');
+  assert.equal((await settings({ series: 'ttt', push: true })).status, 200, 'publishing can be switched on before the key: it is remembered');
+  assert.equal((await app.get('/api/sync', { token: admin })).body.series.ttt.settings.push, true);
+  assert.deepEqual((await app.call('POST', '/api/sync/auto', { token: admin, body: { series: 'ttt' } })).body.ran, [], 'but nothing is written without the key');
+  await settings({ series: 'ttt', push: false });
   process.env.GOOGLE_SERVICE_ACCOUNT_JSON = KEY_JSON;
   world.gs.sheets[TTT_SHEET].locked = true;
   r = await run({ series: 'ttt', direction: 'push' });
