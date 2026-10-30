@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "installCommand": "node -e \"process.exit(Object.keys(require('./package.json').dependencies||{}).length?1:0)\" || env -u npm_config_cache-dir -u npm_config_cache_dir -u NPM_CONFIG_CACHE_DIR npm install --omit=dev --no-audit --no-fund",
   "functions": {
     "api/server.js": {
       "maxDuration": 60
