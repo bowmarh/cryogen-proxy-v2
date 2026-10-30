@@ -26,7 +26,7 @@ beforeEach(async () => {
     await app.post('/api/zrl/assign', { key: z, team: t }, { token: admin });
   }
   await app.post('/api/zrl/captain', { team: 'cryo-gen-alpha', key: '1002' }, { token: admin });
-  setRound({ open: false });
+  setRound({ open: false, autoFix: { place: true, lineups: false } });   // these tests are about the nudges; the automatic fill has its own test below
   await app.post('/api/zrl/status', { published: true, announce: false }, { token: admin });
   app.world.discord.length = 0;
 });
@@ -111,4 +111,19 @@ test('the day after the race, and a week with everything in place, read correctl
   const text = posts('admin').find(p => /race 1 is today/.test(p));
   assert.match(text, /✅ Every team has a full line-up of 1/);
   assert.ok(!/No race time|registered on WTRL/.test(text), 'nothing else to flag');
+});
+
+test('two days out the line-ups are filled from the answers first, the admin channel hears about it, and only the teams still short are chased', async () => {
+  setRound({ autoFix: { place: true, lineups: true }, start: h.ymd(1), racing: 2 });
+  await app.post('/api/zrl/availability', { week: 0, zwid: '1002', status: 'yes' }, { token: admin });
+  await app.post('/api/zrl/availability', { week: 0, zwid: '4378027', status: 'maybe' }, { token: admin });
+  const ran = await tick();
+  assert.ok(ran.includes('zrl-autolineup-1') && ran.includes('zrl-lineup-1'), JSON.stringify(ran));
+  const w = (await app.get('/api/zrl', { token: admin })).body.weekly.lineup;
+  assert.deepEqual(w['0:cryo-gen-alpha'].slice().sort(), ['1002', '4378027']);
+  const admin1 = posts('admin');
+  assert.match(admin1[0], /line-ups filled in from the riders' answers for 2 teams/);
+  assert.match(admin1.find(t => /not picked a full line-up/.test(t)), /Beta/);
+  assert.ok(!/Alpha/.test(admin1.find(t => /not picked a full line-up/.test(t))), 'Alpha is sorted');
+  assert.deepEqual(await tick(), [], 'once');
 });

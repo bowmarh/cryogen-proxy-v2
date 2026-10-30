@@ -503,12 +503,14 @@ function postTttDigest(week, signups, assign){
   lines.push(`${SITE_URL} → 🏁 TTT Week`);
   return discord('admin', { content: lines.join('\n') });
 }
-function postClosed(week, signups, assign){
+function postClosed(week, signups, assign, auto){
   const avail = signups.filter(s => s.available);
   const unplaced = avail.filter(s => !(assign[s.name.toLowerCase()] || []).length).length;
+  const extra = auto ? [`🤖 Teams suggested automatically: ${auto.placed} placed${auto.merged && auto.merged.length ? `, ${auto.merged.length} moved out of a team that was too small` : ''}.`,
+    auto.short.length ? `⚠️ Under 4 riders: ${auto.short.join(', ')}` : '', auto.noCaptain.length ? `⭐ No captain yet: ${auto.noCaptain.join(', ')}` : '', auto.unplaced.length ? `❌ Could not fit: ${auto.unplaced.join(', ')}` : '', auto.outside.length ? `↔️ Outside their choices: ${auto.outside.join(', ')}` : ''].filter(Boolean).join('\n') + '\n' : '';
   return Promise.all([
     discord('public', { content: `🔒 Sign-ups for **${discordEscape(week.title)}** are closed — ${avail.length} rider${avail.length === 1 ? '' : 's'}. Line-ups coming soon.` }),
-    discord('admin', { content: `🛠️ **${discordEscape(week.title)}**: sign-ups closed — ${avail.length} available, ${unplaced} not yet in a team.\nBuild and publish the teams: ${SITE_URL} → 🏁 TTT Week` }),
+    discord('admin', { content: `🛠️ **${discordEscape(week.title)}**: sign-ups closed — ${avail.length} available, ${unplaced} not yet in a team.\n${extra}${auto ? 'Check the teams and publish' : 'Build and publish the teams'}: ${SITE_URL} → 🏁 TTT Week` }),
   ]);
 }
 
@@ -916,26 +918,22 @@ const TTT_ROUTES = {
     requireRole(req, ['admin', 'mod']);
     const data = await requireWeek();
     const velo = await riderVelos(data.signups);
-    const { placements, summary } = planTeams({ teams: data.week.teams, signups: data.signups, assign: data.assign, velo });
+    const plan = tttAllocation(data, velo);
     // A preview shows who would go where and changes nothing; staff look, then apply.
     if (body && body.preview) {
       const nameOf = new Map(data.signups.map(x => [x.name.toLowerCase(), x.name]));
-      return { plan: Object.entries(placements).map(([key, ids]) => ({ name: nameOf.get(key) || key, teams: ids })), summary };
+      return { plan: Object.entries(plan.placements).map(([key, ids]) => ({ name: nameOf.get(key) || key, teams: ids })), summary: plan.summary,
+        captains: Object.entries(plan.newCaptains).map(([id, key]) => ({ team: id, name: nameOf.get(key) || key })) };
     }
-    const commands = Object.entries(placements).map(([key, ids]) => ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]);
-    // Give every team without a captain its strongest volunteer.
-    const assign = { ...data.assign, ...placements };
-    const captains = captainsOf({ week: data.week, assign });
-    summary.noCaptain = [];
-    for (const t of data.week.teams){
-      const inTeam = Object.values(assign).some(ids => ids.includes(t.id));
-      if (!inTeam || captains[t.id]) continue;
-      const pick = pickCaptain(t.id, data.signups, assign, velo);
-      if (pick) captains[t.id] = pick; else summary.noCaptain.push(t.name);
-    }
-    commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
-    await redis(commands);
-    return { ...tttView(await loadTtt(), roleFromRequest(req)), summary };
+    await redis(plan.commands);
+    return { ...tttView(await loadTtt(), roleFromRequest(req)), summary: plan.summary };
+  },
+
+  // Staff: switch the automatic allocation (when sign-ups close) on or off for this week.
+  'POST /api/ttt/auto-settings': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    await requireWeek();
+    await weekWith({ autoAllocate: body.allocate !== false });
   },
 
   'POST /api/ttt/captain': async (req, body) => {
@@ -1137,6 +1135,22 @@ async function readTttBoard(){
   return { tab, blocks: readTeamBoard(grid) };
 }
 
+// The plan for placing the available riders who have no team, and a captain (the strongest volunteer) for every started team without one.
+function tttAllocation(data, velo){
+  const { placements, summary } = planTeams({ teams: data.week.teams, signups: data.signups, assign: data.assign, velo });
+  const commands = Object.entries(placements).map(([key, ids]) => ['HSET', TTT_KEYS.assign, key, JSON.stringify(ids)]);
+  const assign = { ...data.assign, ...placements };
+  const captains = captainsOf({ week: data.week, assign }), newCaptains = {};
+  summary.noCaptain = [];
+  for (const t of data.week.teams){
+    if (!Object.values(assign).some(ids => ids.includes(t.id)) || captains[t.id]) continue;
+    const pick = pickCaptain(t.id, data.signups, assign, velo);
+    if (pick){ captains[t.id] = pick; newCaptains[t.id] = pick; } else summary.noCaptain.push(t.name);
+  }
+  commands.push(['SET', TTT_KEYS.week, JSON.stringify({ ...data.week, captains })]);
+  return { placements, summary, commands, newCaptains, assign };
+}
+
 // ── Auto-assign planner ────────────────────────────────────
 const TTT_MIN_TEAM = 4;                  // fewer than this can't really race a TTT
 const EMPTY_TEAM_PENALTY = 250;          // vELO points: prefer filling a started team over opening a new one
@@ -1195,6 +1209,31 @@ function planTeams({ teams, signups, assign, velo }){
       if (chosen.some(id => s.preferred.includes(id))) summary.preferred++;
     } else {
       summary.unplaced.push(s.name);
+    }
+  }
+  // A team this plan left with fewer than four riders is dissolved into the other started teams when every one of its riders was placed by
+  // this plan (so nobody already settled is moved) and each has a team with room to go to.
+  summary.merged = [];
+  for (const t of teams){
+    const mine = members[t.id].slice();
+    if (!mine.length || mine.length >= TTT_MIN_TEAM) continue;
+    if (!mine.every(k => placements[k] && placements[k].length === 1)) continue;
+    const spare = Object.fromEntries(teams.map(o => [o.id, max[o.id] - members[o.id].length]));
+    const moves = [];
+    for (const k of mine){
+      const signup = signups.find(x => x.name.toLowerCase() === k);
+      const dest = teams.filter(o => o.id !== t.id && members[o.id].length >= TTT_MIN_TEAM - 1 && spare[o.id] > 0)
+        .sort((a, b) => (signup.preferred.includes(b.id) - signup.preferred.includes(a.id)) || (distance(a.id, k) - distance(b.id, k)))[0];
+      if (!dest){ moves.length = 0; break; }
+      spare[dest.id]--; moves.push([k, dest.id]);
+    }
+    if (!moves.length) continue;
+    for (const [k, id] of moves){
+      members[t.id] = members[t.id].filter(x => x !== k);
+      members[id].push(k); placements[k] = [id];
+      const signup = signups.find(x => x.name.toLowerCase() === k);
+      summary.merged.push(`${signup.name} → ${teams.find(o => o.id === id).name}`);
+      if (signup.preferred.length && !signup.preferred.includes(id)) summary.outside.push(`${signup.name} → ${teams.find(o => o.id === id).name}`);
     }
   }
   for (const t of teams){
@@ -1458,7 +1497,16 @@ async function runTttSchedule(now = Date.now()){
     if (event === 'digest') await postTttDigest(week, data.signups, data.assign);
     if (event === 'close'){
       if (week.open) await redis([['SET', TTT_KEYS.week, JSON.stringify({ ...week, open: false })]]);
-      await postClosed(week, data.signups, data.assign);
+      // Teams are suggested straight away (riders already in a team stay put); the staff check it and publish.
+      let auto = null, assign = data.assign;
+      if (week.autoAllocate !== false && !week.published){
+        try {
+          const fresh = await loadTtt();
+          const plan = tttAllocation({ ...fresh, week: { ...fresh.week, open: false } }, await riderVelos(fresh.signups));
+          if (Object.keys(plan.placements).length || Object.keys(plan.newCaptains).length){ await redis(plan.commands); auto = plan.summary; assign = plan.assign; }
+        } catch (e) { console.error('TTT auto-allocate:', e.message); }
+      }
+      await postClosed(week, data.signups, assign, auto);
     }
     if (event === 'next-week'){
       const date = addDays(week.date, 7);
