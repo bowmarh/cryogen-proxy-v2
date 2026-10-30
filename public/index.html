@@ -1064,6 +1064,7 @@ function renderWeek(){
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
   ${weekLiveCard(d)}
+  ${weekNewCard(d)}
   ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
@@ -1072,6 +1073,12 @@ function renderWeek(){
   ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}`;
 }
 async function weekDigestSet(on){ try{ await fetch('/api/digest',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
+// New members and what each still has to do (Discord, a category, a team); the app messages those it can after three and ten days.
+function weekNewCard(d){
+  const list=(d.newMembers||[]).slice(0,12); if(!list.length) return '';
+  return `<details class="card" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👋 New members <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.newMembers.length} in the last month</span></summary>
+    ${list.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><b style="min-width:150px">${rn(m.name,m.zwid)}</b><span style="color:#6b7280;min-width:70px">${m.days===0?'today':m.days+' day'+(m.days===1?'':'s')}</span>${m.steps.map(s=>`<span style="color:${s.done?'#10B981':'#FBBF24'}">${s.done?'✅':'⬜'} ${esc(s.label)}</span>`).join('')}</div>`).join('')}</details>`;
+}
 // Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
 setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);
 async function weekPen(kind,id,zwid,on){

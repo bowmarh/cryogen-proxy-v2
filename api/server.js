@@ -1576,7 +1576,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2463,6 +2463,21 @@ async function handleSync(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
+const onboarding = require('../lib/onboarding')({
+  redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
+  // Everyone who is on a team or has signed up somewhere right now: ZRL sign-ups, the Ladder rosters, DIRT squads and this week's TTT.
+  teamSets: async () => {
+    const [zs, lr, ds, ts] = await redis([['HGETALL', zrl.KEYS.signups], ['HGETALL', ladder.KEYS.roster], ['HGETALL', drs.KEYS.squad], ['HGETALL', TTT_KEYS.signups]]);
+    const out = new Set(), vals = raw => { const o = []; for (let i = 0; i < (raw || []).length; i += 2) { try { o.push([raw[i], JSON.parse(raw[i + 1])]); } catch (e) { /* skip */ } } return o; };
+    for (const [, v] of vals(zs)) if (v.zwid && v.in !== false) out.add(String(v.zwid));
+    for (const [f, v] of vals(lr)) out.add(String((v && v.zwid) || f.split('|').pop()));
+    for (const [f, v] of vals(ds)) out.add(String((v && v.zwid) || f.split('|').pop()));
+    for (const [, v] of vals(ts)) if (v.zwid && v.available !== false) out.add(String(v.zwid));
+    return out;
+  },
+});
+
 // The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
 async function runDigest(now = Date.now()){
@@ -2495,7 +2510,7 @@ const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpErro
 
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
-  requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
+  onboarding, requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
   assocList: req => assoc.routes['GET /api/assoc/list'](req),
 });
 
@@ -2516,7 +2531,7 @@ async function handleCalendar(route, req, res){
 }
 
 // Daily copies of the ZRL and TTT data, kept in Redis (lib/backup.js); admins can download or restore them.
-const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS, syncKeys: sheetSync.KEYS });
+const backup = require('../lib/backup')({ redis, HttpError, requireRole, zrlKeys: zrl.KEYS, tttKeys: TTT_KEYS, ladderKeys: ladder.KEYS, coverKeys: cover.KEYS, drsKeys: drs.KEYS, assocKeys: assoc.KEYS, commsKeys: comms.KEYS, calendarKeys: calendar.KEYS, profileKeys: profile.KEYS, syncKeys: sheetSync.KEYS, extraHashes: [onboarding.KEY, live.KEY] });
 async function handleBackup(route, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await route(req, body, parseRequestUrl(req).query);
@@ -2622,6 +2637,9 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const onboardRoute = onboarding.routes[`${req.method} ${pathname}`];
+  if (onboardRoute) return sendJSON(res, 200, await onboardRoute(req));
+
   const liveRoute = live.routes[`${req.method} ${pathname}`];
   if (liveRoute) return sendJSON(res, 200, await liveRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
