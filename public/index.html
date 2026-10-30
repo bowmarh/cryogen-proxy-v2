@@ -353,7 +353,7 @@ table{width:100%;border-collapse:collapse}
       <div id="backup-box" style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px;flex-wrap:wrap">
           <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">💾 Backups</div>
-          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
+          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupVerify()" title="Unpacks the newest daily copy and checks a restore would work; nothing is changed" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Test restore</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
         </div>
         <div id="backup-panel" style="font-size:12px;color:#6b7280">Loading…</div>
       </div>
@@ -828,6 +828,7 @@ async function loadBackups(){
       <button data-id="${esc(b.id)}" onclick="backupDownload(this.dataset.id)" style="${btn}">Download</button><button data-id="${esc(b.id)}" onclick="backupRestore(this.dataset.id)" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Restore</button></div>`).join(''):'No copies yet. One is taken each day by the scheduled run.';
   }catch(e){ el.innerHTML=`<span style="color:#f87171">${esc(e.message)}</span>`; }
 }
+async function backupVerify(){ try{ const r=await backupCall('/api/admin/backup-verify',{}); alert(r.ok?'Restore test passed: the newest copy unpacks and holds '+r.backupItems+' items ('+r.liveItems+' live). Nothing was changed.':'Restore test FAILED:\n'+r.problems.join('\n')); }catch(e){ alert(e.message); } loadBackups(); }
 async function backupNow(){ try{ await backupCall('/api/admin/backup-now',{}); }catch(e){ alert(e.message); } loadBackups(); }
 async function backupDownload(id){
   try{
