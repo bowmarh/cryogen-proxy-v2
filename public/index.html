@@ -111,11 +111,20 @@ table{width:100%;border-collapse:collapse}
           <label class="lbl">Administrator Password</label>
           <input id="admin-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAdminLogin()" style="margin-bottom:12px"/>
           <button class="btn-cyan" onclick="doAdminLogin()">Login as Administrator</button>
+          <a href="#" onclick="loginStep('user');return false" style="display:block;margin-top:10px;font-size:12px;color:#6b7280">Use my own staff login instead</a>
         </div>
         <div id="login-form-mod" style="display:none">
           <label class="lbl">Moderator Password</label>
           <input id="mod-pw" type="password" class="inp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doModLogin()" style="margin-bottom:12px"/>
           <button class="btn-cyan" onclick="doModLogin()">Login as Moderator</button>
+          <a href="#" onclick="loginStep('user');return false" style="display:block;margin-top:10px;font-size:12px;color:#6b7280">Use my own staff login instead</a>
+        </div>
+        <div id="login-form-user" style="display:none">
+          <label class="lbl">Your staff username</label>
+          <input id="user-name" class="inp" placeholder="e.g. rick" autocomplete="username" style="margin-bottom:8px"/>
+          <label class="lbl">Your password</label>
+          <input id="user-pw" type="password" class="inp" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doUserLogin()" style="margin-bottom:12px"/>
+          <button class="btn-cyan" onclick="doUserLogin()">Sign in</button>
         </div>
         <div id="login-form-member" style="display:none">
           <label class="lbl">Your Zwift Name or Rider ID</label>
@@ -339,6 +348,7 @@ table{width:100%;border-collapse:collapse}
       <div style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:#10B981;margin-bottom:4px">📡 Live Data</div><div id="admin-msg" style="font-size:12px;color:#9ca3af">—</div></div>
       <button onclick="loadLive()" style="padding:10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:8px;font-size:13px;font-weight:700">↻ Refresh Live Data</button>
       <div id="sync-card"></div>
+      <div id="staff-card"></div>
       <div style="display:flex;gap:8px">
         <a href="https://docs.google.com/spreadsheets/d/1HvE7eyOYaWYdJL8zj1GoZIxVa5Qhlx1UTdSHcC0VIbw/edit?gid=1775447185" target="_blank" style="flex:1;display:block;padding:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">📊 Open Sheet →</a>
       </div>
@@ -551,6 +561,37 @@ async function syncCall(method,path,body){
   const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
   const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); return d;
 }
+// Personal staff accounts (administrators only): each person signs in as themselves and their name appears in the change log.
+let staffList=null, staffMsg='';
+async function loadStaff(){
+  const el=document.getElementById('staff-card'); if(!el) return;
+  if(role!=='admin'){ el.innerHTML=''; return; }
+  try{ const r=await fetch('/api/staff',{headers:tttHeaders()}); const d=await r.json(); staffList=r.ok?d.users:[]; }catch(e){ staffList=[]; }
+  renderStaff();
+}
+function renderStaff(){
+  const el=document.getElementById('staff-card'); if(!el||role!=='admin'||!staffList) return;
+  const btn='padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  el.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px;margin-top:12px"><div style="font-size:11px;font-weight:700;color:#00D4FF;margin-bottom:6px">🔑 Staff accounts</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Each person signs in with their own username and password, and their name appears in the change log. The shared passwords keep working until you retire them.</div>
+    ${staffList.map(u=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b style="flex:1">${esc(u.name)} <span style="color:#6b7280;font-weight:400">${esc(u.username)} · ${u.role==='admin'?'administrator':'moderator'}</span></b><button onclick="staffEdit('${esc(u.username)}')" style="${btn}">Edit</button><button onclick="staffRemove('${esc(u.username)}')" style="${btn}">Remove</button></div>`).join('')||'<div style="font-size:12px;color:#6b7280">No personal accounts yet.</div>'}
+    <button onclick="staffEdit('')" style="${btn};margin-top:8px">+ Add a person</button>${staffMsg?`<div style="font-size:12px;margin-top:6px;color:${staffMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(staffMsg)}</div>`:''}</div>`;
+}
+async function staffEdit(username){
+  const cur=(staffList||[]).find(u=>u.username===username)||{};
+  const uname=username||prompt('Username (letters, numbers, dots or dashes):'); if(!uname) return;
+  const name=prompt('Name shown in the change log:',cur.name||''); if(!name) return;
+  const roleIn=(prompt('Role: type admin or mod',cur.role||'mod')||'').trim(); if(!roleIn) return;
+  const pw=prompt(username?'New password (leave empty to keep the current one):':'Password (at least 10 characters):','');
+  if(pw===null) return;
+  try{ const r=await fetch('/api/staff',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ username:uname, name, role:roleIn, password:pw })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not save.'); staffMsg='✓ Saved.'; }catch(e){ staffMsg=e.message; }
+  loadStaff();
+}
+async function staffRemove(username){
+  if(!confirm('Remove '+username+'? They can no longer sign in (a session already open lasts until it expires).')) return;
+  try{ const r=await fetch('/api/staff/remove',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ username })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not remove.'); staffMsg='✓ Removed.'; }catch(e){ staffMsg=e.message; }
+  loadStaff();
+}
 async function loadSync(){
   if(role!=='admin'&&role!=='mod') return;
   try{ syncData=await syncCall('GET','/api/sync'); syncErr=''; }catch(e){ syncErr=e.message; }
@@ -673,9 +714,9 @@ async function sharedWrite(path,payload){
 function loginStep(type){
   document.getElementById('login-step1').style.display='none';
   document.getElementById('login-step2').style.display='block';
-  ['admin','mod','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
+  ['admin','mod','user','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
   document.getElementById('login-form-'+type).style.display='block';
-  setTimeout(()=>{ const el=document.getElementById(type==='admin'?'admin-pw':type==='mod'?'mod-pw':'member-search'); if(el)el.focus(); },50);
+  setTimeout(()=>{ const el=document.getElementById(type==='admin'?'admin-pw':type==='mod'?'mod-pw':type==='user'?'user-name':'member-search'); if(el)el.focus(); },50);
 }
 function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
 function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
@@ -688,6 +729,15 @@ async function doRoleLogin(role, inputId){
   if(res.ok){const d=await res.json();sessionStorage.setItem('token',d.token);launchApp(role);}
   else if(res.status===401){showLoginErr('Incorrect password.');}
   else{showLoginErr('Login is unavailable right now. Please try again later.');}
+}
+async function doUserLogin(){
+  const username=document.getElementById('user-name').value.trim(), password=document.getElementById('user-pw').value;
+  if(!username||!password){ showLoginErr('Enter your username and password.'); return; }
+  let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); try{ localStorage.setItem('cgStaffName',d.name); }catch(e){} launchApp(d.role); }
+  else if(res.status===401) showLoginErr('Incorrect username or password.');
+  else if(res.status===429) showLoginErr('Too many wrong attempts from this connection. Try again in 15 minutes.');
+  else showLoginErr('Login is unavailable right now. Please try again later.');
 }
 function doAdminLogin(){doRoleLogin('admin','admin-pw');}
 function doModLogin(){doRoleLogin('mod','mod-pw');}
@@ -848,7 +898,7 @@ async function backupRestore(id){
 let healthTimer=null;
 function openAdmin(){
   document.getElementById('adminModal').style.display='flex';
-  loadHealth(); loadBackups(); loadSync();
+  loadHealth(); loadBackups(); loadSync(); loadStaff();
   if(healthTimer) clearInterval(healthTimer);
   healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
     const m=document.getElementById('adminModal');

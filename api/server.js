@@ -159,6 +159,15 @@ const writesPerMinute = () => Number(process.env.RATE_LIMIT_WRITES_PER_MIN) || 1
 
 async function handleLogin(req, res){
   const payload = await readJSONBody(req);
+  // A personal staff account: username and password.
+  if (payload.username !== undefined){
+    const failKey = `cg:rl:login:${clientIp(req)}`;
+    if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
+    const u = typeof payload.password === 'string' ? await staff.verify(String(payload.username), payload.password) : null;
+    if (u) return sendJSON(res, 200, { role: u.role, name: u.name, token: signToken(u.role, { staffName: u.name, user: u.username }) });
+    await counter(failKey, LOGIN_WINDOW_SEC);
+    return sendJSON(res, 401, { error: 'incorrect username or password' });
+  }
   const envName = ROLE_PASSWORD_ENV[payload.role];
   if (!envName) throw new HttpError(400, 'unknown role');
   const expected = process.env[envName];
@@ -2241,9 +2250,12 @@ function serveStatic(res, reqPath){
 
 // ── ZRL (Zwift Racing League) ──────────────────────────────
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
+const staff = require('../lib/staff')({ redis, HttpError, requireRole, text });   // personal staff accounts
+
 // What the automation changed, with an undo (lib/autolog.js).
 const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
 const zrl = require('../lib/zrl')({
+  staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''),
   autoLog, notify: (...a) => comms.notify(...a),   // comms is created further down
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
@@ -2709,6 +2721,9 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const staffRoute = staff.routes[`${req.method} ${pathname}`];
+  if (staffRoute) return sendJSON(res, 200, await staffRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
   const onboardRoute = onboarding.routes[`${req.method} ${pathname}`];
   if (onboardRoute) return sendJSON(res, 200, await onboardRoute(req));
 
