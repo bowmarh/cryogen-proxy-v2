@@ -2463,6 +2463,44 @@ async function handleSync(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// The public club page (public/club.html): season tables, results and next races, with no rider names, no private links and nothing about people.
+// Off until an administrator turns it on; while it is off the address answers 404.
+const PUBLIC_KEY = 'cg:public:settings';
+const publicOn = async () => { try { return !!JSON.parse((await redis([['GET', PUBLIC_KEY]]))[0] || 'null').on; } catch (e) { return false; } };
+async function publicClub(now = Date.now()){
+  const staff = syncReq(), out = { name: 'CRYO-GEN', generated: new Date(now).toISOString(), ladder: [], drs: [], next: [] };
+  const day = ms => new Date(ms).toISOString().slice(0, 10);
+  try {
+    for (const t of (await ladder.view(staff, undefined, now)).teams) {
+      const v = await ladder.view(staff, t.id, now), rec = v.record;
+      out.ladder.push({ team: t.name, rung: (v.meta && v.meta.rung) || null, played: rec.played, won: rec.won, lost: rec.lost, pointsFor: rec.pointsFor, pointsAgainst: rec.pointsAgainst,
+        recent: v.matches.filter(m => m.status === 'played' && m.result).slice(0, 5).map(m => ({ opponent: m.opponent, date: m.at ? day(m.at) : '', won: m.result.won, score: `${m.result.ourPoints}-${m.result.theirPoints}` })) });
+      for (const m of v.matches) if (m.status === 'scheduled' && m.at && m.at > now) out.next.push({ series: 'Ladder', title: `${t.name} v ${m.opponent}`, at: m.at });
+    }
+  } catch (e) { /* a series that cannot be read is left out */ }
+  try {
+    for (const t of (await drs.view(staff, undefined, now)).teams) {
+      const v = await drs.view(staff, t.id, now); if (!v.season) continue;
+      out.drs.push({ team: t.name, division: v.season.division, season: v.season.name, played: v.record.played, teamPoints: v.record.teamPoints,
+        stages: v.stages.map(s => ({ n: s.n, date: s.date, type: v.types[s.type] || s.type, route: s.route || '', played: s.status === 'played', teamPoints: s.result ? s.result.teamPoints : null })) });
+      for (const s of v.stages) if (s.status === 'upcoming' && s.startMs > now) out.next.push({ series: 'DIRT Series', title: `${t.name} · stage ${s.n}${s.route ? ' · ' + s.route : ''}`, at: s.startMs });
+    }
+  } catch (e) { /* ditto */ }
+  try {
+    const z = await zrl.load();
+    if (z.round) {
+      out.zrl = { round: z.round.name, start: z.round.start, weeks: z.round.weeks, teams: z.round.teams.filter(t => z.signups.some(x => x.in && (z.assign[x.key] || []).includes(t.id))).map(t => ({ name: t.name, division: t.division || '', league: t.league || '' })) };
+      for (let i = 0; i < z.round.weeks; i++) { const ms = Date.parse(`${z.round.start}T00:00:00Z`) + i * 7 * 86400000; if (ms > now - 86400000) out.next.push({ series: 'ZRL', title: `${z.round.name} · race ${i + 1}`, at: ms, dayOnly: true }); }
+    }
+  } catch (e) { /* ditto */ }
+  try {
+    const t = await loadTtt();
+    if (t.week && t.week.date && Date.parse(`${t.week.date}T00:00:00Z`) > now - 86400000) { out.ttt = { title: t.week.title || 'Weekly TTT', date: t.week.date }; out.next.push({ series: 'TTT', title: t.week.title || 'Weekly TTT', at: Date.parse(`${t.week.date}T00:00:00Z`), dayOnly: true }); }
+  } catch (e) { /* ditto */ }
+  out.next = out.next.filter(x => x.at < now + 21 * 86400000).sort((a, b) => a.at - b.at).slice(0, 12).map(x => ({ ...x, date: day(x.at), at: x.dayOnly ? null : x.at }));
+  return out;
+}
+
 // New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
 const onboarding = require('../lib/onboarding')({
   redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
@@ -2613,6 +2651,15 @@ async function route(req, res){
 
   if (pathname === '/api/discord/callback' && req.method === 'GET') return handleDiscordCallback(req, res);
 
+  if (pathname === '/api/public/club' && req.method === 'GET'){
+    if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
+    return sendJSON(res, 200, await publicClub());
+  }
+  if (pathname === '/api/public/settings'){
+    const role = requireRole(req, ['admin', 'mod']);
+    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
+    return sendJSON(res, 200, { on: await publicOn(), canChange: role === 'admin' });
+  }
   const calFeed = /^\/api\/cal\/([A-Za-z0-9_-]+)\.ics$/.exec(pathname);
   if (calFeed && req.method === 'GET'){
     const ics = await calendar.feed(calFeed[1]);

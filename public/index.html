@@ -1039,6 +1039,7 @@ async function loadWeek(){
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     weekData=d; weekErr='';
+    try{ const g=await fetch('/api/public/settings',{headers:tttHeaders()}); weekData.pub=g.ok?await g.json():null; }catch(e){ weekData.pub=null; }
     try{ const g=await fetch('/api/digest',{headers:tttHeaders()}); weekData.digest=g.ok?await g.json():null; }catch(e){ weekData.digest=null; }
     try{ const l=await fetch('/api/live',{headers:tttHeaders()}); weekData.live=l.ok?(await l.json()).events:[]; }catch(e){ weekData.live=[]; }
     try{ const a=await fetch('/api/auto',{headers:tttHeaders()}); weekData.auto=a.ok?(await a.json()).entries:[]; }catch(e){ weekData.auto=[]; }
@@ -1070,8 +1071,10 @@ function renderWeek(){
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
   ${weekAutoCard(d)}
-  ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}`;
+  ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}
+  ${d.pub?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:8px"><input type="checkbox" ${d.pub.on?'checked':''} ${d.pub.canChange?'':'disabled'} onchange="weekPublicSet(this.checked)"> <b>Public club page:</b> show season tables, results and next races (team results only: no rider names, no private links) at <a href="/club.html" target="_blank" rel="noopener" style="color:#00D4FF">/club.html</a>. Off until you tick it.</label>`:''}`;
 }
+async function weekPublicSet(on){ try{ await fetch('/api/public/settings',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
 async function weekDigestSet(on){ try{ await fetch('/api/digest',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
 // New members and what each still has to do (Discord, a category, a team); the app messages those it can after three and ten days.
 function weekNewCard(d){
