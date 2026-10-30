@@ -982,7 +982,11 @@ async function assocDecline(zwid){
 
 
 // ── My week (riders): your own next seven days ──────────────────────────────────────────
-let myWeek=null;
+let myWeek=null; const myWeekPen=new Set();
+async function myWeekPenTap(kind,id){
+  try{ const r=await fetch('/api/live/checkin',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save that.'); return; } }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  myWeekPen.add(kind+':'+id); renderMyWeek();
+}
 async function loadMyWeek(){
   const el=document.getElementById('myweek-card'); if(!el||role!=='member') return;
   try{
@@ -1013,8 +1017,11 @@ function renderMyWeek(){
   const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
   const days={}; d.items.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
+  // "I'm in the pen": shown from an hour before to forty-five minutes after a start, for a race the rider is in.
+  const penBtn=u=>{ if(!u.pen||!u.timed) return ''; const mins=(u.atMs-Date.now())/60000; if(mins>60||mins<-45) return ''; const done=myWeekPen.has(u.pen.kind+':'+u.pen.id);
+    return `<div style="margin-top:6px"><button ${done?'disabled':''} onclick="myWeekPenTap('${esc(u.pen.kind)}','${esc(u.pen.id)}')" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(16,185,129,0.5);background:${done?'rgba(16,185,129,0.2)':'transparent'};color:#34d399">${done?'✅ Your captain can see you are in the pen':'🏁 I\'m in the pen'}</button></div>`; };
   const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="${u.avail.series?`myWeekAnswer('${u.avail.series}','${esc(u.avail.id)}','${u.avail.mine===v?'':v}')`:`myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')`}" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
-  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
+  const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}${penBtn(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
   el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
 }
 
@@ -1032,6 +1039,7 @@ async function loadWeek(){
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     weekData=d; weekErr='';
+    try{ const l=await fetch('/api/live',{headers:tttHeaders()}); weekData.live=l.ok?(await l.json()).events:[]; }catch(e){ weekData.live=[]; }
     try{ const a=await fetch('/api/auto',{headers:tttHeaders()}); weekData.auto=a.ok?(await a.json()).entries:[]; }catch(e){ weekData.auto=[]; }
   }catch(e){ weekErr=e.message; }
   renderWeek();
@@ -1054,11 +1062,27 @@ function renderWeek(){
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
+  ${weekLiveCard(d)}
   ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
   ${weekAutoCard(d)}`;
+}
+// Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
+setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);
+async function weekPen(kind,id,zwid,on){
+  try{ const r=await fetch('/api/live/checkin',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id, zwid, in:on })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save that.'); return; } }catch(e){ alert('Could not reach the server.'); return; }
+  loadWeek();
+}
+function weekLiveCard(d){
+  const ev=d.live||[]; if(!ev.length) return '';
+  const ans={yes:'✅',maybe:'🤔',no:'❌','':'·'};
+  return `<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:rgba(0,212,255,0.35)"><div style="font-weight:800;margin-bottom:4px">🏁 Race day <span style="font-size:12px;font-weight:600;color:#9ca3af">${ev.length} on in the next day</span></div>
+    ${ev.map(e=>{ const label=e.status==='started'?'started '+Math.abs(e.minutes)+' min ago':e.minutes>=90?'in '+Math.round(e.minutes/60)+' h':'in '+e.minutes+' min'; const col=e.status==='later'?'#9ca3af':e.late.length?'#FBBF24':'#10B981';
+      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(e.title)}</b><span style="font-size:12px;color:${col}">${esc(label)} · ${e.ready} of ${e.need} in the pen</span>${e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener" style="font-size:12px;color:#00D4FF">private event →</a>`:''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${e.riders.map(r=>`<span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid ${r.inPen?'rgba(16,185,129,0.5)':e.status!=='later'&&r.role!=='reserve'?'rgba(251,191,36,0.5)':'rgba(255,255,255,0.12)'};background:${r.inPen?'rgba(16,185,129,0.12)':'transparent'}">${ans[r.answer]||'·'} ${rn(r.name,r.zwid,'',true)}${r.role&&r.role!=='starter'?`<span style="color:#6b7280">${esc(r.role)}</span>`:''}<button title="${r.inPen?'Mark as not in the pen':'Mark as in the pen'}" onclick="weekPen('${esc(e.kind)}','${esc(e.id)}','${esc(r.zwid)}',${!r.inPen})" style="background:none;border:none;cursor:pointer;color:${r.inPen?'#34d399':'#6b7280'};padding:0">${r.inPen?'🏁':'○'}</button></span>`).join('')}</div>
+      ${e.status!=='later'&&e.late.length?`<div style="font-size:12px;color:#FBBF24;margin-top:6px">⏳ Not in the pen yet: ${e.late.map(esc).join(', ')}</div>`:''}</div>`; }).join('')}</div>`;
 }
 // One card per series: all fine, or the one thing that is next.
 function weekSeriesStrip(d){

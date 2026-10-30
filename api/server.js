@@ -1536,7 +1536,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2423,6 +2423,9 @@ async function handleSync(route, req, res){
   sendJSON(res, 200, result);
 }
 
+// Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
+const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
+
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
   requireRole, healthChecks, loadTtt, loadState, zrl, cover, ladder, drs,
@@ -2544,6 +2547,9 @@ async function route(req, res){
 
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
+
+  const liveRoute = live.routes[`${req.method} ${pathname}`];
+  if (liveRoute) return sendJSON(res, 200, await liveRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 
   const autoRoute = autoLog.routes[`${req.method} ${pathname}`];
   if (autoRoute) return sendJSON(res, 200, await autoRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
