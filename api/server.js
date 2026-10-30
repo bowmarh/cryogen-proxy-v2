@@ -2514,6 +2514,9 @@ async function publicClub(now = Date.now()){
   return out;
 }
 
+// "Ask the club" (lib/assistant.js): plain words to a short plan from a fixed menu, shown to staff and run only when they confirm. Needs ANTHROPIC_API_KEY.
+const assistant = require('../lib/assistant')({ redis, HttpError, requireRole, adminReq: () => syncReq(), zrl, ladder, drs, autoLog });
+
 // New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
 const onboarding = require('../lib/onboarding')({
   redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
@@ -2721,6 +2724,9 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const assistantRoute = assistant.routes[`${req.method} ${pathname}`];
+  if (assistantRoute) return sendJSON(res, 200, await assistantRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
   const staffRoute = staff.routes[`${req.method} ${pathname}`];
   if (staffRoute) return sendJSON(res, 200, await staffRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
 

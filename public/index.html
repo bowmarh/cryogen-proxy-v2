@@ -1114,6 +1114,7 @@ function renderWeek(){
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });
   const coming=Object.keys(days).sort().map(k=>`<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none;min-width:48px;font-size:12px;color:#9ca3af">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):'—'}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.level]||'#9ca3af'}">${esc(u.note)}</div></div>${goBtn(u.go)}</div>`).join('')}</div>`).join('')||'<div style="padding:10px 0;font-size:13px;color:#9ca3af">Nothing scheduled in the next '+d.windowDays+' days.</div>';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">This week</h2><p style="font-size:13px;color:#6b7280">What needs you, and what is coming up in the next ${d.windowDays} days.</p></div><button onclick="loadWeek()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#9ca3af;font-size:12px">↻ Refresh · ${esc(new Date(d.generated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))}</button></div>
+  ${weekAssistantCard()}
   ${weekLiveCard(d)}
   ${weekNewCard(d)}
   ${weekSeriesStrip(d)}
@@ -1131,6 +1132,30 @@ function weekNewCard(d){
   const list=(d.newMembers||[]).slice(0,12); if(!list.length) return '';
   return `<details class="card" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👋 New members <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.newMembers.length} in the last month</span></summary>
     ${list.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><b style="min-width:150px">${rn(m.name,m.zwid)}</b><span style="color:#6b7280;min-width:70px">${m.days===0?'today':m.days+' day'+(m.days===1?'':'s')}</span>${m.steps.map(s=>`<span style="color:${s.done?'#10B981':'#FBBF24'}">${s.done?'✅':'⬜'} ${esc(s.label)}</span>`).join('')}</div>`).join('')}</details>`;
+}
+// "Ask the club": plain words in, a plan out, nothing runs until it is confirmed.
+let asst={ text:'', busy:false, plan:null, reply:'', problems:[], done:null, err:'' };
+function weekAssistantCard(){
+  const a=asst, btn='padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
+  return `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:6px">✨ Ask the club</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="asst-in" class="inp" style="flex:1;min-width:220px" maxlength="800" placeholder="e.g. Move Ann Lee to Beta, then pick this week's Ladder line-up" value="${esc(a.text)}" oninput="asst.text=this.value" onkeydown="if(event.key==='Enter')assistantAsk()"/><button onclick="assistantAsk()" ${a.busy?'disabled':''} style="${btn}">${a.busy?'Thinking…':'Ask'}</button></div>
+    ${a.err?`<div style="font-size:12px;color:#f87171;margin-top:8px">${esc(a.err)}</div>`:''}
+    ${a.plan?`<div style="margin-top:10px;font-size:13px">${a.reply?esc(a.reply):''}</div>${a.plan.length?`<ol style="margin:8px 0 0 18px;font-size:13px">${a.plan.map(p=>`<li>${esc(p.text)}</li>`).join('')}</ol><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px;margin-top:10px" onclick="assistantRun()">Do this</button> <button onclick="asst.plan=null;renderWeek()" style="${btn};margin-top:10px">Cancel</button>`:'<div style="font-size:12px;color:#9ca3af;margin-top:6px">Nothing to do.</div>'}${a.problems.length?`<div style="font-size:12px;color:#FBBF24;margin-top:8px">Left out: ${a.problems.map(esc).join(' · ')}</div>`:''}`:''}
+    ${a.done?`<div style="margin-top:10px;font-size:13px">${a.done.map(d=>`<div style="color:${d.ok?'#10B981':'#f87171'}">${d.ok?'✅':'⚠️'} ${esc(d.text)}${d.ok?'':': '+esc(d.error)}</div>`).join('')}<div style="font-size:12px;color:#9ca3af;margin-top:4px">Undo any of it under "What the automation did".</div></div>`:''}
+    <div style="font-size:11px;color:#6b7280;margin-top:8px">It can move a ZRL rider, set a ZRL captain, run the ZRL fixes, and pick the next Ladder line-up or DIRT scoring four. It shows you the plan first.</div></div>`;
+}
+async function assistantAsk(){
+  if(asst.text.trim().length<3||asst.busy) return;
+  asst={ ...asst, busy:true, plan:null, done:null, err:'' }; renderWeek();
+  try{ const r=await fetch('/api/assistant',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ message:asst.text })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not ask.'); asst={ ...asst, busy:false, plan:d.plan, reply:d.reply, problems:d.problems||[] }; }
+  catch(e){ asst={ ...asst, busy:false, err:e.message }; }
+  renderWeek(); const el=document.getElementById('asst-in'); if(el) el.focus();
+}
+async function assistantRun(){
+  const plan=asst.plan; if(!plan||!plan.length) return;
+  try{ const r=await fetch('/api/assistant/run',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ plan })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not do that.'); asst={ ...asst, plan:null, text:'', done:d.done }; }
+  catch(e){ asst={ ...asst, err:e.message }; }
+  zrlReady=null; loadWeek();
 }
 // Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
 setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);

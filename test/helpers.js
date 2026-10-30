@@ -175,6 +175,11 @@ function installFetch(world) {
       if (typeof world.zr.body === 'string') return new Response(world.zr.body, { status: world.zr.status || 200, headers: { 'Content-Type': 'text/html' } });
       return json(world.zr.body ?? {}, world.zr.status || 200);
     }
+    if (u.host === 'api.anthropic.com') {   // the model behind the staff assistant: world.anthropic = { reply: <text the model answers>, status, seen: [] }
+      const a = world.anthropic = world.anthropic || { reply: '{"reply":"","actions":[]}', status: 200, seen: [] };
+      a.seen.push({ key: (opts.headers || {})['x-api-key'], body: JSON.parse(opts.body) });
+      return json(a.status === 200 ? { content: [{ type: 'text', text: a.reply }] } : { error: { message: 'model error' } }, a.status);
+    }
     if (u.host === 'hooks.test') {   // an outbound webhook (Zapier, Make): world.hooks collects what was sent; world.hookFail makes it answer 500
       (world.hooks = world.hooks || []).push({ path: u.pathname, body: JSON.parse(opts.body) });
       return world.hookFail ? json({}, 500) : json({ ok: true });
