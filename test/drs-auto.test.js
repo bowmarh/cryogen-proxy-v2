@@ -139,3 +139,20 @@ test('My week offers the Ladder and DIRT answers inline', async () => {
   const w2 = (await app.get('/api/me/week', { token: rider })).body.items.find(i => i.kind === 'DIRT Series');
   assert.deepEqual([w2.state, w2.avail.mine], ['in', 'yes']);
 });
+
+test('a rating climbing towards the cap is forecast, shown on the squad row, and warned about once a week before it is in the alert zone', async () => {
+  const st = await setup(24 * 14);   // a stage in two weeks
+  await post('stage', { type: 'scratch', date: ymd(Date.now() + 21 * 86400000) });
+  await post('stage', { type: 'scratch', date: ymd(Date.now() + 28 * 86400000) });
+  // Dirt 3 is 1520 (cap 1535); give them a climb of 10 a week over the last two weeks
+  app.world.db['cg:drs:ratings'] = { [ID(3)]: JSON.stringify({ history: [{ r: 1500, at: Date.now() - 14 * 86400000 }, { r: 1520, at: Date.now() }] }) };
+  const row = (await get()).body.squad.find(r => r.zwid === ID(3));
+  assert.equal(row.trend, 10); assert.equal(row.forecast, 'breach'); assert.equal(row.stagesToCap, 2);
+  assert.ok(row.projected > 1535);
+  const flat = (await get()).body.squad.find(r => r.zwid === ID(0));
+  assert.equal(flat.forecast, ''); assert.equal(flat.stagesToCap, null);
+  assert.ok((await tick()).includes('drs-forecast'));
+  assert.match(adminPosts().join('\n'), /Dirt 3.*climbing about 10 a week.*cap of 1535 is likely to be reached in about 2 stages/s);
+  assert.ok(!(await tick()).includes('drs-forecast'), 'once a week');
+  void st;
+});
