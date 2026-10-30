@@ -2467,7 +2467,7 @@ async function handleSync(route, req, res){
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
 async function runDigest(now = Date.now()){
   const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
-  let on = true; try { if (raw && JSON.parse(raw).on === false) on = false; } catch (e) { /* default on */ }
+  let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }   // off until an administrator turns it on
   if (!on) return [];
   const uk = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23', hour: 'numeric' }).format(new Date(now));
   if (Number(uk) < Number(process.env.DIGEST_FROM_HOUR || 7)) return [];   // the env var exists so tests do not depend on the time of day
@@ -2617,9 +2617,9 @@ async function route(req, res){
 
   if (pathname === '/api/digest' && (req.method === 'GET' || req.method === 'POST')) {
     const role = requireRole(req, ['admin', 'mod']);
-    if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on !== false })]]); return sendJSON(res, 200, { on: body.on !== false, canChange: true }); }
+    if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on === true })]]); return sendJSON(res, 200, { on: body.on === true, canChange: true }); }
     const [raw] = await redis([['GET', DIGEST_KEYS.settings]]);
-    let on = true; try { if (raw && JSON.parse(raw).on === false) on = false; } catch (e) { /* default on */ }
+    let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
   const liveRoute = live.routes[`${req.method} ${pathname}`];

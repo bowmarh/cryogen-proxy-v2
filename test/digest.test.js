@@ -13,8 +13,10 @@ const tick = () => app.call('GET', '/api/cron/tick', { headers: { Authorization:
 const adminPosts = () => app.world.discord.filter(p => p.channel === 'admin').map(p => p.body.content);
 const digests = () => adminPosts().filter(t => /Good morning/.test(t));
 beforeEach(() => { app.world.db = {}; app.world.discord.length = 0; });
+const turnOn = () => app.post('/api/digest', { on: true }, A);
 
 test('one digest a day, naming what needs attention', async () => {
+  await turnOn();
   await app.post('/api/zrl/round', { name: 'Round 2', start: h.ymd(5), closes: h.ymd(10) }, A);
   await app.post('/api/zrl/teams', { teams: [{ name: 'Alpha', region: 'eu', grade: 'Open B' }] }, A);
   await app.post('/api/zrl/signup', { name: 'Rider Zero', zwid: '1000', regions: ['eu'], cat: 'B' });
@@ -27,6 +29,7 @@ test('one digest a day, naming what needs attention', async () => {
 });
 
 test('what the automation did in the last day, and what is on today, are included', async () => {
+  await turnOn();
   await app.post('/api/ttt/new-week', { date: h.ymd(0) }, A);
   await app.post('/api/ttt/signup', { name: 'Ann Lee' });
   await app.post('/api/ttt/auto-assign', {}, A);
@@ -38,6 +41,8 @@ test('what the automation did in the last day, and what is on today, are include
 });
 
 test('an administrator can switch it off; a moderator can read the setting but not change it; riders cannot see it', async () => {
+  assert.equal((await app.get('/api/digest', A)).body.on, false, 'off until an administrator turns it on');
+  await turnOn();
   assert.equal((await app.get('/api/digest', A)).body.on, true);
   assert.equal((await app.post('/api/digest', { on: false }, { token: await app.login('mod') })).status, 403);
   assert.equal((await app.get('/api/digest', { token: await app.login('mod') })).body.canChange, false);

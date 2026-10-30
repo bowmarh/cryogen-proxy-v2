@@ -1069,7 +1069,7 @@ function renderWeek(){
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
   ${weekAutoCard(d)}
-  ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel at about 07:00 UK, when there is something to say.</label>`:''}`;
+  ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}`;
 }
 async function weekDigestSet(on){ try{ await fetch('/api/digest',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ on })}); }catch(e){ alert('Could not save that.'); } loadWeek(); }
 // Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
