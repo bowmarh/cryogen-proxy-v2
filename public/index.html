@@ -1322,7 +1322,7 @@ function weekBadge(){
 function renderWeek(){
   const el=document.getElementById('week-content'); if(!el) return;
   weekBadge();
-  setTimeout(()=>{ if(window.uiStaffTrend) uiStaffTrend(document.getElementById('staff-trend')); },0);
+  setTimeout(()=>{ if(window.uiStaffTrend) uiStaffTrend(document.getElementById('staff-trend')); if(window.uiStaffAi) uiStaffAi(document.getElementById('staff-ai')); },0);
   if(weekErr&&!weekData){ el.innerHTML=`<div class="card" style="padding:20px;color:#f87171">${esc(weekErr)}</div>`; return; }
   const d=weekData; if(!d) return;
   const col={fail:'#f87171',warn:'#FBBF24',todo:'#9ca3af',ok:'#10B981'}, ico={fail:'🔴',warn:'🟡',todo:'⚪',ok:'✅'};
@@ -1342,6 +1342,7 @@ function renderWeek(){
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
   <div id="staff-trend"></div>
+  <div id="staff-ai"></div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
   ${weekAutoCard(d)}
   ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}
@@ -4268,8 +4269,8 @@ function zrlLineupHtml(t,racing){
     ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);border-left:3px solid ${window.uiTeamColor?uiTeamColor(t.id):'transparent'};padding:6px 0 6px 8px;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#8b95a5">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${window.uiAvatar?uiAvatar(r.name,(riders.find(x=>String(x.id)===String(r.zwid))||{}).cat,r.zwid):''}${rn(r.name,r.zwid,'',true)}</td>
         <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}','${esc(t.id)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
-       <button type="button" data-t="${esc(t.name)}" data-s="${esc('Race '+(w.i+1)+' · '+seasonDay(w.date))}" data-n="${esc(JSON.stringify(w.riders.filter(r=>w.lineup.includes(r.zwid)).map(r=>r.name)))}" onclick="uiLineupCard(this.dataset.t,this.dataset.s,JSON.parse(this.dataset.n))" style="${btn};margin-top:6px">🖼️ Picture</button> <button onclick="zrlLineupAuto('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">✨ Pick for me</button> <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
-      <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
+       <button type="button" data-t="${esc(t.name)}" data-s="${esc('Race '+(w.i+1)+' · '+seasonDay(w.date))}" data-n="${esc(JSON.stringify(w.riders.filter(r=>w.lineup.includes(r.zwid)).map(r=>r.name)))}" onclick="uiLineupCard(this.dataset.t,this.dataset.s,JSON.parse(this.dataset.n))" style="${btn};margin-top:6px">🖼️ Picture</button> <button type="button" onclick="aiLineup('${esc(t.id)}',${w.i},this)" style="${btn};margin-top:6px">🤖 Review</button> <button onclick="zrlLineupAuto('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">✨ Pick for me</button> <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
+      <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div><div id="zl-ai-${esc(t.id)}-${w.i}"></div></details>`).join('')}</div>`;
 }
 async function zrlWeeklyLoad(){
   try{ const r=await fetch('/api/zrl/weekly',{headers:tttHeaders()}); if(r.ok) zrlWeekly=await r.json(); }catch(e){}
@@ -5294,6 +5295,7 @@ if(role && !ssoToken){
 <script src="/js/investigate.js"></script>
 <script src="/js/coach.js"></script>
 <script src="/js/support.js"></script>
+<script src="/js/aistaff.js"></script>
 <script src="/js/ui.js"></script>
 </body>
 </html>

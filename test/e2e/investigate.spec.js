@@ -73,3 +73,46 @@ test('the admin sees supporters and the AI cost, and can add a supporter', async
   await page.locator('#support-card button', { hasText: 'Add' }).click();
   await expect(page.locator('#support-card')).toContainText('⭐ Rider 2');
 });
+
+test('the coach page: ask about the club, the weekly plan for supporters, the season story and the race debrief', async ({ page, baseURL }) => {
+  const base = { enabled: true, tier: 'supporter', period: 'today', limit: 15, remaining: 15, ridesLeft: null, supporterDaily: 15, payUrl: '', price: 3, transparency: null, consent: true };
+  const paths = [];
+  await page.route('**/api/coach/status', r => r.fulfill({ json: base }));
+  await page.route('**/api/plan', r => r.fulfill({ json: { optIn: false, supporter: true, consent: true, enabled: true, last: { week: '2026-11-02', text: 'Tue: 60 min at 70% FTP\nThu: 2 x 15 min at 90%' } } }));
+  await page.route('**/api/plan/optin', r => r.fulfill({ json: { optIn: JSON.parse(r.request().postData()).on } }));
+  await page.route('**/api/coach/club', r => { paths.push('club'); r.fulfill({ json: { ...base, remaining: 14, reply: 'Alpha lead Division 1.' } }); });
+  await page.route('**/api/coach/story', r => { paths.push('story'); r.fulfill({ json: { ...base, remaining: 13, reply: 'This year I raced a lot.' } }); });
+  await page.route('**/api/coach/ride', r => { paths.push('ride:' + JSON.parse(r.request().postData()).mode); r.fulfill({ json: { ...base, remaining: 12, reply: 'You won it on the surges.', ride: { minutes: 30, avgPower: 230, normalizedPower: 240, variabilityIndex: 1.04, bestWatts: { '1200s': 250 }, heartRate: { avg: 140, decouplingPercent: 3.2 }, minutesInZones: null } } }); });
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  await page.locator('#nav-coach').click();
+  await expect(page.locator('#coach-content')).toContainText('Send me a weekly plan on Mondays');
+  await expect(page.locator('#coach-content')).toContainText('Tue: 60 min at 70% FTP');
+  await page.getByRole('checkbox', { name: /weekly plan/ }).check();
+  await page.getByLabel('Who to ask').selectOption('club');
+  await page.getByRole('button', { name: 'How are our teams doing?' }).click();
+  await expect(page.locator('#coach-content')).toContainText('Alpha lead Division 1.');
+  await page.getByRole('button', { name: /My season story/ }).click();
+  await expect(page.locator('#coach-content')).toContainText('This year I raced a lot.');
+  await page.getByLabel('Race debrief').check().catch(async () => { await page.getByText('Race debrief').click(); });
+  await page.locator('#coach-content input[type=file]').setInputFiles({ name: 'race.fit', mimeType: 'application/octet-stream', buffer: ride({ flat: false }) });
+  await expect(page.locator('#coach-content')).toContainText('You won it on the surges.');
+  expect(paths).toEqual(['club', 'story', 'ride:debrief']);
+});
+
+test('staff see the weekly report, the quiet riders with a draft button, and the club story on This week', async ({ page, baseURL }) => {
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  await page.route('**/api/ai/report', r => r.request().method() === 'GET' ? r.fulfill({ json: { aiOn: true, report: { at: '2026-11-02T08:00:00Z', by: 'automatic', via: 'ai', text: 'A steady week. To do: place two riders.' } } }) : r.fulfill({ json: { report: { at: '2026-11-02T09:00:00Z', by: 'staff', via: 'ai', text: 'A fresh report.' } } }));
+  await page.route('**/api/ai/drift', r => r.request().method() === 'GET' ? r.fulfill({ json: { aiOn: true, quiet: [{ zwid: '77', name: 'Dee Dawson', days: 70, tier: 'full' }] } }) : r.fulfill({ json: { draft: 'Hi Dee, we have missed you!' } }));
+  await page.route('**/api/ai/club-story', r => r.fulfill({ json: { text: 'Our season so far…' } }));
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
+  await expect(page.locator('#staff-ai')).toContainText('A steady week');
+  await expect(page.locator('#staff-ai')).toContainText('Dee Dawson');
+  await page.getByRole('button', { name: 'Draft a message' }).click();
+  await expect(page.locator('#staff-ai textarea')).toHaveValue('Hi Dee, we have missed you!');
+  await page.getByRole('button', { name: 'Write it now' }).click();
+  await expect(page.locator('#staff-ai')).toContainText('A fresh report.');
+  await page.getByRole('button', { name: /Write the story/ }).click();
+  await expect(page.locator('#staff-ai textarea[aria-label="The club story"]')).toHaveValue('Our season so far…');
+});

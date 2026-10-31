@@ -50,6 +50,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `SITE_URL` *(optional)* | Public portal URL, used for links and as the only allowed browser origin for API mutations. Defaults to `https://club.cryo-gen.team`. |
 | `STAGING` *(optional)* | Set to `1` on a practice copy only: shows a STAGING banner, tags Discord posts `[STAGING]`, and enables the "Fill with test data" button. Use a separate database. |
 | `REDIS_DAILY_LIMIT` *(optional)* | Storage commands per day at which Health starts warning (at 80%). Defaults to 16000; set it to your Upstash plan's daily allowance. |
+| `AI_MODEL`, `COACH_MODEL` *(optional)* | The model used by the weekly plan, race briefings, staff helpers and the coach. Defaults to the assistant's model. |
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
 | `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |

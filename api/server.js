@@ -1632,7 +1632,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2722,7 +2722,21 @@ const avatars = require('../lib/avatars')({ redis, HttpError, memberFromRequest,
 const fairplay = require('../lib/fairplay')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, activeMembers, discord, siteUrl: SITE_URL });
 const fitAnalysis = require('../lib/fitanalysis');
 const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh });
-const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse });
+const ai = require('../lib/ai')({ redis, HttpError, support });
+const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse,
+  clubData: () => publicClub(Date.now()), seasonOf: m => seasonOf(m) });
+// The AI messages that go to riders on their own (Monday plans, race-day briefings) and the AI drafts for the staff.
+const asMember = (zwid, name) => ({ headers: { authorization: `Bearer ${signToken('member', { zwid, name })}` } });
+const aiplans = require('../lib/aiplans')({ redis, HttpError, memberFromRequest, ai, coach, support, notify: (...a) => comms.notify(...a), live: { events: (...a) => live.events(...a) }, adminReq: () => syncReq(), fetchRoster, siteUrl: SITE_URL, coachSystem: coach.SYSTEM, asMember });
+const aiStaff = require('../lib/aistaff')({ redis, HttpError, requireRole, memberFromRequest, roleFromRequest, ai, zrl, lifecycle: { quiet: () => lifecycle.quiet() }, discord, publicClub: now => publicClub(now), fetchRoster, siteUrl: SITE_URL,
+  // The facts the weekly report is written from: counts and titles, no rider names.
+  digest: async now => {
+    const w = await week.build(syncReq(), now, 'admin').catch(() => ({ attention: [], newMembers: [] })), out = { week: new Date(now).toISOString().slice(0, 10), needsAttention: (w.attention || []).length, attentionTitles: (w.attention || []).slice(0, 8).map(a => a.title), newMembers: (w.newMembers || []).length, upcoming: (w.upcoming || []).slice(0, 8).map(u => `${u.kind}: ${u.title}`) };
+    try { const z = await zrl.load(); if (z.round) { const racing = z.signups.filter(x => x.in), ids = new Set(z.round.teams.map(t => t.id)); out.zrl = { round: z.round.name, teams: z.round.teams.length, racing: racing.length, unplaced: racing.filter(x => !(z.assign[x.key] || []).some(i => ids.has(i))).length }; } } catch (e) { /* left out */ }
+    try { out.quiet = (await lifecycle.quiet()).length; } catch (e) { out.quiet = 0; }
+    try { out.supporters = (await support.activeIds()).length; const mo = await support.month(now); out.aiCostThisMonth = mo.cost; } catch (e) { out.supporters = 0; }
+    return out;
+  } });
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -2935,7 +2949,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`];
   if (bigRoute) return sendJSON(res, 200, await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query));
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
