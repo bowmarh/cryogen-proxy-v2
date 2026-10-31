@@ -317,3 +317,11 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Themes:** the 🌓 button cycles Auto (follows the device), Light, Dark; saved in this browser. Light mode inverts the page and rotates the hue back (`html[data-theme="light"]`), with pictures put right again. A small script in `<head>` applies it before paint.
 - **Accessibility:** visible focus ring, skip link, reduced-motion respect, small-print greys raised to at least 4.5:1 contrast on the dark cards, and `a11yPass()` (re-run on page changes) names unlabelled buttons, fields and checkboxes and marks pop-ups as dialogs. `test/e2e/polish.spec.js` checks the rider pages (`npm run test:e2e`).
 - **My week:** `myWeekChanges()` compares what the rider sees with what this browser saw on its previous visit (a gap of 30 minutes or more starts a new visit) and shows "Since you last looked: New / Changed …". Stored in the browser only (`mw:snap`, `mw:base`).
+
+## Orbit phase 4: self-check, recovery, captain notes, history, load test
+- **Self-check** (`POST /api/selfcheck`, admin; Admin → "🧪 Is everything working?"): runs the database, an admin-channel post, the Discord bot sign-in, the buttons key format, push keys, a Google sign-in and a backup read-back, one at a time, and reports pass / fail / skip. It posts one line to the admin channel and sends nothing to riders.
+- **Recovery:** a failed scheduled job is retried once at the end of the same run; failing jobs are remembered in `cg:cron:failing`, and the admin channel hears once when one works again.
+- **Captain note:** the day before each ZRL race, every captain gets one direct message (line-up so far, who has not answered, how many said no), once per team and race.
+- **Club history** (`GET /api/history/export`, staff; `lib/history.js`): one workbook of finished ZRL rounds (rounds, results, riders), Ladder seasons and DIRT seasons. Read only.
+- **Pen reminders and no-show alerts** already exist in `lib/live.js` (20 minutes before: riders who said yes and are not in the pen; 10 minutes: admin channel and the bench).
+- **Load test** (`test/load.test.js`): 300 riders, 40 teams, Discord failing while sign-ups close; checks the outbox, repeat runs and line-ups.

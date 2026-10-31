@@ -1622,7 +1622,7 @@ async function runTttSchedule(now = Date.now()){
 }
 
 const CRON_LAST_KEY = 'cg:cron:last';
-const CRON_FAILED_KEY = 'cg:cron:failed', CRON_ALERT_KEY = 'cg:cron:alerts';
+const CRON_FAILING_KEY = 'cg:cron:failing', CRON_FAILED_KEY = 'cg:cron:failed', CRON_ALERT_KEY = 'cg:cron:alerts';
 
 async function handleCron(req, res){
   const secret = process.env.CRON_SECRET;
@@ -1633,10 +1633,25 @@ async function handleCron(req, res){
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
   const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
+  // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
+  const retry = [];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
-    catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
+    catch (e){ console.error(`Scheduled ${name}:`, e.message); retry.push([name, job, e]); }
   }
+  for (const [name, job, first] of retry){
+    try { ran.push(...await job()); }
+    catch (e){ console.error(`Scheduled ${name} (retry):`, e.message); failed.push({ job: name, error: String(e.message || first.message || e).slice(0, 200) }); }
+  }
+  try {
+    const [raw] = await redis([['HGETALL', CRON_FAILING_KEY]]);
+    const before = new Set(pairs(raw).map(([k]) => k)), now = new Set(failed.map(f => f.job));
+    const fixed = [...before].filter(j => !now.has(j));
+    const cmds = [...failed.filter(f => !before.has(f.job)).map(f => ['HSET', CRON_FAILING_KEY, f.job, new Date().toISOString()]), ...fixed.map(j => ['HDEL', CRON_FAILING_KEY, j])];
+    if (cmds.length) await redis(cmds);
+    if (fixed.length) await discord('zrl-admin', { content: `✅ **Fixed itself:** the scheduled ${fixed.join(', ')} job ${fixed.length === 1 ? 'is' : 'are'} working again.` });
+  } catch (e) { console.error('Cron recovery notes:', e.message); }
   for (const f of failed){
     const [claimed] = await redis([['HSETNX', CRON_ALERT_KEY, `${f.job}:${Math.floor(Date.now() / 21600000)}`, new Date().toISOString()]]).catch(() => [0]);
     if (claimed) await discord('zrl-admin', { content: `⚠️ **The scheduled ${f.job} job failed:** ${discordEscape(f.error)}\nIts reminders, posts or backups did not run this time. Check the health panel at ${SITE_URL}.` });
@@ -2096,6 +2111,51 @@ async function handleMe(req, res){
   const record = members && uniqueMembers(members).find(m => String(m.zwift_id) === member.zwid);
   const associate = member.assoc && await assoc.stillAssociate(member.zwid);
   sendJSON(res, 200, { zwid: member.zwid, name: member.name, tier: record && normTier(record.tier), status: record && record.status, associate: !!associate });
+}
+
+// ── "Is everything working?" ───────────────────────────────
+// Runs the real thing for each service the club relies on, one step at a time, and says what each gave back. It posts one short line to
+// the admin channel and contacts Discord, Google and the database; it sends nothing to riders and writes no club data.
+async function selfCheck(){
+  const steps = [];
+  const step = async (id, label, fn) => {
+    const started = Date.now();
+    try { const [status, detail] = await withTimeout(Promise.resolve().then(fn), 10000); steps.push({ id, label, status, detail, ms: Date.now() - started }); }
+    catch (e) { steps.push({ id, label, status: 'fail', detail: String(e.message || e).slice(0, 200), ms: Date.now() - started }); }
+  };
+  await step('db', 'Database', async () => { await redis([['GET', TTT_KEYS.week]]); return ['ok', 'Answered.']; });
+  await step('admin', 'Admin channel post', async () => {
+    if (!(DISCORD_HOOKS.admin || []).some(k => process.env[k])) return ['fail', 'DISCORD_WEBHOOK_ADMIN is not set.'];
+    const ok = await discord('admin', { content: '🧪 Self-check from the dashboard: if you can read this, the admin channel works.' }, { noQueue: true });
+    return ok ? ['ok', 'Posted (look for the 🧪 message in Discord).'] : ['fail', 'Discord did not accept the post. The webhook may be deleted or wrong.'];
+  });
+  await step('bot', 'Discord bot sign-in', async () => {
+    if (!process.env.DISCORD_BOT_TOKEN) return ['skip', 'No bot token: reminders go to the channel only.'];
+    const r = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`, 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? ['ok', 'The bot token is accepted.'] : ['fail', `Discord answered ${r.status}: the bot token is wrong or was reset.`];
+  });
+  await step('buttons', 'Discord buttons key', async () => {
+    const k = process.env.DISCORD_PUBLIC_KEY || '';
+    if (!k) return ['skip', 'Not set: the Yes / Maybe / No buttons are off.'];
+    return /^[0-9a-f]{64}$/i.test(k.trim()) ? ['ok', 'The key looks right. The Developer Portal does the real check when you save the endpoint URL.'] : ['fail', 'The key should be 64 letters and numbers (copy "Public Key" from General Information).'];
+  });
+  await step('push', 'Push notifications', async () => {
+    if (!push.configured()) return ['skip', 'Not switched on (VAPID keys).'];
+    const [n] = await redis([['HLEN', push.KEY]]);
+    return ['ok', `Keys are valid; ${n} device${n === 1 ? '' : 's'} registered.`];
+  });
+  await step('sheets', 'Google sign-in', async () => {
+    const st = gsheets.status();
+    if (!st.configured) return ['skip', st.error || 'GOOGLE_SERVICE_ACCOUNT_JSON is not set.'];
+    await gsheets.accessToken();
+    return ['ok', `Google accepted ${st.email}. Share each sheet with that address.`];
+  });
+  await step('backup', 'Backup copy restores', async () => {
+    const v = await backup.verify(Date.now(), true);
+    return v.ok ? ['ok', `The copy ${v.id} was read back correctly.`] : ['fail', (v.problems || []).join(' ') || 'The test restore failed.'];
+  });
+  await step('assistant', 'Assistant key', async () => process.env.ANTHROPIC_API_KEY ? ['ok', 'Set (not called, to save cost).'] : ['skip', 'Not set: the assistant is off.']);
+  return { at: new Date().toISOString(), steps, ok: steps.every(x => x.status !== 'fail'), failing: steps.filter(x => x.status === 'fail').length };
 }
 
 // ── System health (admin) ──────────────────────────────────
@@ -2638,6 +2698,7 @@ function readRawBody(req, limit = 20000){
 }
 
 // The go-live checklist (lib/golive.js): what is on, what is half set up, and the next step for each.
+const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
 const golive = require('../lib/golive')({
   requireRole,
@@ -2843,7 +2904,10 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
+  const historyRoute = history.routes[`${req.method} ${pathname}`];
+  if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
   const stagingRoute = staging.routes[`${req.method} ${pathname}`];
   if (stagingRoute) return sendJSON(res, 200, await stagingRoute(req));
   const goliveRoute = golive.routes[`${req.method} ${pathname}`];
