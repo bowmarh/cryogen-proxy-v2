@@ -458,9 +458,8 @@ const DISCORD_HOOKS = {
 };
 const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
 
-async function discord(channel, payload){
-  const hook = (DISCORD_HOOKS[channel] || DISCORD_HOOKS.public).map(k => process.env[k]).find(Boolean);
-  if (!hook) return false;
+const OUTBOX_KEY = 'cg:outbox', OUTBOX_MAX = 50, OUTBOX_TRIES = 5, OUTBOX_AGE_MS = 24 * 3600000;
+async function sendHook(hook, payload){
   try {
     const r = await fetch(hook, {
       method: 'POST',
@@ -469,12 +468,46 @@ async function discord(channel, payload){
       body: JSON.stringify({ username: process.env.STAGING === '1' ? '[STAGING] CRYO-GEN TTT' : 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
       signal: AbortSignal.timeout(4000),
     });
-    if (!r.ok) console.error(`Discord ${channel} webhook returned ${r.status}`);
-    return r.ok;
+    if (r.ok) return { ok: true };
+    let wait = 0;
+    if (r.status === 429) { try { wait = Number((await r.json()).retry_after) * 1000 || 0; } catch (e) { /* no body */ } }
+    return { ok: false, status: r.status, transient: r.status === 429 || r.status >= 500, wait };
   } catch (e) {
-    console.error(`Discord ${channel} webhook failed: ${e.message}`);
-    return false;
+    return { ok: false, status: 0, transient: true, wait: 0, error: e.message };
   }
+}
+// A post that hits a hiccup (Discord busy, a timeout) is tried once more straight away; if it still fails it goes in the outbox and the
+// scheduled run keeps trying for up to a day. A bad hook (a 4xx other than "slow down") is not retried: that needs a person.
+async function discord(channel, payload, opts = {}){
+  const hook = (DISCORD_HOOKS[channel] || DISCORD_HOOKS.public).map(k => process.env[k]).find(Boolean);
+  if (!hook) return false;
+  let r = await sendHook(hook, payload);
+  if (!r.ok && r.transient) { await new Promise(ok => setTimeout(ok, Math.min(r.wait || 400, 1500))); r = await sendHook(hook, payload); }
+  if (r.ok) return true;
+  console.error(`Discord ${channel} webhook failed: ${r.status || r.error}`);
+  if (r.transient && !opts.noQueue) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await redis([['HSET', OUTBOX_KEY, id, JSON.stringify({ channel, payload, tries: 1, at: Date.now() })]]).catch(() => {});
+  }
+  return false;
+}
+// Run from the schedule: send what is waiting, drop what is a day old or has failed five times, and tell the admin channel once about the drops.
+async function flushOutbox(){
+  const [all] = await redis([['HGETALL', OUTBOX_KEY]]);
+  const entries = [];
+  for (let i = 0; i < (all || []).length; i += 2) { try { entries.push([all[i], JSON.parse(all[i + 1])]); } catch (e) { await redis([['HDEL', OUTBOX_KEY, all[i]]]); } }
+  entries.sort((a, b) => a[1].at - b[1].at);
+  let sent = 0; const dropped = [];
+  for (const [id, e] of entries.slice(0, OUTBOX_MAX)) {
+    const hook = (DISCORD_HOOKS[e.channel] || DISCORD_HOOKS.public).map(k => process.env[k]).find(Boolean);
+    const r = hook ? await sendHook(hook, e.payload) : { ok: false, transient: false };
+    if (r.ok) { await redis([['HDEL', OUTBOX_KEY, id]]); sent++; continue; }
+    e.tries++;
+    if (!r.transient || e.tries > OUTBOX_TRIES || Date.now() - e.at > OUTBOX_AGE_MS) { await redis([['HDEL', OUTBOX_KEY, id]]); dropped.push(e); }
+    else await redis([['HSET', OUTBOX_KEY, id, JSON.stringify(e)]]);
+  }
+  if (dropped.length) await discord('admin', { content: `📭 ${dropped.length} Discord message${dropped.length === 1 ? '' : 's'} could not be delivered and ${dropped.length === 1 ? 'was' : 'were'} dropped (first: "${discordEscape(String((dropped[0].payload && dropped[0].payload.content) || '').slice(0, 80))}"). Check the webhook for the ${dropped[0].channel} channel.` }, { noQueue: true });
+  return sent ? [`Outbox: sent ${sent} waiting message${sent === 1 ? '' : 's'}`] : [];
 }
 
 const teamLabel = t => [t.level, t.zone].filter(Boolean).join(' · ');
@@ -1585,7 +1618,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -1969,6 +2002,27 @@ async function handleWpSso(req, res, token){
 async function handleMeSeason(req, res){
   const member = memberFromRequest(req);
   if (!member) return sendJSON(res, 401, { error: 'Sign in with your cryogen.team account.' });
+  sendJSON(res, 200, await seasonOf(member));
+}
+
+// A rider's own season recap, shared to the club channel only when they press the button (once a day).
+async function handleMeSeasonShare(req, res){
+  const member = memberFromRequest(req);
+  if (!member) return sendJSON(res, 401, { error: 'Sign in with your cryogen.team account.' });
+  if (!process.env.DISCORD_WEBHOOK_PUBLIC) return sendJSON(res, 409, { error: 'The club channel is not set up yet.' });
+  const [fresh] = await redis([['HSETNX', 'cg:season:shared', `${member.zwid}:${new Date().toISOString().slice(0, 10)}`, '1']]);
+  if (!fresh) return sendJSON(res, 429, { error: 'You already shared your season today.' });
+  const d = await seasonOf(member), lines = [];
+  if (d.zrl && d.zrl.placed) lines.push(`🚀 ZRL: picked for ${d.zrl.picked} of ${d.zrl.races} races${d.zrl.podiums ? `, ${d.zrl.podiums} podium${d.zrl.podiums === 1 ? '' : 's'}` : ''}`);
+  if (d.ttt && d.ttt.weeks) lines.push(`🏁 TTT: ${d.ttt.weeks} week${d.ttt.weeks === 1 ? '' : 's'} raced${d.ttt.podiums ? `, ${d.ttt.podiums} podium${d.ttt.podiums === 1 ? '' : 's'}` : ''}`);
+  if (d.rides && d.rides.attended) lines.push(`🚴 ${d.rides.attended} social ride${d.rides.attended === 1 ? '' : 's'}`);
+  if (d.cover && d.cover.past) lines.push(`🧭 Ride cover: ${d.cover.led} led, ${d.cover.swept} swept`);
+  if (!lines.length) { await redis([['HDEL', 'cg:season:shared', `${member.zwid}:${new Date().toISOString().slice(0, 10)}`]]); return sendJSON(res, 409, { error: 'There is nothing to share yet: race, ride or lead a ride first.' }); }
+  const ok = await discord('public', { content: `⭐ **${discordEscape(member.name)}'s season**\n${lines.join('\n')}${d.highlights.length ? '\n' + d.highlights.join(' · ') : ''}` });
+  sendJSON(res, 200, { ok });
+}
+
+async function seasonOf(member){
   const now = Date.now(), today = new Date(now).toISOString().slice(0, 10);
   const names = new Set([member.name.toLowerCase()]);
   const part = async (label, fn) => { try { return await fn(); } catch (e) { console.error(`Season ${label}:`, e.message); return null; } };
@@ -2018,7 +2072,7 @@ async function handleMeSeason(req, res){
   if (tttPart && tttPart.podiums) highlights.push(`🥇 ${tttPart.podiums} TTT podium${tttPart.podiums === 1 ? '' : 's'}`);
   if (coverPart && coverPart.past >= 5) highlights.push('🧭 Ride-cover regular');
   if (ridesPart && ridesPart.attended >= 10) highlights.push('🚴 Regular on the social rides');
-  sendJSON(res, 200, { name: member.name, zrl: zrlPart, ttt: tttPart, rides: ridesPart, cover: coverPart, highlights });
+  return { name: member.name, zrl: zrlPart, ttt: tttPart, rides: ridesPart, cover: coverPart, highlights };
 }
 
 async function handleMe(req, res){
@@ -2695,6 +2749,7 @@ async function route(req, res){
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
   if (pathname === '/api/me/season' && req.method === 'GET') return handleMeSeason(req, res);
+  if (pathname === '/api/me/season/share' && req.method === 'POST') return handleMeSeasonShare(req, res);
   if (pathname === '/api/health' && req.method === 'GET'){
     requireRole(req, ['admin']);
     return sendJSON(res, 200, { checked: new Date().toISOString(), checks: await healthChecks() });
