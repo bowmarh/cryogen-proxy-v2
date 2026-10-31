@@ -5,23 +5,30 @@
 <title>CRYO-GEN: races and results</title>
 <meta name="description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/>
 <style>
+:root{--accent:#00D4FF;--accent-rgb:0,212,255}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#060a14;color:#e5e7eb;font-family:system-ui,sans-serif;min-height:100vh;padding:0 16px 48px}
 .wrap{max-width:860px;margin:0 auto}
 header{padding:28px 0 18px}
-h1{font-size:26px;font-weight:900;color:#00D4FF;letter-spacing:.5px}
-.sub{font-size:13px;color:#6b7280;margin-top:4px}
+h1{font-size:26px;font-weight:900;color:var(--accent);letter-spacing:.5px}
+.sub{font-size:13px;color:#8b95a5;margin-top:4px}
 h2{font-size:16px;font-weight:800;margin:26px 0 8px}
 .card{background:#0f1623;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:14px}
 .row:first-child{border-top:none}
-.tag{font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 8px;border-radius:99px;background:rgba(0,212,255,0.12);color:#00D4FF}
+.tag{font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 8px;border-radius:99px;background:rgba(var(--accent-rgb),0.12);color:var(--accent)}
 .muted{color:#9ca3af;font-size:12px}
 .win{color:#10B981;font-weight:700}.loss{color:#f87171;font-weight:700}
 .big{font-size:22px;font-weight:900}
+.hero{text-align:center;padding:18px;border-radius:14px;background:linear-gradient(135deg,rgba(var(--accent-rgb),.2),rgba(var(--accent-rgb),.04));border:1px solid rgba(var(--accent-rgb),.4);margin-bottom:10px}
+.count{font-size:36px;font-weight:900;font-family:monospace;letter-spacing:.04em}
+.pod{display:flex;gap:8px;align-items:flex-end;justify-content:center;margin:10px 0 2px}
+.pod>div{text-align:center;width:30%;max-width:140px}.pod .blk{border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-size:22px;background:var(--accent)}
+.welcome{margin-bottom:10px;padding:10px 14px;border-radius:10px;background:rgba(var(--accent-rgb),.1);border:1px solid rgba(var(--accent-rgb),.25);font-weight:600}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
-footer{margin-top:34px;font-size:12px;color:#6b7280}
-a{color:#00D4FF}
+footer{margin-top:34px;font-size:12px;color:#8b95a5}
+a{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -36,13 +43,21 @@ const fmt=(date,at)=>at?new Date(at).toLocaleString(undefined,{weekday:'short',d
 (async()=>{
   const root=document.getElementById('root');
   let d; try{ const r=await fetch('/api/public/club'); if(!r.ok){ root.innerHTML='<div class="card muted">This page is not switched on yet.</div>'; return; } d=await r.json(); }catch(x){ root.innerHTML='<div class="card muted">Could not load the page. Please try again later.</div>'; return; }
+  if(/^#[0-9a-f]{6}$/i.test(d.accent||'')){ const n=parseInt(d.accent.slice(1),16); document.documentElement.style.setProperty('--accent',d.accent); document.documentElement.style.setProperty('--accent-rgb',(n>>16)+','+((n>>8)&255)+','+(n&255)); }
   let h='';
+  if(d.welcome) h+=`<div class="welcome">${e(d.welcome)}</div>`;
+  const nx=(d.next||[]).find(n=>n.at&&n.at>Date.now());
+  if(nx) h+=`<div class="hero"><div class="muted">Next up · ${e(nx.series)}</div><div style="font-weight:800;margin:4px 0">${e(nx.title)}</div><div class="count" id="count" data-at="${nx.at}" aria-live="off">--:--:--</div></div>`;
+  const medal={1:'🥇',2:'🥈',3:'🥉'}, ht={1:60,2:44,3:30};
+  if((d.podium||[]).length) h+=`<h2>Zwift Racing League: the top three</h2>${d.podium.map(g=>`<div class="card"><b>${e(g.division)}</b><div class="pod" role="img" aria-label="${e(g.top.map(t=>t.rank+' '+t.team).join(', '))}">${[g.top.find(t=>t.rank===2),g.top.find(t=>t.rank===1),g.top.find(t=>t.rank===3)].filter(Boolean).map(t=>`<div><div style="font-size:12px;font-weight:700">${e(t.team)}</div><div class="muted">${t.points} pts</div><div class="blk" style="height:${ht[t.rank]||26}px">${medal[t.rank]||''}</div></div>`).join('')}</div></div>`).join('')}`;
   if(d.next.length) h+=`<h2>Next races</h2><div class="card">${d.next.map(n=>`<div class="row"><span class="tag">${e(n.series)}</span><b>${e(n.title)}</b><span class="muted">${e(fmt(n.date,n.at))}</span></div>`).join('')}</div>`;
   if(d.ladder.length) h+=`<h2>Zwift Club Ladder</h2><div class="grid">${d.ladder.map(t=>`<div class="card"><b>${e(t.team)}</b>${t.rung?` <span class="muted">rung ${e(t.rung)}</span>`:''}<div class="big">${t.won}–${t.lost}</div><div class="muted">${t.played} played · points ${t.pointsFor}–${t.pointsAgainst}</div>${t.recent.map(m=>`<div class="row"><span class="${m.won?'win':'loss'}">${m.won?'Won':'Lost'} ${e(m.score)}</span><span>v ${e(m.opponent)}</span><span class="muted">${e(m.date)}</span></div>`).join('')}</div>`).join('')}</div>`;
   if(d.drs.length) h+=`<h2>DIRT Racing Series</h2>${d.drs.map(t=>`<div class="card"><b>${e(t.team)}</b> <span class="muted">${e(t.division)} · ${e(t.season)}</span><div class="big">${t.teamPoints} points</div><div class="muted">${t.played} stage${t.played===1?'':'s'} raced</div>${t.stages.map(s=>`<div class="row"><span class="muted">Stage ${s.n}</span><span>${e(s.type)}${s.route?' · '+e(s.route):''}</span><span class="muted">${e(fmt(s.date))}</span>${s.played?`<span class="win">${s.teamPoints==null?'raced':s.teamPoints+' pts'}</span>`:''}</div>`).join('')}</div>`).join('')}`;
   if(d.zrl) h+=`<h2>Zwift Racing League</h2><div class="card"><b>${e(d.zrl.round)}</b> <span class="muted">${d.zrl.weeks} races from ${e(fmt(d.zrl.start))}</span>${d.zrl.teams.length?`<div class="muted" style="margin-top:6px">${d.zrl.teams.map(t=>e(t.name)).join(' · ')}</div>`:''}</div>`;
   if(d.ttt) h+=`<h2>Team time trials</h2><div class="card"><b>${e(d.ttt.title)}</b> <span class="muted">${e(fmt(d.ttt.date))}</span></div>`;
   root.innerHTML=h||'<div class="card muted">Nothing to show yet.</div>';
+  const c=document.getElementById('count');
+  if(c){ const tick=()=>{ const ms=Number(c.dataset.at)-Date.now(); if(ms<=0){ c.textContent='Under way'; return; } const t=Math.floor(ms/1000), dd=Math.floor(t/86400); c.textContent=(dd?dd+'d ':'')+String(Math.floor(t%86400/3600)).padStart(2,'0')+':'+String(Math.floor(t%3600/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }; tick(); setInterval(tick,1000); }
 })();
 </script>
 </body>

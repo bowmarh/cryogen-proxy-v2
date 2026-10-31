@@ -68,3 +68,11 @@ test('300 riders, 40 teams, Discord down while sign-ups close: the run completes
   assert.ok(secs < 60, `took ${secs}s`);
   console.log(`# load: ${N} riders, placed ${placed}, unplaced ${unplaced}, ${secs.toFixed(1)}s`);
 });
+
+test('the riders who could not be placed are named in Needs attention with the reason, counted', async () => {
+  const week = (await app.get('/api/week', A)).body;
+  const item = week.attention.find(a => a.id === 'zrl:placed');
+  assert.ok(item, JSON.stringify(week.attention.map(a => a.id)));
+  assert.match(item.detail, /riders? ha(s|ve) no team yet\./);
+  assert.match(item.detail, /cannot \(.*(full or there is none|no free place)/);
+});

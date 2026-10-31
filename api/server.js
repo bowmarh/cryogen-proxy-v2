@@ -2652,6 +2652,12 @@ async function publicClub(now = Date.now()){
     const t = await loadTtt();
     if (t.week && t.week.date && Date.parse(`${t.week.date}T00:00:00Z`) > now - 86400000) { out.ttt = { title: t.week.title || 'Weekly TTT', date: t.week.date }; out.next.push({ series: 'TTT', title: t.week.title || 'Weekly TTT', at: Date.parse(`${t.week.date}T00:00:00Z`), dayOnly: true }); }
   } catch (e) { /* ditto */ }
+  // The club wall: the club's accent and the top three of each ZRL division (team names and points only).
+  try { const th = await clubTheme.get(now); out.accent = th.accent || ''; out.welcome = th.welcome || ''; } catch (e) { /* the default look */ }
+  try {
+    const st = await zrl.routes['GET /api/zrl/standings'](staff);
+    out.podium = (st.groups || []).slice(0, 4).map(g => ({ division: g.name, top: g.teams.filter(t => t.rank <= 3 && t.total > 0).slice(0, 3).map(t => ({ rank: t.rank, team: t.name.replace(/^CRYO-GEN\s+/, ''), points: t.total })) })).filter(g => g.top.length);
+  } catch (e) { /* no standings yet */ }
   out.next = out.next.filter(x => x.at < now + 21 * 86400000).sort((a, b) => a.at - b.at).slice(0, 12).map(x => ({ ...x, date: day(x.at), at: x.dayOnly ? null : x.at }));
   return out;
 }
@@ -2698,7 +2704,15 @@ function readRawBody(req, limit = 20000){
 }
 
 // The go-live checklist (lib/golive.js): what is on, what is half set up, and the next step for each.
-const trend = require('../lib/trend')({ redis, fetchRoster, activeMembers, keys: { rides: KEYS.rides, rsvps: KEYS.rsvps } });
+const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFromRequest, fetchRoster, activeMembers, keys: { rides: KEYS.rides, rsvps: KEYS.rsvps },
+  // What the staff pages chart: how much needs attention, how many riders are racing and how many have no team yet.
+  staffMetrics: async () => {
+    const out = {};
+    try { out.attention = ((await week.build(syncReq(), Date.now(), 'admin')).attention || []).length; } catch (e) { /* left out */ }
+    try { const z = await zrl.load(); if (z.round) { const racing = z.signups.filter(x => x.in), ids = new Set(z.round.teams.map(t => t.id)); out.racing = racing.length; out.unplaced = racing.filter(x => !teamsOfAssign(z.assign[x.key]).some(i => ids.has(i))).length; out.teams = z.round.teams.length; } } catch (e) { /* ditto */ }
+    return out;
+  } });
+const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const avatars = require('../lib/avatars')({ redis, HttpError, memberFromRequest, roleFromRequest });
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });

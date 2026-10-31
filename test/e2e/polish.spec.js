@@ -177,3 +177,31 @@ test('standings get a podium and a points-over-the-round chart, with a colour pe
   expect((out.chart.match(/<path/g) || []).length).toBe(3);
   expect(out.none).toBe('');
 });
+
+test('the staff page chart, the rider profile charts and the picture cards work', async ({ page, baseURL }) => {
+  await page.route('**/api/staff/trend', r => r.fulfill({ json: { days: [{ d: '2026-10-29', attention: 5, racing: 40, unplaced: 3 }, { d: '2026-10-30', attention: 3, racing: 44, unplaced: 1 }] } }));
+  await page.route('**/api/me/velo', r => r.fulfill({ json: { history: [{ d: '2026-10-28', v: 1190 }, { d: '2026-10-29', v: 1200 }, { d: '2026-10-30', v: 1215 }] } }));
+  await signInAsRider(page, baseURL);
+  const host = await page.evaluate(async () => { const el = document.createElement('div'); el.id = 'tmp-trend'; document.body.appendChild(el); await uiStaffTrend(el); return el.textContent; });
+  expect(host).toContain('Needs attention'); expect(host).toContain('Riders without a team');
+  await page.getByRole('button', { name: /My Profile/ }).click();
+  await expect(page.locator('#prof-charts')).toContainText('Power curve');
+  await expect(page.locator('#prof-charts')).toContainText('My vELO');
+  await expect(page.locator('#prof-charts svg').first()).toBeVisible();
+  const dl = page.waitForEvent('download');
+  await page.evaluate(() => uiLineupCard('CRYO-GEN Alpha', 'Race 1 · Tue 3 Nov', ['Ann Able', 'Bob Brown', 'Cy Cole']));
+  expect((await dl).suggestedFilename()).toBe('cryogen-lineup.png');
+  const dl2 = page.waitForEvent('download');
+  await page.evaluate(() => uiResultsCard('Division 1', [{ rank: 1, name: 'Alpha', total: 30 }, { rank: 2, name: 'Beta', total: 22 }]));
+  expect((await dl2).suggestedFilename()).toBe('cryogen-results.png');
+});
+
+test('the public club wall shows the club colour, a countdown and the top three, and nothing about people', async ({ page, baseURL }) => {
+  const at = Date.now() + 3 * 86400000 + 5 * 3600000;
+  await page.route('**/api/public/club', r => r.fulfill({ json: { name: 'CRYO-GEN', accent: '#a78bfa', welcome: 'Race week!', ladder: [], drs: [], next: [{ series: 'ZRL', title: 'Round 2 · race 1', at, date: '2026-11-03' }], podium: [{ division: 'Division 1', top: [{ rank: 1, team: 'Alpha', points: 30 }, { rank: 2, team: 'Beta', points: 22 }, { rank: 3, team: 'Gamma', points: 9 }] }] } }));
+  await page.goto(`${baseURL}/club.html`);
+  await expect(page.locator('.welcome')).toContainText('Race week!');
+  await expect(page.locator('#count')).toContainText(/^3d \d\d:\d\d:\d\d$/);
+  await expect(page.locator('.pod')).toContainText('Alpha'); await expect(page.locator('.pod')).toContainText('🥇');
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())).toBe('#a78bfa');
+});
