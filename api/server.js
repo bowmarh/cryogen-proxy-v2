@@ -159,6 +159,15 @@ const writesPerMinute = () => Number(process.env.RATE_LIMIT_WRITES_PER_MIN) || 1
 
 async function handleLogin(req, res){
   const payload = await readJSONBody(req);
+  // A personal staff account: username and password.
+  if (payload.username !== undefined){
+    const failKey = `cg:rl:login:${clientIp(req)}`;
+    if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
+    const u = typeof payload.password === 'string' ? await staff.verify(String(payload.username), payload.password) : null;
+    if (u) return sendJSON(res, 200, { role: u.role, name: u.name, token: signToken(u.role, { staffName: u.name, user: u.username }) });
+    await counter(failKey, LOGIN_WINDOW_SEC);
+    return sendJSON(res, 401, { error: 'incorrect username or password' });
+  }
   const envName = ROLE_PASSWORD_ENV[payload.role];
   if (!envName) throw new HttpError(400, 'unknown role');
   const expected = process.env[envName];
@@ -1576,7 +1585,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2241,9 +2250,12 @@ function serveStatic(res, reqPath){
 
 // ── ZRL (Zwift Racing League) ──────────────────────────────
 // Round sign-up, time-zone demand and team setup live in lib/zrl.js (not in api/, where every file becomes a public function).
+const staff = require('../lib/staff')({ redis, HttpError, requireRole, text });   // personal staff accounts
+
 // What the automation changed, with an undo (lib/autolog.js).
 const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
 const zrl = require('../lib/zrl')({
+  staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''),
   autoLog, notify: (...a) => comms.notify(...a),   // comms is created further down
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
   validDate, ukTime, ukLabel, teamId, fetchGrid, siteUrl: SITE_URL,
@@ -2348,7 +2360,10 @@ async function handleAssoc(assocRoute, req, res){
 }
 
 // Staff messages to Discord (lib/comms.js): everyone in the club channel, or chosen members by DM (with a bot) or @mention.
+const push = require('../lib/webpush')({ redis, HttpError, requireRole, memberFromRequest, siteUrl: SITE_URL });
 const comms = require('../lib/comms')({
+  push,
+  buttonsFor: (series, id) => discordInteractions.buttons(series, id),   // created just below
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord,
   templates: req => commsTemplates.build(req),
   nudges: now => commsTemplates.nudges(now),
@@ -2501,6 +2516,12 @@ async function publicClub(now = Date.now()){
   return out;
 }
 
+// "Ask the club" (lib/assistant.js): plain words to a short plan from a fixed menu, shown to staff and run only when they confirm. Needs ANTHROPIC_API_KEY.
+const assistant = require('../lib/assistant')({ redis, HttpError, requireRole, adminReq: () => syncReq(), zrl, ladder, drs, autoLog });
+
+const lifecycle = require('../lib/lifecycle')({ redis, requireRole, tidy, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });   // members who have gone quiet
+const projection = require('../lib/projection')({ requireRole, adminReq: () => syncReq(), zrl, ladder, drs });   // the season outlook
+
 // New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
 const onboarding = require('../lib/onboarding')({
   redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
@@ -2515,6 +2536,26 @@ const onboarding = require('../lib/onboarding')({
     return out;
   },
 });
+
+// Yes / Maybe / No buttons under Discord reminders (lib/discord-interactions.js): Discord posts each tap, signed, to /api/discord/interactions.
+const discordInteractions = require('../lib/discord-interactions')({
+  zwidOfDiscord: id => comms.zwidOfDiscord(id),
+  // The answer is saved by the same route a rider's own tap in the dashboard uses, as that rider (a member token made here, inside this process only).
+  answer: async (zwid, series, id, status) => {
+    const req = { headers: { authorization: `Bearer ${signToken('member', { zwid, name: zwid })}` } };
+    if (series === 'zrl') { const [week, team] = id.split(':'); await zrl.routes['POST /api/zrl/availability'](req, { week: Number(week), team, status }); }
+    else if (series === 'ladder') await ladder.routes['POST /api/ladder/availability'](req, { match: id, status });
+    else await drs.routes['POST /api/drs/availability'](req, { stage: id, status });
+  },
+});
+function readRawBody(req, limit = 20000){
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', c => { body += c; if (body.length > limit){ reject(new HttpError(413, 'request too large')); req.destroy(); } });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
 
 // The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
@@ -2544,7 +2585,7 @@ async function runDigest(now = Date.now()){
 }
 
 // Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
-const live = require('../lib/live')({ adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
+const live = require('../lib/live')({ discord, discordEscape, siteUrl: SITE_URL, adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
 
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
@@ -2677,6 +2718,10 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  if (pathname === '/api/discord/interactions' && req.method === 'POST'){
+    const out = await discordInteractions.handle(await readRawBody(req), req.headers);
+    return sendJSON(res, out.status, out.body);
+  }
   if (pathname === '/api/digest' && (req.method === 'GET' || req.method === 'POST')) {
     const role = requireRole(req, ['admin', 'mod']);
     if (req.method === 'POST') { requireRole(req, ['admin']); const body = await readJSONBody(req); await redis([['SET', DIGEST_KEYS.settings, JSON.stringify({ on: body.on === true })]]); return sendJSON(res, 200, { on: body.on === true, canChange: true }); }
@@ -2684,6 +2729,21 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const lifecycleRoute = lifecycle.routes[`${req.method} ${pathname}`];
+  if (lifecycleRoute) return sendJSON(res, 200, await lifecycleRoute(req));
+
+  const projectionRoute = projection.routes[`${req.method} ${pathname}`];
+  if (projectionRoute) return sendJSON(res, 200, await projectionRoute(req));
+
+  const assistantRoute = assistant.routes[`${req.method} ${pathname}`];
+  if (assistantRoute) return sendJSON(res, 200, await assistantRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
+  const pushRoute = push.routes[`${req.method} ${pathname}`];
+  if (pushRoute) return sendJSON(res, 200, await pushRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
+  const staffRoute = staff.routes[`${req.method} ${pathname}`];
+  if (staffRoute) return sendJSON(res, 200, await staffRoute(req, req.method === 'POST' ? await readJSONBody(req) : {}));
+
   const onboardRoute = onboarding.routes[`${req.method} ${pathname}`];
   if (onboardRoute) return sendJSON(res, 200, await onboardRoute(req));
 

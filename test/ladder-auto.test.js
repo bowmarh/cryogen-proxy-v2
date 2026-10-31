@@ -157,3 +157,20 @@ test('the challenge planner gives the range, whether a legal five exists, free d
   assert.match(p.draft, /would like to challenge \[your team\].*one or two power-ups/);
   assert.equal((await app.get('/api/ladder/planner')).status, 401);
 });
+
+test('with the ladder table pasted in, our rung is found and the planner names opponents: seven above, zombies skipped, the draft names the first', async () => {
+  for (let i = 0; i < 6; i++) await post('roster', { zwid: ID(i) });
+  const day = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const table = ['Rank,Team,Last raced', `1,Top Team,${day(3)}`, `2,Old Timers,${day(40)}`, `3,Third,${day(5)}`, `4,Fourth,${day(8)}`, `5,Fifth,${day(1)}`, `6,CRYO-GEN,${day(2)}`, `7,Seventh,${day(9)}`].join('\n');
+  const pre = (await post('standings', { csv: table })).body.preview;
+  assert.deepEqual([pre.teams, pre.ours.rank], [7, 6]);
+  assert.equal((await post('standings', { csv: 'nothing useful' })).status, 400);
+  assert.equal((await post('standings', { csv: 'Rank,Team\n1,Only' })).status, 400);
+  assert.equal((await app.get('/api/ladder', { token: admin })).body.meta.rung ?? null, null, 'a preview saves nothing');
+  await post('standings', { csv: table, apply: true });
+  assert.equal((await app.get('/api/ladder', { token: admin })).body.meta.rung, 6, 'the rung is set from our row');
+  const p = (await app.get('/api/ladder/planner', { token: admin })).body;
+  assert.deepEqual(p.targets.map(t => t.team), ['Fifth', 'Fourth', 'Third', 'Top Team'], 'nearest first; the 40-day team is a zombie and left out');
+  assert.match(p.draft, /would like to challenge Fifth to a Club Ladder match/);
+  assert.equal(p.standings.teams, 7);
+});
