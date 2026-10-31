@@ -311,3 +311,9 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Needs attention** rows can carry an `action` ({label, post, body}); the page shows a button that posts it. Used for ZRL items the one-click fix can resolve and for the Discord outbox ("Retry now", `POST /api/outbox/flush`).
 - **Usage guard:** each running copy counts storage commands and Discord posts and adds them to `cg:usage` (per day) on every scheduled run. Health shows "Daily usage" and warns at 80% of `REDIS_DAILY_LIMIT` (default 16000, about the Upstash free tier per day). Counts are a floor: each running copy only counts its own traffic.
 - Onboarding (existing) already nudges new members on day 3 and day 10; "stuck" new members appear in Needs attention.
+
+## Polish: captains spread, themes, accessibility, "since you last looked"
+- **Captains:** when placing riders, a volunteer is preferred for a team that has no captain or volunteer yet (`planAssignments`), so volunteers are spread across teams instead of all landing on the team that fills first.
+- **Themes:** the 🌓 button cycles Auto (follows the device), Light, Dark; saved in this browser. Light mode inverts the page and rotates the hue back (`html[data-theme="light"]`), with pictures put right again. A small script in `<head>` applies it before paint.
+- **Accessibility:** visible focus ring, skip link, reduced-motion respect, small-print greys raised to at least 4.5:1 contrast on the dark cards, and `a11yPass()` (re-run on page changes) names unlabelled buttons, fields and checkboxes and marks pop-ups as dialogs. `test/e2e/polish.spec.js` checks the rider pages (`npm run test:e2e`).
+- **My week:** `myWeekChanges()` compares what the rider sees with what this browser saw on its previous visit (a gap of 30 minutes or more starts a new visit) and shows "Since you last looked: New / Changed …". Stored in the browser only (`mw:snap`, `mw:base`).
