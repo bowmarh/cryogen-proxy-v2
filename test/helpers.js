@@ -232,6 +232,7 @@ function installFetch(world) {
       return json({}, 404);
     }
     if (u.host === 'discord.test') {
+      if (world.discordFail > 0) { world.discordFail--; return new Response(JSON.stringify({ retry_after: 0.01 }), { status: world.discordFailStatus || 500 }); }   // Discord having a bad moment
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body
     }

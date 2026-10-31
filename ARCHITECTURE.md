@@ -300,3 +300,8 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Go-live checklist:** `lib/golive.js`, `GET /api/golive` (admin), shown at the top of the Admin panel. It reads environment names and counts only, never values.
 - **Staging:** `STAGING=1` shows a banner (`/api/auth/status` → `staging`), names every Discord post `[STAGING] …`, and enables `POST /api/staging/seed` (`lib/staging.js`), which makes a test ZRL round with made-up riders. Use a separate Vercel project and database; see `docs/RUNBOOK.md`.
 - **Runbook:** `docs/RUNBOOK.md`.
+
+## Orbit phase: outbox, captain auto-pick, season share
+- **Discord outbox:** `discord()` retries a transient failure (429, 5xx, timeout) once straight away; if it still fails the post waits in `cg:outbox` and the scheduled "Outbox" job keeps trying for up to 24 hours / 5 tries, then drops it and tells the admin channel once. A refused hook (other 4xx) is never queued.
+- **ZRL captains:** `POST /api/zrl/lineup` with `auto: true` keeps the riders already picked and fills the rest (yes, then maybe, then no answer, then rating; never someone who said no). Captains get a "✨ Pick for me" button per race; the permission rules are unchanged (own team or staff).
+- **Season share:** `POST /api/me/season/share` posts the rider's own season recap to the club channel, once per rider per day, only when they press the button.

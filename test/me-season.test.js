@@ -72,3 +72,16 @@ test('social rides count the rider\'s RSVPs, past ones as attended; ride cover c
   assert.equal(c.upcoming.length, 1);
   assert.deepEqual([c.upcoming[0].title, c.upcoming[0].role], ['Duty Spin', 'Leader']);
 });
+
+test('a rider can share their season to the club channel, once a day, and only when there is something to share', async () => {
+  const share = () => app.post('/api/me/season/share', {}, { token: ann });
+  assert.equal((await app.post('/api/me/season/share', {})).status, 401);
+  assert.equal((await share()).status, 409, 'nothing to share yet');
+  app.world.db['cg:rides'] = { r1: JSON.stringify({ date: h.ymd(-3), title: 'Sunday ride' }) };
+  app.world.db['cg:rsvps'] = { 'r1|ann': JSON.stringify({ name: 'Ann Able' }) };
+  const ok = await share();
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  const post = app.world.discord.find(d => /Ann Able's season/.test(d.body.content));
+  assert.ok(post && /1 social ride/.test(post.body.content));
+  assert.equal((await share()).status, 429);
+});

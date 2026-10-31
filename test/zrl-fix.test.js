@@ -106,3 +106,17 @@ test('when sign-ups close the teams are suggested automatically and the admin ch
   await tick();
   assert.equal((await view()).placements['1000'], undefined, 'switched off: left for the staff');
 });
+
+test('a captain can have the line-up picked for them, from the answers, and only for their own team', async () => {
+  for (const [n, z] of [['Rider Five', '1005'], ['Rider Six', '1006']]) await app.post('/api/zrl/signup', { name: n, zwid: z, regions: ['eu'], cat: 'B' });
+  await app.post('/api/zrl/fix', { only: ['placed'], apply: true }, A);
+  await app.post('/api/zrl/captain', { team: 'alpha', key: '1002' }, A);
+  await app.post('/api/zrl/availability', { week: 0, zwid: '1000', status: 'no' }, A);
+  await app.post('/api/zrl/availability', { week: 0, zwid: '1005', status: 'yes' }, A);
+  const cap = { token: await app.memberSession('1002', { name: 'Rider Two' }) };
+  const r = await app.post('/api/zrl/lineup', { team: 'alpha', week: 0, auto: true }, cap);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.ok(r.body.zwids.includes('1005') && !r.body.zwids.includes('1000'));
+  const other = { token: await app.memberSession('1004', { name: 'Rider Four' }) };
+  assert.equal((await app.post('/api/zrl/lineup', { team: 'alpha', week: 0, auto: true }, other)).status, 403);
+});
