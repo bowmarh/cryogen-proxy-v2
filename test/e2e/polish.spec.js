@@ -111,3 +111,69 @@ test('a club logo address that is not a picture falls back to the CRYO-GEN logo 
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].map(i => i.getAttribute('src')).join(','))).toMatch(/^(\/logo\.png,?)+$/);
   expect(await page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].every(i => i.complete && i.naturalWidth > 0))).toBe(true);
 });
+
+test('one-tap looks set theme, accent, text size, colour-blind-safe categories and reduced motion together', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  await page.locator('#ui-btn').click();
+  await page.getByRole('button', { name: /High contrast/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduce');
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase())).toBe('#fbbf24');
+  expect(await page.evaluate(() => CAT_COLOR.B)).toBe('#0072B2');
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text-zoom').trim())).toBe('1.1');
+  await page.getByRole('button', { name: /Daylight/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-motion', 'auto');
+  expect(await page.evaluate(() => CAT_COLOR.B)).toBe('#3B82F6');
+});
+
+test('pinned pages appear at the top of the menu and open their page; each series can have its own colour', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  await page.locator('#ui-btn').click();
+  await page.getByRole('checkbox', { name: /^ ?🏁? ?TTT Week/ }).check();
+  await page.keyboard.press('Escape');
+  const pinned = page.locator('#pinned-nav .navbtn');
+  await expect(pinned).toHaveCount(1);
+  await expect(pinned).toContainText('TTT Week');
+  await pinned.click();
+  await expect(page.locator('#page-ttt')).toHaveClass(/active/);
+  await page.locator('#ui-btn').click();
+  await page.getByRole('checkbox', { name: /A colour for each series/ }).check();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /ZRL/ }).first().click();
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase())).toBe('#a78bfa');
+});
+
+test('a rider picks an emoji avatar and it shows next to their name', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  await page.locator('#ui-btn').click();
+  await page.getByRole('button', { name: 'Use 🦊' }).click();
+  await expect(page.locator('#top10 .av', { hasText: '🦊' })).toHaveCount(1);   // the window is redrawn after the save, so wait for that
+  await page.getByRole('button', { name: 'None' }).click();
+  await expect(page.locator('#top10 .av', { hasText: '🦊' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+});
+
+test('My week has a month view, and an empty week offers a next step', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  expect(await page.evaluate(() => uiEmpty('📅', 'A clear week', 'Nothing planned.', 'Find a ride', 'weekGo(\'rides\')'))).toContain('Find a ride');
+  await page.locator('#myweek-card summary', { hasText: 'Month view' }).click();
+  await expect(page.locator('#myweek-card [role="gridcell"]')).toHaveCount(42);
+  await expect(page.locator('#myweek-card [role="columnheader"]')).toHaveCount(7);
+  const problems = await page.evaluate(() => [...document.querySelectorAll('#myweek-card button,#myweek-card a[href]')].filter(el => !(el.getAttribute('aria-label') || el.textContent.trim())).length);
+  expect(problems).toBe(0);
+});
+
+test('standings get a podium and a points-over-the-round chart, with a colour per team', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  const out = await page.evaluate(() => {
+    const g = { name: 'Division 1', teams: [
+      { id: 'a', name: 'CRYO-GEN Alpha', rank: 1, total: 30, weeks: [{ pts: 10 }, { pts: 20 }] },
+      { id: 'b', name: 'CRYO-GEN Beta', rank: 2, total: 22, weeks: [{ pts: 12 }, { pts: 10 }] },
+      { id: 'c', name: 'CRYO-GEN Gamma', rank: 3, total: 9, weeks: [null, { pts: 9 }] }] };
+    return { pod: uiPodium(g), chart: uiPointsChart(g, ['2026-11-17', '2026-11-24']), none: uiPodium({ teams: [{ id: 'a', name: 'A', rank: 1, total: 5, weeks: [] }] }) };
+  });
+  expect(out.pod).toContain('🥇'); expect(out.pod).toContain('🥈'); expect(out.pod).toContain('🥉');
+  expect((out.chart.match(/<path/g) || []).length).toBe(3);
+  expect(out.none).toBe('');
+});

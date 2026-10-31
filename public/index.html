@@ -82,6 +82,7 @@ table{width:100%;border-collapse:collapse}
 .av{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:2px solid var(--c,#8b95a5);background:rgba(255,255,255,.07);font-size:9px;font-weight:800;color:#e5e7eb;margin-right:6px;flex:none;vertical-align:middle}
 #page-dashboard.active{display:flex;flex-direction:column}
 main{zoom:var(--text-zoom,1)}
+html[data-motion="reduce"] *{animation:none!important;transition:none!important}
 html[data-density="compact"] main{padding:14px!important}
 html[data-density="compact"] .card{padding:10px 12px!important}
 html[data-density="compact"] td{padding:5px 10px!important}
@@ -866,6 +867,7 @@ function launchApp(r){
   installBarMaybe();
   if(r==='admin'||r==='mod') showTab('week',document.getElementById('nav-week'));   // staff start on This week
   if(r==='member'){ loadMyWeek(); tzLoadMine(); }
+  if(window.uiLogin) uiLogin();
   if(r!=='admin'&&r!=='mod'&&window.uiStartPage) uiStartPage();
   tzRefresh();
 }
@@ -1211,7 +1213,7 @@ function myWeekChanges(items){
 function renderMyWeek(){
   const el=document.getElementById('myweek-card'); const d=myWeek; if(!el||!d) return;
   const changes=myWeekChanges(d.items);
-  if(!d.items.length){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">📅 My week</div><div style="font-size:13px;color:#9ca3af;margin-top:4px">Nothing planned for you in the next ${d.windowDays} days. <a href="#" onclick="weekGo('rides');return false" style="color:var(--accent)">Find a ride →</a></div></div>`; return; }
+  if(!d.items.length){ el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">📅 My week</div>${window.uiEmpty?uiEmpty('📅','A clear week','Nothing planned for you in the next '+d.windowDays+' days. A social ride is an easy way to start.','Find a ride',"weekGo('rides')"):'<div style="font-size:13px;color:#9ca3af;margin-top:4px">Nothing planned for you in the next '+d.windowDays+' days. <a href="#" onclick="weekGo(\'rides\');return false" style="color:var(--accent)">Find a ride →</a></div>'}${window.uiMonthBox?uiMonthBox():''}</div>`; return; }
   const col={in:'#10B981',todo:'#FBBF24',info:'#9ca3af',out:'#8b95a5'}, ico={in:'✅',todo:'🟡',info:'⚪',out:'➖'};
   const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
@@ -1226,7 +1228,7 @@ function renderMyWeek(){
   const first=d.items.find(u=>u.state==='todo'), nextIn=d.items.find(u=>u.state==='in');
   const nowLine=first?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,0.1);font-size:13px">👉 <b>Do this now:</b> answer ${esc(first.kind)} “${esc(first.title)}” — ${esc(first.note||'')} <a href="#" onclick="weekGo('${esc(first.go)}');return false" style="color:var(--accent);white-space:nowrap">Open →</a></div>`
     :nextIn?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(16,185,129,0.1);font-size:13px">✅ <b>Nothing to do.</b> Next up: ${esc(nextIn.kind)} “${esc(nextIn.title)}”${nextIn.timed?' at '+esc(new Date(nextIn.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})):''}.</div>`:'';
-  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${changeLine}${window.uiRaceDay?uiRaceDay(d.items,myWeekPen):''}${nowLine}${rows}</div>`;
+  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${changeLine}${window.uiRaceDay?uiRaceDay(d.items,myWeekPen):''}${nowLine}${rows}${window.uiMonthBox?uiMonthBox():''}</div>`;
 }
 
 // One-click fix on a "needs attention" row: posts the action the server named, then reloads the page.
@@ -1806,6 +1808,7 @@ function showTab(id,btn){
   if(id==='upgrade')loadUpgrade();
   if(id==='week')loadWeek();
   if(id==='comms')loadComms();
+  if(window.uiSeries) uiSeries(id);
 }
 
 // ── Live Data ──────────────────────────────────────────────
@@ -2185,7 +2188,7 @@ function renderAll(){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px">
         <span style="font-size:10px;color:#7b8494;width:16px;text-align:right">${i+1}</span>
-        ${window.uiAvatar?uiAvatar(m.name,m.cat):''}<span style="font-size:13px">${esc(m.name.split(' ')[0])}</span>
+        ${window.uiAvatar?uiAvatar(m.name,m.cat,m.id):''}<span style="font-size:13px">${esc(m.name.split(' ')[0])}</span>
         ${catB(m.cat)}
         ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
       </div>
@@ -3193,7 +3196,7 @@ function renderLadder(){
   if(!ladder){ return; }
   const staff=ladderStaff(), rec=ladder.record, up=ladder.matches.filter(m=>m.upcoming).sort((a,b)=>(a.at||9e15)-(b.at||9e15)), past=ladder.matches.filter(m=>!m.upcoming);
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(var(--accent-rgb),0.12);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.4)';
-  el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
+  el.innerHTML=`${teamBar('ladder')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px;border-left:5px solid ${window.uiTeamColor&&ladder.team?uiTeamColor(ladder.team.id):'transparent'};padding-left:10px">🪜 Zwift Club Ladder${ladder.teams.length>1?' · '+esc(ladder.team.name):''}</h2>
       <p style="font-size:13px;color:#8b95a5">5v5 head-to-head on ZwiftRacing.app · ${rec.played?`${rec.won} won, ${rec.lost} lost · points ${rec.pointsFor}–${rec.pointsAgainst}`:'no matches played yet'}${ladder.meta&&ladder.meta.rung?` · rung ${ladder.meta.rung}`:''}${staff?` <a href="#" onclick="event.preventDefault();ladderSetRung()" style="color:var(--accent);font-size:12px">set rung</a>`:''}</p></div>
     ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"> <button onclick="ladderSetCaptains()" title="Riders who manage this team's line-ups" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">👑 Captains</button><button onclick="recognitionPost('/api/ladder',ladderTeam)" title="Preview and post the end-of-season thank-you" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🎉 Recognition</button><button onclick="ladderPlan()" title="Rungs you may challenge, whether a legal five exists, and dates to propose" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🎯 Plan a challenge</button><button onclick="ladderCloseSeason()" title="Keeps this team's record and roster in the archive" style="${btn};background:rgba(255,255,255,0.05);color:#e5e7eb;border-color:rgba(255,255,255,0.18)">🏁 Close season</button><button onclick="ladderFormOpen('new')" style="${btn}">+ New challenge</button></div>`:''}</div>
     ${ladder.challengeRange?`<div style="font-size:12px;color:#9ca3af;margin:-6px 0 10px">🎯 You can challenge rungs <b style="color:#e5e7eb">${ladder.challengeRange.from}${ladder.challengeRange.to>ladder.challengeRange.from?' to '+ladder.challengeRange.to:''}</b> (up to seven above you). ${esc(ladder.challengeRange.note)}</div>`:''}
@@ -3401,10 +3404,10 @@ function renderDrs(){
   if(drsErr){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#FBBF24">${esc(drsErr)}</div>`; return; }
   if(!drs) return;
   const staff=drsStaff(), s=drs.season, rec=drs.record;
-  if(!s){ el.innerHTML=`${teamBar('drs')}<h2 style="font-size:20px;font-weight:900;margin-bottom:10px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>${staff?drsSetupCard():'<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">The DIRT Racing Series has not been set up yet.</div>'}${drsHelpCard()}`; return; }
+  if(!s){ el.innerHTML=`${teamBar('drs')}<h2 style="font-size:20px;font-weight:900;margin-bottom:10px;border-left:5px solid ${window.uiTeamColor&&drs.team?uiTeamColor(drs.team.id):'transparent'};padding-left:10px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>${staff?drsSetupCard():'<div class="card" style="padding:16px;font-size:13px;color:#9ca3af">The DIRT Racing Series has not been set up yet.</div>'}${drsHelpCard()}`; return; }
   const btn='padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(var(--accent-rgb),0.12);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.4)', sec=btn.replace('rgba(var(--accent-rgb),0.12)','rgba(255,255,255,0.05)').replace('var(--accent)','#e5e7eb').replace('rgba(var(--accent-rgb),0.4)','rgba(255,255,255,0.18)');
   const up=drs.stages.filter(x=>x.upcoming), past=drs.stages.filter(x=>!x.upcoming);
-  el.innerHTML=`${teamBar('drs')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>
+  el.innerHTML=`${teamBar('drs')}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px;border-left:5px solid ${window.uiTeamColor&&drs.team?uiTeamColor(drs.team.id):'transparent'};padding-left:10px">🏜️ DIRT Racing Series${drs.teams.length>1?' · '+esc(drs.team.name):''}</h2>
       <p style="font-size:13px;color:#8b95a5">${esc(s.name)} · ${esc(s.division)} · ${esc(s.slot||'squad slot')} ${esc(s.time)} (${esc(s.tz)})${rec.played?` · ${rec.played} stage${rec.played===1?'':'s'}, ${rec.teamPoints} team points`:''}</p></div>
     ${staff?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="drsSetup=!drsSetup;renderDrs()" style="${sec}">⚙️ Season</button><button onclick="drsSetCaptains()" title="Squad riders who manage this team's scoring four" style="${sec}">👑 Captains</button><button onclick="recognitionPost('/api/drs',drsTeam)" title="Preview and post the end-of-season thank-you" style="${sec}">🎉 Recognition</button><button onclick="drsStageOpen('new')" style="${btn}">+ Add a stage</button></div>`:''}</div>
     ${staff&&drsSetup?drsSetupCard():''}${drsStageForm_()}${drsSquadCard()}
@@ -4204,8 +4207,8 @@ function zrlLineupHtml(t,racing){
   const today=new Date().toISOString().slice(0,10), nextI=(t.weeks.find(w=>w.date>=today)||{i:-1}).i;
   const btn='padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
   return `<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:6px">Pick your ${racing} for each race</div>
-    ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);padding:6px 0;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#8b95a5">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${window.uiAvatar?uiAvatar(r.name,(riders.find(x=>String(x.id)===String(r.zwid))||{}).cat):''}${rn(r.name,r.zwid,'',true)}</td>
+    ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);border-left:3px solid ${window.uiTeamColor?uiTeamColor(t.id):'transparent'};padding:6px 0 6px 8px;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#8b95a5">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${window.uiAvatar?uiAvatar(r.name,(riders.find(x=>String(x.id)===String(r.zwid))||{}).cat,r.zwid):''}${rn(r.name,r.zwid,'',true)}</td>
         <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}','${esc(t.id)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
       <button onclick="zrlLineupAuto('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">✨ Pick for me</button> <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
       <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
@@ -4259,9 +4262,9 @@ function zrlStandingsHtml(){
   const s=zrlStand; if(!s||!s.groups.length) return '';
   const th='padding:5px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5';
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin:0 0 8px">🏆 Standings</div>
-    ${s.groups.map(g=>`<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">${esc(g.name)}</div>
+    ${s.groups.map(g=>`<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">${esc(g.name)}</div>${window.uiPodium?uiPodium(g):''}${window.uiPointsChart?uiPointsChart(g,s.dates):''}
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="${th}">#</th><th style="${th}">Team</th>${s.dates.map((d,i)=>`<th style="${th}">R${i+1}</th>`).join('')}<th style="${th}">Points</th></tr></thead>
-      <tbody>${g.teams.map(t=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px;color:#9ca3af">${t.rank}</td><td style="padding:5px 8px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>
+      <tbody>${g.teams.map(t=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px;color:#9ca3af;box-shadow:inset 4px 0 0 ${window.uiTeamColor?uiTeamColor(t.id||t.name):'transparent'}">${t.rank}</td><td style="padding:5px 8px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>
         ${t.weeks.map(w=>`<td style="padding:5px 8px;color:#9ca3af;white-space:nowrap">${w?(w.pos?w.pos+(w.pos===1?'st':w.pos===2?'nd':w.pos===3?'rd':'th'):'')+(w.pts!==null?(w.pos?' · ':'')+w.pts:''):'–'}</td>`).join('')}<td style="padding:5px 8px;font-weight:800">${t.total}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>`;
 }
 function zrlRiderInfo(en){ return en&&en.score!==undefined&&en.score!==null?`Rider points ${esc(en.score)} · FIN ${esc(en.fin??0)} · FAL ${esc(en.fal??0)} · FTS ${esc(en.fts??0)}`:''; }
@@ -4709,7 +4712,7 @@ function zrlMyCard(){
 }
 function renderZrl(d){
   const staff=role==='admin'||role==='mod';
-  if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">No ZRL round is open right now. We'll announce it in Discord when the next one starts.</div>${staff?zrlStaffPanel(d):''}`;
+  if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">${window.uiEmpty?uiEmpty('🚀','No ZRL round yet',"We'll announce the next round in Discord when sign-ups open.",'Back to the dashboard',"showTab('dashboard',document.querySelector('.navbtn'))"):"No ZRL round is open right now. We'll announce it in Discord when the next one starts."}</div>${staff?zrlStaffPanel(d):''}`;
   if(staff) return renderZrlStaff(d);
   const r=d.round, dem=d.demand;
   const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} ${tzLabel()}`:'';
@@ -4862,7 +4865,7 @@ function renderMyTtt(m){
   const card=(inner)=>`<div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:10px">🏁 My TTT</div>${inner}</div>`;
   const goBtn=(t)=>`<button class="btn-cyan" style="width:auto;padding:8px 16px;margin-top:12px" onclick="showTab('ttt',[...document.querySelectorAll('#main-nav .navbtn')].find(b=>b.textContent.includes('TTT Week')))">${t}</button>`;
   let body='';
-  if(!w) body='<div style="font-size:13px;color:#9ca3af">No TTT week is open yet.</div>';
+  if(!w) body=window.uiEmpty?uiEmpty('🏁','No TTT week is open yet','Sign-ups open each week; we will tell you in Discord. Meanwhile there is a social ride to join.','Find a ride',"showTab('rides',[...document.querySelectorAll('.navbtn')].find(b=>/Social Rides/.test(b.textContent)))"):'<div style="font-size:13px;color:#9ca3af">No TTT week is open yet.</div>';
   else{
     const closes=w.open&&w.closesAt?` · sign-ups close ${esc(new Date(w.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} ${tzLabel()}`:'';
     body+=`<div style="font-size:14px;font-weight:700">${esc(w.title)}<span style="font-weight:400;color:#9ca3af;font-size:12px">${closes}</span></div>`;

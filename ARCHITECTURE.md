@@ -332,3 +332,11 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Charts** use `GET /api/club/trend` (`lib/trend.js`): one daily snapshot of the active roster (average vELO, size, riders per category; totals only, kept 120 days; the scheduled "Trend" job writes it) and ride RSVPs per week for eight weeks. The vELO line shows after the second day.
 - **Race-day card** on My week: from three hours before to 45 minutes after a start the rider is racing in. Big countdown, teammates in the pen (`GET /api/live/pen`: names and a tick only, racers only) and the "I'm in the pen" button.
 - **Season picture:** rings for races picked, answers given and social rides; "Save my season as a picture" draws a PNG in the browser (shares through the phone's share sheet where available).
+
+## Visual round 2
+- **Looks:** four one-tap presets (Night, Daylight, Neon, High contrast) set theme, accent, spacing, text size, category palette and motion together. Rider choices stay in the browser (`ui:prefs`, `theme`).
+- **Colour for each series** (optional): the accent follows the page (ZRL purple, TTT gold, Ladder green, DIRT orange) via `uiSeries()`, called from `showTab`.
+- **Colour-blind-safe categories:** switches `CAT_COLOR` to the Okabe-Ito set and redraws. **Reduce animation** sets `html[data-motion=reduce]`.
+- **Pinned pages:** up to four, shown under "Pinned" at the top of the menu.
+- **Avatars:** a rider picks one emoji (`lib/avatars.js`, `POST /api/me/avatar`, `GET /api/avatars` for signed-in members and staff). Zwift's profile pictures are not part of the data the club gets, and photos would need a public address each, so they are not used.
+- **Month view** on My week: `GET /api/me/week?days=` widens the window (7 to 42). **Empty states** (`uiEmpty`) name the next step. **Standings** show a podium and a points-over-the-round line chart; team colour stripes appear on ZRL line-ups, standings rows and the Ladder and DIRT headings.

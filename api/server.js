@@ -2699,6 +2699,7 @@ function readRawBody(req, limit = 20000){
 
 // The go-live checklist (lib/golive.js): what is on, what is half set up, and the next step for each.
 const trend = require('../lib/trend')({ redis, fetchRoster, activeMembers, keys: { rides: KEYS.rides, rsvps: KEYS.rsvps } });
+const avatars = require('../lib/avatars')({ redis, HttpError, memberFromRequest, roleFromRequest });
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -2859,7 +2860,7 @@ async function route(req, res){
   if (zrlRoute) return handleZrl(zrlRoute, req, res);
 
   const myWeekRoute = myweek.routes[`${req.method} ${pathname}`];
-  if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req));
+  if (myWeekRoute) return sendJSON(res, 200, await myWeekRoute(req, undefined, parseRequestUrl(req).query));
 
   if (pathname === '/api/discord/callback' && req.method === 'GET') return handleDiscordCallback(req, res);
 
@@ -2908,8 +2909,8 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`];
-  if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined));
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`];
+  if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
   const stagingRoute = staging.routes[`${req.method} ${pathname}`];
