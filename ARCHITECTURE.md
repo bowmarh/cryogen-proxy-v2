@@ -348,3 +348,9 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Picture cards:** "🖼️ Picture" on a ZRL line-up and on each standings table draws a PNG in the browser (phone share sheet where available).
 - **Seasonal looks** (`lib/clubtheme.js`): up to four dated looks (month-day to month-day, may wrap New Year) override the club accent and welcome line; the saved base look is kept for editing.
 - **Unplaced riders:** the ZRL readiness item now says how many can be placed now and counts the reasons the rest cannot be (full zone, no room in their category).
+
+## Fair play (staff only)
+- `lib/fairplay.js`, page "🔎 Fair play" (admin and moderators). A daily scheduled job takes one snapshot per active rider (registered weight, 5 and 20 minute W/kg, vELO) and flags: a weight drop of more than 2 kg in 7 days (or an implausible weight), a 5 or 20 minute W/kg more than 5% above their best of the previous 90 days (needs four readings older than two weeks), and a vELO rise of 150 or more in 14 days. Severity 1 to 3 by size.
+- A flag is a prompt for a person, never a finding. Staff mark each one Fine, Confirmed or Dismissed with a note; a dismissed item is not raised again unless it gets clearly worse or a month passes. Nothing is sent to the rider, members cannot read it, and the admin channel only gets a count.
+- Registered weight is written to a private key (`cg:fair:weights`) when the roster is fetched and is not part of the roster members can fetch.
+- Not checked, because the data the club receives has no heart rate or second-by-second power: heart-rate decoupling and "sticky watts". Adding them needs FIT files or a stream source.
