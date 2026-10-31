@@ -1122,6 +1122,15 @@ function renderMyWeek(){
   el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${nowLine}${rows}</div>`;
 }
 
+// One-click fix on a "needs attention" row: posts the action the server named, then reloads the page.
+async function weekAction(a,btn){
+  btn.disabled=true; btn.textContent='Working…';
+  try{
+    const res=await fetch(a.post,{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify(a.body||{})});
+    const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+  }catch(e){ alert(e.message); }
+  if(typeof loadWeek==='function') loadWeek(); 
+}
 // ── This week (staff): what needs attention and what is coming up ───────────────────────
 let weekData=null, weekErr='';
 function weekGo(go){
@@ -1157,7 +1166,7 @@ function renderWeek(){
   const d=weekData; if(!d) return;
   const col={fail:'#f87171',warn:'#FBBF24',todo:'#9ca3af',ok:'#10B981'}, ico={fail:'🔴',warn:'🟡',todo:'⚪',ok:'✅'};
   const goBtn=go=>`<button onclick="weekGo('${esc(go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button>`;
-  const att=d.attention.length?d.attention.map(a=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="flex:none">${ico[a.level]||'•'}</div><div style="flex:1;min-width:0"><div style="font-weight:700;color:#e5e7eb">${esc(a.title)}</div><div style="font-size:12px;color:${col[a.level]||'#9ca3af'}">${esc(a.detail)}</div></div>${goBtn(a.go)}</div>`).join(''):'<div style="padding:10px 0;font-size:13px;color:#10B981">✅ Nothing needs attention. Everything the dashboard watches is in order.</div>';
+  const att=d.attention.length?d.attention.map(a=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="flex:none">${ico[a.level]||'•'}</div><div style="flex:1;min-width:0"><div style="font-weight:700;color:#e5e7eb">${esc(a.title)}</div><div style="font-size:12px;color:${col[a.level]||'#9ca3af'}">${esc(a.detail)}</div></div>${a.action?`<button onclick="weekAction(${JSON.stringify(a.action).replace(/"/g,'&quot;')},this)" style="flex:none;padding:5px 10px;background:rgba(0,212,255,0.12);color:#00D4FF;border:1px solid rgba(0,212,255,0.3);border-radius:6px;font-size:12px;font-weight:700">${esc(a.action.label)}</button>`:''}${goBtn(a.go)}</div>`).join(''):'<div style="padding:10px 0;font-size:13px;color:#10B981">✅ Nothing needs attention. Everything the dashboard watches is in order.</div>';
   const todayKey=new Date().toLocaleDateString('en-CA',{timeZone:tzZone()});
   const dayLabel=k=>{ const diff=Math.round((Date.parse(k+'T12:00:00Z')-Date.parse(todayKey+'T12:00:00Z'))/86400000); return diff===0?'Today':diff===1?'Tomorrow':new Date(k+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}); };
   const days={}; d.upcoming.forEach(u=>{ const k=u.timed?new Date(u.atMs).toLocaleDateString('en-CA',{timeZone:tzZone()}):u.date; (days[k]=days[k]||[]).push(u); });

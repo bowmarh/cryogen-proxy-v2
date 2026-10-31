@@ -189,8 +189,12 @@ function redisConfig(){
   return base && token ? { base: base.replace(/\/$/, ''), token } : null;
 }
 
+// Rough daily usage so a quota is seen coming: counted in this process and added to the day's totals on every scheduled run.
+// Each running copy of the app counts its own, so the totals are a floor, not an exact bill.
+const usage = { redis: 0, discord: 0 };
 async function redis(commands){
   const cfg = redisConfig();
+  usage.redis += commands.length;
   if (!cfg) throw new HttpError(503, 'Shared storage is not set up yet.');
   let r;
   try {
@@ -458,6 +462,15 @@ const DISCORD_HOOKS = {
 };
 const discordEscape = t => String(t == null ? '' : t).replace(/([\\*_~`|>\[\]])/g, '\\$1');
 
+const USAGE_KEY = 'cg:usage', REDIS_DAILY_LIMIT = () => Number(process.env.REDIS_DAILY_LIMIT) || 16000;
+const usageDay = () => new Date().toISOString().slice(0, 10);
+async function flushUsage(){
+  const r = usage.redis, d = usage.discord; usage.redis = 0; usage.discord = 0;
+  if (!r && !d) return [];
+  const day = usageDay();
+  await redis([['HINCRBY', USAGE_KEY, `${day}:redis`, r + 1], ['HINCRBY', USAGE_KEY, `${day}:discord`, d]]);
+  return [];
+}
 const OUTBOX_KEY = 'cg:outbox', OUTBOX_MAX = 50, OUTBOX_TRIES = 5, OUTBOX_AGE_MS = 24 * 3600000;
 async function sendHook(hook, payload){
   try {
@@ -483,6 +496,7 @@ async function discord(channel, payload, opts = {}){
   if (!hook) return false;
   let r = await sendHook(hook, payload);
   if (!r.ok && r.transient) { await new Promise(ok => setTimeout(ok, Math.min(r.wait || 400, 1500))); r = await sendHook(hook, payload); }
+  usage.discord++;
   if (r.ok) return true;
   console.error(`Discord ${channel} webhook failed: ${r.status || r.error}`);
   if (r.transient && !opts.noQueue) {
@@ -1618,7 +1632,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   for (const [name, job] of jobs){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); failed.push({ job: name, error: String(e.message || e).slice(0, 200) }); }
@@ -2101,6 +2115,17 @@ async function healthChecks(){
     .then(([status, detail]) => ({ id, label, status, detail }))
     .catch(e => ({ id, label, status: 'fail', detail: e.message }));
   return Promise.all([
+    run('usage', 'Daily usage', async () => {
+      const [raw] = await redis([['HGETALL', USAGE_KEY]]);
+      const day = usageDay(), get = k => Number(pairs(raw).find(([f]) => f === `${day}:${k}`)?.[1]) || 0;
+      const r = get('redis') + usage.redis, d = get('discord') + usage.discord, limit = REDIS_DAILY_LIMIT();
+      const detail = `Today so far: about ${r} storage commands (alert at ${Math.round(limit * 0.8)} of ${limit}), ${d} Discord posts. Counts are a floor.`;
+      return [r >= limit * 0.8 ? 'warn' : 'ok', r >= limit * 0.8 ? `${detail} Close to the daily limit: check the Upstash plan or what is polling.` : detail];
+    }),
+    run('outbox', 'Discord messages waiting to send', async () => {
+      const [n] = await redis([['HLEN', OUTBOX_KEY]]);
+      return n ? ['warn', `${n} message${n === 1 ? ' is' : 's are'} waiting to be retried (Discord was busy or refused them). They are retried every 15 minutes for a day.`] : ['ok', 'None waiting.'];
+    }),
     run('storage', 'Shared storage (Redis)', async () => {
       const started = Date.now();
       await redis([['GET', TTT_KEYS.week]]);
@@ -2818,6 +2843,7 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
   const stagingRoute = staging.routes[`${req.method} ${pathname}`];
   if (stagingRoute) return sendJSON(res, 200, await stagingRoute(req));
   const goliveRoute = golive.routes[`${req.method} ${pathname}`];

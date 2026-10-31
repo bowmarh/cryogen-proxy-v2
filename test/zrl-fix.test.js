@@ -120,3 +120,10 @@ test('a captain can have the line-up picked for them, from the answers, and only
   const other = { token: await app.memberSession('1004', { name: 'Rider Four' }) };
   assert.equal((await app.post('/api/zrl/lineup', { team: 'alpha', week: 0, auto: true }, other)).status, 403);
 });
+
+test('"needs attention" offers a one-click fix for the ZRL items that can be fixed', async () => {
+  const week = (await app.get('/api/week', A)).body;
+  const placed = week.attention.find(a => a.id === 'zrl:placed');
+  assert.ok(placed && placed.action, JSON.stringify(week.attention.map(a => a.id)));
+  assert.deepEqual(placed.action.body, { only: ['placed'], apply: true });
+});
