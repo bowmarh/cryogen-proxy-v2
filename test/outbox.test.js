@@ -38,3 +38,26 @@ test('a hook that is refused (not a hiccup) is not queued', async () => {
   assert.equal(Object.keys(app.world.db['cg:outbox'] || {}).length, 0);
   app.world.discordFail = 0; app.world.discordFailStatus = 0;
 });
+
+test('waiting messages show up in "needs attention" with a retry button, and the daily usage is tracked', async () => {
+  app.world.db = {}; app.world.discord.length = 0; app.world.discordFail = 2;
+  await app.post('/api/zrl/round', { name: 'Round D', start: h.ymd(5), closes: h.ymd(2) }, { token: admin });
+  let week = (await app.get('/api/week', { token: admin })).body;
+  const item = week.attention.find(a => a.id === 'health:outbox');
+  assert.ok(item, 'listed');
+  assert.deepEqual(item.action, { label: 'Retry now', post: '/api/outbox/flush', body: {} });
+  assert.equal((await app.post('/api/outbox/flush', {})).status, 401);
+  const r = await app.post('/api/outbox/flush', {}, { token: admin });
+  assert.equal(r.body.left, 0);
+  week = (await app.get('/api/week', { token: admin })).body;
+  assert.ok(!week.attention.some(a => a.id === 'health:outbox'));
+  await tick();   // a scheduled run adds the day's counts
+  const day = new Date().toISOString().slice(0, 10);
+  assert.ok(Number(app.world.db['cg:usage'][`${day}:redis`]) > 0 && Number(app.world.db['cg:usage'][`${day}:discord`]) > 0);
+  const health = (await app.get('/api/health', { token: admin })).body.checks.find(c => c.id === 'usage');
+  assert.equal(health.status, 'ok');
+  process.env.REDIS_DAILY_LIMIT = '10';
+  const warn = (await app.get('/api/health', { token: admin })).body.checks.find(c => c.id === 'usage');
+  delete process.env.REDIS_DAILY_LIMIT;
+  assert.equal(warn.status, 'warn');
+});

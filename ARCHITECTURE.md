@@ -305,3 +305,9 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Discord outbox:** `discord()` retries a transient failure (429, 5xx, timeout) once straight away; if it still fails the post waits in `cg:outbox` and the scheduled "Outbox" job keeps trying for up to 24 hours / 5 tries, then drops it and tells the admin channel once. A refused hook (other 4xx) is never queued.
 - **ZRL captains:** `POST /api/zrl/lineup` with `auto: true` keeps the riders already picked and fills the rest (yes, then maybe, then no answer, then rating; never someone who said no). Captains get a "✨ Pick for me" button per race; the permission rules are unchanged (own team or staff).
 - **Season share:** `POST /api/me/season/share` posts the rider's own season recap to the club channel, once per rider per day, only when they press the button.
+
+## Orbit phase 2: simulation, one-click inbox, usage guard
+- `test/season-sim.test.js` plays a whole ZRL round through the scheduler (sign-ups, automatic close and placement, answers, line-ups, captain "Pick for me", results, standings, repeat runs). Run by `npm test` and CI.
+- **Needs attention** rows can carry an `action` ({label, post, body}); the page shows a button that posts it. Used for ZRL items the one-click fix can resolve and for the Discord outbox ("Retry now", `POST /api/outbox/flush`).
+- **Usage guard:** each running copy counts storage commands and Discord posts and adds them to `cg:usage` (per day) on every scheduled run. Health shows "Daily usage" and warns at 80% of `REDIS_DAILY_LIMIT` (default 16000, about the Upstash free tier per day). Counts are a floor: each running copy only counts its own traffic.
+- Onboarding (existing) already nudges new members on day 3 and day 10; "stuck" new members appear in Needs attention.

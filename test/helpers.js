@@ -104,6 +104,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'HKEYS': return Object.keys(db[key] || {});
     case 'HLEN': return Object.keys(db[key] || {}).length;
     case 'HSET': hash(key)[a[0]] = a[1]; return 1;
+    case 'HINCRBY': { const h = hash(key); h[a[0]] = String((Number(h[a[0]]) || 0) + Number(a[1])); return Number(h[a[0]]); }
     case 'HSETNX': if (a[0] in hash(key)) return 0; hash(key)[a[0]] = a[1]; return 1;
     case 'HDEL': { let n = 0; for (const f of a) if (f in hash(key)) { delete db[key][f]; n++; } return n; }
     case 'LPUSH': { const l = (db[key] = db[key] || []); for (const v of a) l.unshift(v); return l.length; }
