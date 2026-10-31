@@ -208,6 +208,8 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
       <button class="navbtn" id="nav-fair" style="display:none" onclick="showTab('fair',this)">🔎 Fair play</button>
+      <button class="navbtn" id="nav-inv" style="display:none" onclick="showTab('inv',this)">🕵️ Investigations</button>
+      <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
       <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="openAdmin()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
@@ -354,6 +356,8 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
   </div>
 
   <div id="page-fair" class="page"><div id="fair-content"></div></div>
+  <div id="page-inv" class="page"><div id="inv-content"></div></div>
+  <div id="page-coach" class="page"><div id="coach-content"></div></div>
 
   <div id="page-comms" class="page">
     <div id="comms-content"></div>
@@ -994,6 +998,7 @@ function renderFair(){
     <td style="white-space:nowrap">${esc(f.at)}</td><td style="font-size:12px;color:#d1d5db">${esc(f.metric)}${f.note?`<div style="color:#8b95a5;margin-top:2px">Note: ${esc(f.note)}</div>`:''}</td>
     <td style="white-space:nowrap"><span style="font-size:11px;color:#8b95a5">${esc(st[f.status])}${f.reviewedBy?' · '+esc(f.reviewedBy):''}</span><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
       <a href="${esc(f.profile)}" target="_blank" rel="noopener" style="${btn};text-decoration:none">Review ↗</a>
+      <button type="button" style="${btn}" data-z="${esc(f.zwid)}" data-t="${esc(f.typeLabel+' · '+f.at)}" data-n="${esc('From Fair play ('+f.at+'): '+f.typeLabel+'. '+f.metric)}" data-f="${esc(f.id)}" onclick="invFromFlag(this.dataset.z,this.dataset.t,this.dataset.n,this.dataset.f)">🕵️ Investigate</button>
       ${f.status==='open'?`<button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','ok')">Fine</button><button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','confirmed')">Confirm</button><button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','dismissed')">Dismiss</button>`:`<button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','open')">Reopen</button>`}</div></td></tr>`).join('');
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🔎 Fair play</h2><p style="font-size:13px;color:#8b95a5">${d.open} to review · last checked ${esc(d.lastRun||'never')}</p></div>
       ${role==='admin'?`<button type="button" style="${btn}" onclick="fairRun(this)">Check now</button>`:''}</div>
@@ -1828,7 +1833,8 @@ function setupRole(){
     }
     document.getElementById('nav-upgrade').style.display='flex';
   }
-  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; }
+  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-inv').style.display='flex'; }
+  if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
 }
@@ -1853,6 +1859,8 @@ function showTab(id,btn){
   if(id==='week')loadWeek();
   if(id==='comms')loadComms();
   if(id==='fair')loadFair();
+  if(id==='inv'&&window.invLoad)invLoad();
+  if(id==='coach'&&window.coachOpen)coachOpen();
   if(window.uiSeries) uiSeries(id);
 }
 
@@ -5278,6 +5286,9 @@ if(role && !ssoToken){
   if(role==='member') loadMyWeek();
 }
 </script>
+<script src="/js/fit.js"></script>
+<script src="/js/investigate.js"></script>
+<script src="/js/coach.js"></script>
 <script src="/js/ui.js"></script>
 </body>
 </html>

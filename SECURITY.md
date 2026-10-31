@@ -22,3 +22,8 @@ Updated 28 October 2026. This summarizes the controls in the dashboard and the r
 3. **Set `SESSION_SECRET` explicitly** if staff sessions should remain invalidated independently of password changes. Changing it signs out all current sessions; individual session revocation is not supported.
 4. **Review framing and CSP separately.** The dashboard still contains inline scripts and event handlers. A strict Content-Security-Policy needs a larger frontend refactor. Confirm whether another site embeds the dashboard before adding a `frame-ancestors` restriction.
 5. **Public ZRL data includes Zwift IDs.** These are visible on ZwiftPower, but confirm that this remains acceptable for the club.
+
+## Fair play, investigations and the coach
+- Fair-play items, investigation cases and the registered weights are staff-only (admin and moderators). Members cannot read them and riders are never told automatically. Registered weight is kept in a private key and is not part of the roster members can fetch.
+- Raw rides are not kept: only worked-out numbers. Locations are never read from FIT files. An admin can delete a case entirely.
+- The AI summary and the coach send data to Anthropic. The summary gets numbers and staff notes without the rider's name or Zwift ID; the coach gets only the rider's own roster numbers after their yes, and never name, weight or contact details. Both treat the data as information, not instructions, and the AI is told it is not a judge or a doctor.
