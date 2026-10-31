@@ -13,7 +13,20 @@
   ];
   const STARTS = [['dashboard', 'Dashboard'], ['profile', 'My Profile'], ['zrl', 'ZRL'], ['ttt', 'TTT Week'], ['ladder', 'Ladder'], ['drs', 'DIRT Series'], ['rides', 'Social Rides']];
   const TEXT = { s: 0.92, m: 1, l: 1.1, xl: 1.2 };
-  const DEFAULTS = { accent: 'club', density: 'comfortable', text: 'm', start: 'dashboard', order: CARDS.map(c => c.id), hidden: [] };
+  const DEFAULTS = { accent: 'club', density: 'comfortable', text: 'm', start: 'dashboard', order: CARDS.map(c => c.id), hidden: [], series: false, palette: 'default', motion: 'auto', pins: [] };
+  // One-tap looks: they set the theme, accent, spacing, text size and the colour and motion options together.
+  const PRESETS = {
+    night: { label: '🌙 Night', theme: 'dark', accent: 'cyan', density: 'comfortable', text: 'm', palette: 'default', motion: 'auto' },
+    daylight: { label: '☀️ Daylight', theme: 'light', accent: 'orange', density: 'comfortable', text: 'm', palette: 'default', motion: 'auto' },
+    neon: { label: '💜 Neon', theme: 'dark', accent: 'pink', density: 'compact', text: 'm', palette: 'default', motion: 'auto' },
+    contrast: { label: '🔆 High contrast', theme: 'dark', accent: 'gold', density: 'comfortable', text: 'l', palette: 'cb', motion: 'reduce' },
+  };
+  // Category colours that stay apart for most kinds of colour blindness (the Okabe-Ito set).
+  const CB_CATS = { 'A+': '#F0E442', A: '#D55E00', B: '#0072B2', C: '#009E73', D: '#CC79A7' };
+  // Each series can use its own colour when the rider turns that on.
+  const SERIES = { zrl: '#A78BFA', ttt: '#FBBF24', season: '#FBBF24', ladder: '#22C55E', drs: '#FF8A1F', rides: '#00D4FF', events: '#00D4FF' };
+  const MONTH_KIND = { TTT: '#FBBF24', ZRL: '#A78BFA', Ladder: '#22C55E', DIRT: '#FF8A1F', Ride: '#00D4FF', Cover: '#8b95a5' };
+  let origCats = null, emojis = {};
   let club = { accent: '', welcome: '', logo: '' };
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,11 +40,23 @@
   function save(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) { /* not saved */ } }
   const rgb = hex => { const n = parseInt(hex.slice(1), 16); return `${n >> 16},${(n >> 8) & 255},${n & 255}`; };
 
+  const baseAccent = p => (ACCENTS[p.accent]) || (p.accent === 'club' && /^#[0-9a-f]{6}$/i.test(club.accent) ? club.accent : ACCENTS.cyan);
+  function setAccent(hex) { const root = document.documentElement; root.style.setProperty('--accent', hex); root.style.setProperty('--accent-rgb', rgb(hex)); }
+  // Called whenever the rider changes page: with "a colour for each series" on, the accent follows the series.
+  function seriesAccent(id) { const p = prefs(); setAccent(p.series && SERIES[id] ? SERIES[id] : baseAccent(p)); }
+  function palette(p) {
+    if (typeof CAT_COLOR === 'undefined') return;
+    if (!origCats) origCats = { ...CAT_COLOR };
+    const want = p.palette === 'cb' ? CB_CATS : origCats;
+    if (Object.keys(want).some(k => CAT_COLOR[k] !== want[k])) { Object.assign(CAT_COLOR, want); try { if (typeof renderAll === 'function' && document.getElementById('top10')) renderAll(); } catch (e) { /* redrawn on the next change */ } }
+  }
   function apply() {
     const p = prefs(), root = document.documentElement;
-    const hex = (ACCENTS[p.accent]) || (p.accent === 'club' && /^#[0-9a-f]{6}$/i.test(club.accent) ? club.accent : ACCENTS.cyan);
-    root.style.setProperty('--accent', hex); root.style.setProperty('--accent-rgb', rgb(hex));
+    setAccent(baseAccent(p));
     root.dataset.density = p.density === 'compact' ? 'compact' : 'comfortable';
+    root.dataset.motion = p.motion === 'reduce' ? 'reduce' : 'auto';
+    palette(p);
+    pins();
     root.style.setProperty('--text-zoom', String(TEXT[p.text] || 1));
     layout();
     welcome();
@@ -93,8 +118,13 @@
     bg.className = 'modal-bg'; bg.id = 'ui-modal'; bg.onclick = e => { if (e.target === bg) close(); };
     bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Customise" style="max-width:480px"><div class="modal-head"><span>🎨 Customise</span><button type="button" aria-label="Close" onclick="uiClose()" style="background:none;border:none;color:#9ca3af;font-size:18px">✕</button></div>
       <div class="modal-body">
+        <div><div class="lbl">One-tap looks</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PRESETS).map(([k, v]) => `<button type="button" onclick="uiPreset('${k}')" style="padding:6px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#e5e7eb;font-size:12px;cursor:pointer">${v.label}</button>`).join('')}</div></div>
         <div><div class="lbl">Accent colour</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${sw}</div></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap"><div><div class="lbl">Spacing</div>${sel('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], p.density)}</div><div><div class="lbl">Text size</div>${sel('text', [['s', 'Small'], ['m', 'Normal'], ['l', 'Large'], ['xl', 'Extra large']], p.text)}</div><div><div class="lbl">Open on</div>${sel('start', STARTS, p.start)}</div></div>
+        <div><label style="font-size:13px"><input type="checkbox" ${p.series ? 'checked' : ''} onchange="uiSet('series',this.checked)"/> A colour for each series (ZRL purple, TTT gold, Ladder green, DIRT orange)</label></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap"><div><div class="lbl">Category colours</div>${sel('palette', [['default', 'Standard'], ['cb', 'Colour-blind safe']], p.palette)}</div><div><div class="lbl">Motion</div>${sel('motion', [['auto', 'Follow my device'], ['reduce', 'Reduce animation']], p.motion)}</div></div>
+        <div><div class="lbl">Pinned pages (shown at the top of the menu)</div>${pinList(p)}</div>
+        ${typeof role !== 'undefined' && role === 'member' ? `<div><div class="lbl">My avatar</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${['🦊', '🐻', '🦁', '🐺', '🦅', '🚴', '⚡', '🔥', '❄️', '🏔️', '🐢', '🚀'].map(e => `<button type="button" aria-label="Use ${e}" onclick="uiAvatarSet('${e}')" style="font-size:20px;padding:2px 6px;border-radius:8px;border:1px solid ${emojis[myZwid()] === e ? '#fff' : 'rgba(255,255,255,.15)'};background:transparent;cursor:pointer">${e}</button>`).join('')}<button type="button" onclick="uiAvatarSet('')" style="padding:4px 10px;font-size:12px;border-radius:99px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#e5e7eb;cursor:pointer">None</button></div><div style="font-size:11px;color:#8b95a5;margin-top:4px">Other members see it next to your name.</div></div>` : ''}
         <div><div class="lbl">Dashboard cards</div>${cards}</div>
         ${clubBox}
         <div><button type="button" onclick="uiReset()" style="padding:6px 12px;background:rgba(255,255,255,.05);color:#e5e7eb;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:12px">Back to the defaults</button></div>
@@ -160,7 +190,9 @@
   }
 
   // ── Avatars and team colours ──────────────────────────────
-  function avatar(name, cat) {
+  function avatar(name, cat, zwid) {
+    const c0 = (typeof CAT_COLOR !== 'undefined' && CAT_COLOR[cat]) || '#8b95a5';
+    if (zwid && emojis[String(zwid)]) return `<span class="av" aria-hidden="true" style="--c:${c0};font-size:13px;background:rgba(255,255,255,.12)">${esc(emojis[String(zwid)])}</span>`;
     const parts = String(name || '?').trim().split(/\s+/), ini = ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
     const c = (typeof CAT_COLOR !== 'undefined' && CAT_COLOR[cat]) || '#8b95a5';
     return `<span class="av" aria-hidden="true" style="--c:${c}">${esc(ini)}</span>`;
@@ -249,6 +281,93 @@
     if (btn) btn.textContent = '✅ Saved';
   }
 
+
+  // ── Presets, pins, avatars ────────────────────────────────
+  function preset(name) {
+    const v = PRESETS[name]; if (!v) return;
+    try { localStorage.setItem('theme', v.theme); } catch (e) { /* the page default */ }
+    const p = prefs(); Object.assign(p, { accent: v.accent, density: v.density, text: v.text, palette: v.palette, motion: v.motion }); save(p);
+    if (typeof themeApply === 'function') themeApply();
+    apply(); open();
+  }
+  const navButtons = () => [...document.querySelectorAll('#main-nav .navbtn')].filter(b => !b.dataset.pin && /showTab\('/.test(b.getAttribute('onclick') || '') && b.offsetParent !== null);
+  const tabOf = b => ((/showTab\('([^']+)'/.exec(b.getAttribute('onclick') || '')) || [])[1];
+  const labelOf = b => b.textContent.replace(/\s+\d+\s*$/, '').trim();
+  function pinList(p) {
+    const items = navButtons();
+    if (!items.length) return '<div style="font-size:12px;color:#8b95a5">Open the dashboard first.</div>';
+    return items.map(b => { const id = tabOf(b); return `<label style="display:inline-block;margin:2px 10px 2px 0;font-size:13px"><input type="checkbox" ${p.pins.includes(id) ? 'checked' : ''} onchange="uiPin('${id}',this.checked)"/> ${esc(labelOf(b))}</label>`; }).join('');
+  }
+  function pin(id, on) { const p = prefs(); p.pins = on ? [...new Set([...p.pins, id])].slice(-4) : p.pins.filter(x => x !== id); save(p); pins(); open(); }
+  // Pinned pages sit at the top of the menu, under a small heading.
+  function pins() {
+    const nav = document.getElementById('main-nav'); if (!nav) return;
+    let box = document.getElementById('pinned-nav');
+    if (!box) { box = document.createElement('div'); box.id = 'pinned-nav'; nav.prepend(box); }
+    const wanted = prefs().pins, real = navButtons();
+    const btns = wanted.map(id => real.find(b => tabOf(b) === id)).filter(Boolean);
+    box.innerHTML = btns.length ? '<div class="navgroup">Pinned</div>' : '';
+    btns.forEach(b => { const c = document.createElement('button'); c.className = 'navbtn'; c.dataset.pin = '1'; c.textContent = '⭐ ' + labelOf(b).replace(/^\S+\s/, ''); c.onclick = () => b.click(); box.appendChild(c); });
+  }
+  async function loadAvatars() {
+    try { const r = await fetch('/api/avatars', { headers: tttHeaders() }); if (r.ok) emojis = (await r.json()).avatars || {}; } catch (e) { /* initials are shown */ }
+  }
+  const myZwid = () => (typeof memberRider !== 'undefined' && memberRider && memberRider.id != null ? String(memberRider.id) : '');
+  async function avatarSet(emoji) {
+    try {
+      const res = await fetch('/api/me/avatar', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Could not save.');
+      await loadAvatars(); open();
+      if (typeof renderAll === 'function') renderAll();
+    } catch (e) { alert(e.message); }
+  }
+
+  // ── Empty states: a picture word, a sentence and the next thing to do ──
+  function empty(icon, title, text, label, onclick) {
+    return `<div style="text-align:center;padding:26px 16px"><div style="font-size:42px" aria-hidden="true">${icon}</div><div style="font-weight:800;margin:6px 0 4px">${esc(title)}</div><div style="font-size:13px;color:#8b95a5;max-width:360px;margin:0 auto 12px">${esc(text)}</div>${label ? `<button type="button" onclick="${onclick}" class="btn-cyan" style="width:auto;padding:8px 18px;font-size:13px">${esc(label)}</button>` : ''}</div>`;
+  }
+
+  // ── Month calendar (My week) ──────────────────────────────
+  async function calendarInto(el) {
+    if (!el) return;
+    el.innerHTML = '<div style="font-size:12px;color:#8b95a5;padding:8px">Loading…</div>';
+    let d; try { const r = await fetch('/api/me/week?days=42', { headers: tttHeaders() }); d = await r.json(); if (!r.ok) throw new Error(d.error || ''); } catch (e) { el.innerHTML = '<div style="font-size:12px;color:#f87171;padding:8px">Could not load the calendar.</div>'; return; }
+    const tz = typeof tzZone === 'function' ? tzZone() : 'UTC';
+    const key = ms => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
+    const byDay = {}; d.items.forEach(u => { const k = u.timed ? key(u.atMs) : u.date; (byDay[k] = byDay[k] || []).push(u); });
+    const today = key(Date.now()), start = new Date(today + 'T12:00:00Z'); start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    let html = '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;font-size:11px" role="grid" aria-label="Next six weeks">' + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => `<div role="columnheader" style="text-align:center;color:#8b95a5;padding:2px">${x}</div>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const day = new Date(start); day.setUTCDate(start.getUTCDate() + i); const k = day.toISOString().slice(0, 10), its = byDay[k] || [], past = k < today;
+      html += `<div role="gridcell" style="min-height:62px;padding:3px;border-radius:6px;border:1px solid ${k === today ? 'var(--accent)' : 'rgba(255,255,255,.07)'};background:${its.some(u => u.state === 'todo') ? 'rgba(251,191,36,.08)' : 'transparent'};opacity:${past ? .5 : 1}"><div style="color:#8b95a5">${day.getUTCDate()}</div>${its.slice(0, 3).map(u => `<div title="${esc(u.kind + ': ' + u.title)}" style="margin-top:2px;padding:1px 4px;border-radius:4px;background:${MONTH_KIND[u.kind] || '#8b95a5'}33;border-left:3px solid ${MONTH_KIND[u.kind] || '#8b95a5'};overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(u.title)}</div>`).join('')}${its.length > 3 ? `<div style="color:#8b95a5">+${its.length - 3} more</div>` : ''}</div>`;
+    }
+    el.innerHTML = html + '</div>' + (d.items.length ? '' : '<div style="font-size:12px;color:#8b95a5;margin-top:8px">Nothing planned for you in the next six weeks.</div>');
+  }
+  function monthBox() {
+    return `<details style="margin-top:10px" ontoggle="if(this.open) uiCalendarInto(this.querySelector('.mw-cal'))"><summary style="cursor:pointer;font-size:13px;color:#9ca3af">📆 Month view</summary><div class="mw-cal" style="margin-top:8px"></div></details>`;
+  }
+
+  // ── Results as pictures: podium and points over the round ──
+  function podium(g) {
+    const top = g.teams.filter(t => t.rank <= 3 && t.total > 0).slice(0, 3);
+    if (top.length < 2) return '';
+    const order = [top[1], top[0], top[2]].filter(Boolean), h = { 1: 64, 2: 46, 3: 32 }, medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    return `<div style="display:flex;gap:8px;align-items:flex-end;justify-content:center;margin:6px 0 10px" role="img" aria-label="Podium: ${top.map(t => t.rank + ' ' + t.name).join(', ')}">${order.map(t => `<div style="text-align:center;width:30%;max-width:130px"><div style="font-size:12px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(t.name.replace(/^CRYO-GEN\s+/, ''))}</div><div style="font-size:11px;color:#8b95a5">${t.total} pts</div><div style="height:${h[t.rank] || 28}px;background:${teamColor(t.id || t.name)};border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-size:22px">${medal[t.rank] || ''}</div></div>`).join('')}</div>`;
+  }
+  function pointsChart(g, dates) {
+    const teams = g.teams.filter(t => t.total > 0).slice(0, 6), n = (dates || []).length;
+    if (!teams.length || n < 2) return '';
+    const W = 300, H = 90, series = teams.map(t => { let run = 0; return { t, pts: t.weeks.map(w => (run += (w && Number(w.pts)) || 0)) }; });
+    const max = Math.max(...series.map(x => x.pts[x.pts.length - 1]), 1);
+    const x = i => Math.round(i / (n - 1) * W), y = v => Math.round(H - 6 - v / max * (H - 14));
+    return `<div style="margin:0 0 8px"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Team points after each race">${series.map(({ t, pts }) => `<path d="${pts.map((v, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(v)).join(' ')}" fill="none" stroke="${teamColor(t.id || t.name)}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}</svg>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#9ca3af">${series.map(({ t }) => `<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${teamColor(t.id || t.name)};margin-right:4px"></span>${esc(t.name.replace(/^CRYO-GEN\s+/, ''))}</span>`).join('')}</div></div>`;
+  }
+  // Called once a rider is signed in: avatars, pinned pages, charts.
+  async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
+
+  window.uiPreset = preset; window.uiPin = pin; window.uiAvatarSet = avatarSet; window.uiEmpty = empty; window.uiMonthBox = monthBox; window.uiCalendarInto = calendarInto;
+  window.uiPodium = podium; window.uiPointsChart = pointsChart; window.uiSeries = seriesAccent; window.uiLogin = afterLogin;
   window.uiSet = set; window.uiToggle = toggle; window.uiMove = move; window.uiReset = reset; window.uiClose = close; window.uiOpen = open; window.uiSaveClub = saveClub;
   window.uiCharts = charts; window.uiAvatar = avatar; window.uiTeamColor = teamColor; window.uiRaceDay = raceDay; window.uiSeasonVisual = d => { lastSeason = d; return seasonVisual(d); };
   window.uiSeasonShare = seasonShare; window.uiStartPage = startPage; window.uiApply = apply; window.uiPrefs = prefs;

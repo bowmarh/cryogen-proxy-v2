@@ -45,3 +45,23 @@ test('the club theme: anyone can read it, only an admin can set it, and bad valu
   assert.equal((await app.get('/api/club/theme')).body.accent, '#ff8800');
 });
 
+
+test('a rider picks one emoji as their avatar; members and staff can read them; anything else is refused', async () => {
+  const me = { token: await app.memberSession('1002', { name: 'Rider Two' }) };
+  assert.equal((await app.get('/api/avatars')).status, 401);
+  assert.equal((await app.post('/api/me/avatar', { emoji: '🦊' })).status, 401);
+  for (const bad of ['abc', '🦊🐻', '<b>', '1']) assert.equal((await app.post('/api/me/avatar', { emoji: bad }, me)).status, 400, bad);
+  assert.equal((await app.post('/api/me/avatar', { emoji: '🦊' }, me)).body.emoji, '🦊');
+  assert.deepEqual((await app.get('/api/avatars', me)).body.avatars, { 1002: '🦊' });
+  assert.deepEqual((await app.get('/api/avatars', { token: admin })).body.avatars, { 1002: '🦊' });
+  assert.equal((await app.post('/api/me/avatar', { emoji: '' }, me)).body.emoji, '');
+  assert.deepEqual((await app.get('/api/avatars', me)).body.avatars, {});
+});
+
+test('My week can be widened for the month calendar, but only up to six weeks', async () => {
+  const me = { token: await app.memberSession('1002', { name: 'Rider Two' }) };
+  assert.equal((await app.get('/api/me/week', me)).body.windowDays, 7);
+  assert.equal((await app.get('/api/me/week?days=35', me)).body.windowDays, 35);
+  assert.equal((await app.get('/api/me/week?days=900', me)).body.windowDays, 42);
+  assert.equal((await app.get('/api/me/week?days=1', me)).body.windowDays, 7);
+});
