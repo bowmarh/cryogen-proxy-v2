@@ -2,7 +2,7 @@
 // Members: the AI coach. A yes is asked for once; the conversation lives in this page only (the last few turns are sent with each question) and a
 // FIT file of the rider's own ride is read here in the browser and explained, never stored.
 (function () {
-  let st = null, chat = [], busy = false, ride = null;
+  let st = null, chat = [], busy = false, ride = null, mode = 'coach', rideMode = 'training', plan = null;
   const E = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const root = () => document.getElementById('coach-content');
   const btn = 'padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18);border-radius:6px;cursor:pointer';
@@ -17,7 +17,7 @@
   }
   async function open() {
     const el = root(); if (!el) return;
-    try { st = await api('/api/coach/status'); } catch (e) { el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; return; }
+    try { st = await api('/api/coach/status'); try { plan = await api('/api/plan'); } catch (x) { plan = null; } } catch (e) { el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; return; }
     render();
   }
   function render() {
@@ -30,15 +30,23 @@
         <button type="button" class="btn-cyan" style="width:auto;padding:9px 20px;font-size:14px" onclick="coachConsent(true)">Yes, coach me</button></div>`; return;
     }
     const msgs = chat.map(m => `<div style="display:flex;justify-content:${m.role === 'user' ? 'flex-end' : 'flex-start'};margin:6px 0"><div style="max-width:90%;padding:8px 12px;border-radius:12px;font-size:13px;background:${m.role === 'user' ? 'rgba(var(--accent-rgb),.18)' : 'rgba(255,255,255,.06)'}">${m.role === 'user' ? E(m.content) : pretty(m.content)}</div></div>`).join('');
-    const chips = ['Plan my week', 'How can I climb better?', 'Tactics for my next race', 'What should I eat before a race?'].map(q => `<button type="button" style="${btn}" onclick="coachAsk('${E(q)}')">${E(q)}</button>`).join(' ');
+    const chips = (mode === 'club' ? ['Who is racing this week?', 'How are our teams doing?', 'What is on this weekend?', 'Where do I ride next?'] : ['Plan my week', 'How can I climb better?', 'Tactics for my next race', 'What should I eat before a race?']).map(q => `<button type="button" style="${btn}" onclick="coachAsk('${E(q)}')">${E(q)}</button>`).join(' ');
     const rd = ride ? `<div class="card" style="padding:14px 16px;margin-top:12px"><b>Your ride</b><div style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px">${[['Time', ride.minutes + ' min'], ['Average', ride.avgPower + ' W'], ['NP', (ride.normalizedPower || '–') + ' W'], ['Variability', ride.variabilityIndex || '–'], ['20 min best', (ride.bestWatts['1200s'] || '–') + ' W'], ['Heart rate', ride.heartRate.avg ? ride.heartRate.avg + ' bpm' : 'none'], ['Drift', ride.heartRate.decouplingPercent == null ? '–' : ride.heartRate.decouplingPercent + '%']].map(([l, v]) => `<div><div class="lbl" style="margin:0">${l}</div><b>${E(v)}</b></div>`).join('')}</div>
       ${ride.minutesInZones ? `<div style="font-size:12px;color:#9ca3af">Minutes in zones: ${Object.entries(ride.minutesInZones).map(([k, v]) => `${E(k)} ${v}`).join(' · ')}</div>` : ''}</div>` : '';
     el.innerHTML = head + `<div class="card" style="padding:14px 16px"><div style="min-height:80px">${msgs || '<div style="font-size:13px;color:#8b95a5">Ask anything about your training or racing.</div>'}${busy ? '<div style="font-size:12px;color:#8b95a5;margin:6px 0">The coach is thinking…</div>' : ''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${chips}</div>
-      <div style="display:flex;gap:8px"><input id="coach-q" class="inp" maxlength="700" placeholder="Ask your coach…" onkeydown="if(event.key==='Enter')coachSend()" style="flex:1" aria-label="Your question"/><button type="button" class="btn-cyan" style="width:auto;padding:0 18px" ${busy ? 'disabled' : ''} onclick="coachSend()">Ask</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><select class="inp" aria-label="Who to ask" onchange="coachMode(this.value)" style="width:auto"><option value="coach" ${mode === 'coach' ? 'selected' : ''}>🧠 Coach me</option><option value="club" ${mode === 'club' ? 'selected' : ''}>🏁 Ask about the club</option></select><button type="button" style="${btn}" ${busy ? 'disabled' : ''} onclick="coachStory()">📖 My season story</button></div>
+      <div style="display:flex;gap:8px"><input id="coach-q" class="inp" maxlength="700" onkeydown="if(event.key==='Enter')coachSend()" style="flex:1" aria-label="Your question" placeholder="${mode === 'club' ? 'Ask about results, teams or fixtures…' : 'Ask your coach…'}"/><button type="button" class="btn-cyan" style="width:auto;padding:0 18px" ${busy ? 'disabled' : ''} onclick="coachSend()">Ask</button></div>
       <div style="font-size:11px;color:#8b95a5;margin-top:6px">${st.tier === 'supporter' ? '⭐ Supporter · ' : ''}${st.remaining} of ${st.limit} questions left ${E(st.period)} · <a href="#" onclick="coachConsent(false);return false">Stop using my numbers</a></div></div>
-      <div class="card" style="padding:14px 16px;margin-top:12px"><b>Explain my ride</b><div style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Choose a FIT file from Zwift or your head unit. It is read here in your browser; only the recorded power and heart rate are sent to the coach, and nothing is kept. Counts as one question.${st.tier === 'free' ? ` Free riders can have ${st.ridesLeft > 0 ? 'one ride explained a month (you have it left)' : 'one ride explained a month (used this month)'}; supporters can explain as many as they like.` : ''}</div><input type="file" accept=".fit,application/octet-stream" aria-label="Choose a FIT file" ${st.tier === 'free' && st.ridesLeft === 0 ? 'disabled' : ''} onchange="coachRide(this)"/><div id="coach-ride-msg" role="status" style="font-size:12px;color:#8b95a5;margin-top:6px"></div></div>${rd}${support()}`;
+      <div class="card" style="padding:14px 16px;margin-top:12px"><b>Explain my ride</b><div style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Choose a FIT file from Zwift or your head unit. It is read here in your browser; only the recorded power and heart rate are sent to the coach, and nothing is kept. Counts as one question.${st.tier === 'free' ? ` Free riders can have ${st.ridesLeft > 0 ? 'one ride explained a month (you have it left)' : 'one ride explained a month (used this month)'}; supporters can explain as many as they like.` : ''}</div><div style="margin:0 0 6px"><label style="font-size:12px"><input type="radio" name="rm" ${rideMode === 'training' ? 'checked' : ''} onchange="coachRideMode('training')"/> Training ride</label> <label style="font-size:12px;margin-left:10px"><input type="radio" name="rm" ${rideMode === 'debrief' ? 'checked' : ''} onchange="coachRideMode('debrief')"/> Race debrief</label></div><input type="file" accept=".fit,application/octet-stream" aria-label="Choose a FIT file" ${st.tier === 'free' && st.ridesLeft === 0 ? 'disabled' : ''} onchange="coachRide(this)"/><div id="coach-ride-msg" role="status" style="font-size:12px;color:#8b95a5;margin-top:6px"></div></div>${rd}${planCard()}${support()}`;
     const box = document.getElementById('coach-q'); if (box && !busy) box.focus();
+  }
+  // The weekly plan: a supporter extra, sent on Monday to Discord or as a notification, and kept here to read.
+  function planCard() {
+    if (!plan || !plan.enabled) return '';
+    if (!plan.supporter) return `<div class="card" style="padding:12px 16px;margin-top:12px;font-size:13px">📅 <b>Weekly plan</b> <span style="color:#8b95a5">· a supporter extra: every Monday, a plan for your week from your own numbers and the races you have on.</span></div>`;
+    const last = plan.last ? `<div style="margin-top:8px;font-size:13px;white-space:pre-wrap;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.05)">${E(plan.last.text)}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">Week of ${E(plan.last.week)}</div>` : '<div style="font-size:12px;color:#8b95a5;margin-top:6px">Your first plan arrives next Monday morning.</div>';
+    return `<div class="card" style="padding:12px 16px;margin-top:12px"><label style="font-size:13px"><input type="checkbox" ${plan.optIn ? 'checked' : ''} onchange="coachPlan(this.checked)"/> 📅 <b>Send me a weekly plan on Mondays</b></label>${last}</div>`;
   }
   // A gentle note, never a wall: open by itself only when the free allowance has run out.
   function support() {
@@ -56,10 +64,18 @@
   async function ask(text) {
     if (busy || !text.trim()) return;
     const history = chat.slice(-6); chat.push({ role: 'user', content: text }); busy = true; render();
-    try { const d = await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply || '⚠️ The coach had no answer that time. Please ask again.' }); st = merge(d); }
+    try { const d = mode === 'club' ? await api('/api/coach/club', { message: text }) : await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply || '⚠️ The coach had no answer that time. Please ask again.' }); st = merge(d); }
     catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
   }
+  window.coachMode = v => { mode = v === 'club' ? 'club' : 'coach'; render(); };
+  window.coachRideMode = v => { rideMode = v === 'debrief' ? 'debrief' : 'training'; };
+  window.coachStory = async () => {
+    if (busy) return; busy = true; render();
+    try { const d = await api('/api/coach/story', {}); chat.push({ role: 'assistant', content: d.reply }); st = merge(d); } catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
+    busy = false; render();
+  };
+  window.coachPlan = async on => { try { plan = { ...plan, ...(await api('/api/plan/optin', { on })) }; } catch (e) { alert(e.message); plan = await api('/api/plan').catch(() => plan); } render(); };
   window.coachOpen = open;
   window.coachSend = () => { const b = document.getElementById('coach-q'); if (b) { const v = b.value; b.value = ''; ask(v); } };
   window.coachAsk = q => ask(q);
@@ -70,7 +86,7 @@
       msg.textContent = 'Reading the file…'; const p = FitParse.parse(await f.arrayBuffer());
       if (p.samples.t.length < 120) throw new Error('That ride is too short to look at.');
       msg.textContent = 'The coach is looking at it…'; busy = true;
-      const d = await api('/api/coach/ride', { samples: p.samples, question: '' });
+      const d = await api('/api/coach/ride', { samples: p.samples, question: '', mode: rideMode });
       ride = d.ride; chat.push({ role: 'assistant', content: d.reply }); st = merge(d);
     } catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
