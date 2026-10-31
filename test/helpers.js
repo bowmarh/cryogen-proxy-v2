@@ -98,6 +98,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'SET': if (a.includes('NX') && key in db) return null; db[key] = a[0]; return 'OK';
     case 'DEL': { let n = 0; for (const k of [key, ...a]) if (k in db) { delete db[k]; n++; } return n; }
     case 'INCR': db[key] = (Number(db[key]) || 0) + 1; return db[key];
+    case 'INCRBY': db[key] = (Number(db[key]) || 0) + Number(a[0]); return db[key];
     case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
@@ -184,7 +185,7 @@ function installFetch(world) {
     if (u.host === 'api.anthropic.com') {   // the model behind the staff assistant: world.anthropic = { reply: <text the model answers>, status, seen: [] }
       const a = world.anthropic = world.anthropic || { reply: '{"reply":"","actions":[]}', status: 200, seen: [] };
       a.seen.push({ key: (opts.headers || {})['x-api-key'], body: JSON.parse(opts.body) });
-      return json(a.status === 200 ? { content: [{ type: 'text', text: a.reply }] } : { error: { message: 'model error' } }, a.status);
+      return json(a.status === 200 ? { content: [{ type: 'text', text: a.reply }], ...(a.usage ? { usage: a.usage } : {}) } : { error: { message: 'model error' } }, a.status);
     }
     if (u.host === 'hooks.test') {   // an outbound webhook (Zapier, Make): world.hooks collects what was sent; world.hookFail makes it answer 500
       (world.hooks = world.hooks || []).push({ path: u.pathname, body: JSON.parse(opts.body) });

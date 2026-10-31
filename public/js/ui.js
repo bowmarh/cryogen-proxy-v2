@@ -26,7 +26,7 @@
   // Each series can use its own colour when the rider turns that on.
   const SERIES = { zrl: '#A78BFA', ttt: '#FBBF24', season: '#FBBF24', ladder: '#22C55E', drs: '#FF8A1F', rides: '#00D4FF', events: '#00D4FF' };
   const MONTH_KIND = { TTT: '#FBBF24', ZRL: '#A78BFA', Ladder: '#22C55E', DIRT: '#FF8A1F', Ride: '#00D4FF', Cover: '#8b95a5' };
-  let origCats = null, emojis = {};
+  let origCats = null, emojis = {}, stars = new Set();
   let club = { accent: '', welcome: '', logo: '' };
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -211,11 +211,11 @@
 
   // ── Avatars and team colours ──────────────────────────────
   function avatar(name, cat, zwid) {
-    const c0 = (typeof CAT_COLOR !== 'undefined' && CAT_COLOR[cat]) || '#8b95a5';
-    if (zwid && emojis[String(zwid)]) return `<span class="av" aria-hidden="true" style="--c:${c0};font-size:13px;background:rgba(255,255,255,.12)">${esc(emojis[String(zwid)])}</span>`;
+    const c0 = (typeof CAT_COLOR !== 'undefined' && CAT_COLOR[cat]) || '#8b95a5', star = zwid && stars.has(String(zwid)) ? '<span title="Club supporter" aria-label="Club supporter" style="margin-right:4px;font-size:11px">⭐</span>' : '';
+    if (zwid && emojis[String(zwid)]) return star + `<span class="av" aria-hidden="true" style="--c:${c0};font-size:13px;background:rgba(255,255,255,.12)">${esc(emojis[String(zwid)])}</span>`;
     const parts = String(name || '?').trim().split(/\s+/), ini = ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
     const c = (typeof CAT_COLOR !== 'undefined' && CAT_COLOR[cat]) || '#8b95a5';
-    return `<span class="av" aria-hidden="true" style="--c:${c}">${esc(ini)}</span>`;
+    return star + `<span class="av" aria-hidden="true" style="--c:${c}">${esc(ini)}</span>`;
   }
   function teamColor(id) { let h = 0; for (const ch of String(id || '')) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 70% 55%)`; }
 
@@ -330,7 +330,7 @@
     btns.forEach(b => { const c = document.createElement('button'); c.className = 'navbtn'; c.dataset.pin = '1'; c.textContent = '⭐ ' + labelOf(b).replace(/^\S+\s/, ''); c.onclick = () => b.click(); box.appendChild(c); });
   }
   async function loadAvatars() {
-    try { const r = await fetch('/api/avatars', { headers: tttHeaders() }); if (r.ok) emojis = (await r.json()).avatars || {}; } catch (e) { /* initials are shown */ }
+    try { const r = await fetch('/api/avatars', { headers: tttHeaders() }); if (r.ok) { const d = await r.json(); emojis = d.avatars || {}; stars = new Set(d.supporters || []); } } catch (e) { /* initials are shown */ }
   }
   const myZwid = () => (typeof memberRider !== 'undefined' && memberRider && memberRider.id != null ? String(memberRider.id) : '');
   async function avatarSet(emoji) {

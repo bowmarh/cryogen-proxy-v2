@@ -36,14 +36,27 @@
     el.innerHTML = head + `<div class="card" style="padding:14px 16px"><div style="min-height:80px">${msgs || '<div style="font-size:13px;color:#8b95a5">Ask anything about your training or racing.</div>'}${busy ? '<div style="font-size:12px;color:#8b95a5;margin:6px 0">The coach is thinking…</div>' : ''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${chips}</div>
       <div style="display:flex;gap:8px"><input id="coach-q" class="inp" maxlength="700" placeholder="Ask your coach…" onkeydown="if(event.key==='Enter')coachSend()" style="flex:1" aria-label="Your question"/><button type="button" class="btn-cyan" style="width:auto;padding:0 18px" ${busy ? 'disabled' : ''} onclick="coachSend()">Ask</button></div>
-      <div style="font-size:11px;color:#8b95a5;margin-top:6px">${st.remaining} of ${st.limit} questions left today · <a href="#" onclick="coachConsent(false);return false">Stop using my numbers</a></div></div>
-      <div class="card" style="padding:14px 16px;margin-top:12px"><b>Explain my ride</b><div style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Choose a FIT file from Zwift or your head unit. It is read here in your browser; only the recorded power and heart rate are sent to the coach, and nothing is kept. Counts as one question.</div><input type="file" accept=".fit,application/octet-stream" aria-label="Choose a FIT file" onchange="coachRide(this)"/><div id="coach-ride-msg" role="status" style="font-size:12px;color:#8b95a5;margin-top:6px"></div></div>${rd}`;
+      <div style="font-size:11px;color:#8b95a5;margin-top:6px">${st.tier === 'supporter' ? '⭐ Supporter · ' : ''}${st.remaining} of ${st.limit} questions left ${E(st.period)} · <a href="#" onclick="coachConsent(false);return false">Stop using my numbers</a></div></div>
+      <div class="card" style="padding:14px 16px;margin-top:12px"><b>Explain my ride</b><div style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Choose a FIT file from Zwift or your head unit. It is read here in your browser; only the recorded power and heart rate are sent to the coach, and nothing is kept. Counts as one question.${st.tier === 'free' ? ` Free riders can have ${st.ridesLeft > 0 ? 'one ride explained a month (you have it left)' : 'one ride explained a month (used this month)'}; supporters can explain as many as they like.` : ''}</div><input type="file" accept=".fit,application/octet-stream" aria-label="Choose a FIT file" ${st.tier === 'free' && st.ridesLeft === 0 ? 'disabled' : ''} onchange="coachRide(this)"/><div id="coach-ride-msg" role="status" style="font-size:12px;color:#8b95a5;margin-top:6px"></div></div>${rd}${support()}`;
     const box = document.getElementById('coach-q'); if (box && !busy) box.focus();
   }
+  // A gentle note, never a wall: open by itself only when the free allowance has run out.
+  function support() {
+    if (st.tier === 'supporter') return `<div class="card" style="padding:12px 16px;margin-top:12px;font-size:13px">⭐ Thank you for supporting the club. You are helping keep the coach running for everyone.</div>${cost()}`;
+    const out = st.remaining === 0 || st.ridesLeft === 0, link = st.payUrl ? `<a href="${E(st.payUrl)}" target="_blank" rel="noopener" class="btn-cyan" style="display:inline-block;width:auto;padding:8px 18px;font-size:13px;text-decoration:none;margin-top:8px">⭐ Become a supporter${st.price ? ' · £' + E(st.price) + ' a month' : ''}</a>` : '';
+    return `<details class="card" ${out ? 'open' : ''} style="padding:12px 16px;margin-top:12px"><summary style="cursor:pointer;font-size:13px">⭐ Keep the coach going</summary><div style="font-size:13px;color:#d1d5db;margin-top:8px">The racing tools, results and the club wall are free for everyone, and always will be. The coach is the one thing that costs the club money each time it is used, so it has a free allowance and a bigger one for supporters.</div>
+      <ul style="margin:8px 0 0 18px;font-size:13px;color:#d1d5db"><li>Free: ${E(st.limit)} questions a week and one ride explained a month</li><li>Supporters: up to ${E(st.supporterDaily)} questions a day, any number of rides explained, and a ⭐ by their name</li></ul>${link || '<div style="font-size:12px;color:#8b95a5;margin-top:8px">Supporter membership opens soon.</div>'}</details>${cost()}`;
+  }
+  function cost() {
+    const t = st.transparency; if (!t) return '';
+    return `<div style="font-size:12px;color:#8b95a5;margin-top:8px">This month the coach has cost the club about £${E(t.cost)}. ${E(t.supporters)} supporter${t.supporters === 1 ? '' : 's'} give about £${E(t.monthly)} a month. Thank you.</div>`;
+  }
+  // The answer carries the rider's allowance too, so the counts on the page stay right.
+  const merge = d => { const { reply, ride: _ride, ...rest } = d; return { ...st, ...rest }; };
   async function ask(text) {
     if (busy || !text.trim()) return;
     const history = chat.slice(-6); chat.push({ role: 'user', content: text }); busy = true; render();
-    try { const d = await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply }); st = { ...st, remaining: d.remaining }; }
+    try { const d = await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply || '⚠️ The coach had no answer that time. Please ask again.' }); st = merge(d); }
     catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
   }
@@ -58,7 +71,7 @@
       if (p.samples.t.length < 120) throw new Error('That ride is too short to look at.');
       msg.textContent = 'The coach is looking at it…'; busy = true;
       const d = await api('/api/coach/ride', { samples: p.samples, question: '' });
-      ride = d.ride; chat.push({ role: 'assistant', content: d.reply }); st = { ...st, remaining: d.remaining };
+      ride = d.ride; chat.push({ role: 'assistant', content: d.reply }); st = merge(d);
     } catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
   };
