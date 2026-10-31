@@ -98,6 +98,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'SET': if (a.includes('NX') && key in db) return null; db[key] = a[0]; return 'OK';
     case 'DEL': { let n = 0; for (const k of [key, ...a]) if (k in db) { delete db[k]; n++; } return n; }
     case 'INCR': db[key] = (Number(db[key]) || 0) + 1; return db[key];
+    case 'INCRBY': db[key] = (Number(db[key]) || 0) + Number(a[0]); return db[key];
     case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();

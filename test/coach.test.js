@@ -61,3 +61,16 @@ test('a rider’s own ride is explained: analysed and thrown away, with pacing a
   assert.match(sent, /firstHalfAvgPower/); assert.ok(!/sticky|weight_implied|findings|flat power/i.test(sent), 'no fair-play findings reach the coach');
   assert.equal((await app.post('/api/coach/ride', { samples: { t: [1, 2, 3] } }, ann)).status, 400);
 });
+
+test('an answer with no words is not shown as an empty bubble and does not use up a question; the answer allowance leaves room for thinking', async () => {
+  const bob = { token: await app.memberSession('1003', { name: 'Rider Three' }) };
+  await app.post('/api/coach/consent', { on: true }, bob);
+  const before = (await app.get('/api/coach/status', bob)).body.remaining;
+  world.anthropic.reply = '';
+  const r = await app.post('/api/coach/chat', { message: 'Plan my week' }, bob);
+  assert.equal(r.status, 502); assert.match(r.body.error, /not counted/);
+  assert.equal((await app.get('/api/coach/status', bob)).body.remaining, before, 'given back');
+  assert.ok(world.anthropic.seen.at(-1).body.max_tokens >= 2000);
+  world.anthropic.reply = 'Easy spin Tuesday.';
+  assert.equal((await app.post('/api/coach/chat', { message: 'again' }, bob)).status, 200);
+});

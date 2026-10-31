@@ -43,7 +43,7 @@
   async function ask(text) {
     if (busy || !text.trim()) return;
     const history = chat.slice(-6); chat.push({ role: 'user', content: text }); busy = true; render();
-    try { const d = await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply }); st = { ...st, remaining: d.remaining }; }
+    try { const d = await api('/api/coach/chat', { message: text, history }); chat.push({ role: 'assistant', content: d.reply || '⚠️ The coach had no answer that time. Please ask again.' }); st = { ...st, remaining: d.remaining }; }
     catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
   }

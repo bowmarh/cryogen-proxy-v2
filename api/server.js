@@ -2179,10 +2179,11 @@ async function healthChecks(){
     .catch(e => ({ id, label, status: 'fail', detail: e.message }));
   return Promise.all([
     run('usage', 'Daily usage', async () => {
-      const [raw] = await redis([['HGETALL', USAGE_KEY]]);
+      const [raw, aiRaw] = await redis([['HGETALL', USAGE_KEY], ['HGETALL', 'cg:ai:usage']]);
       const day = usageDay(), get = k => Number(pairs(raw).find(([f]) => f === `${day}:${k}`)?.[1]) || 0;
       const r = get('redis') + usage.redis, d = get('discord') + usage.discord, limit = REDIS_DAILY_LIMIT();
-      const detail = `Today so far: about ${r} storage commands (alert at ${Math.round(limit * 0.8)} of ${limit}), ${d} Discord posts. Counts are a floor.`;
+      const ai = k => Number(pairs(aiRaw).find(([f]) => f === `${day}:${k}`)?.[1]) || 0;
+      const detail = `Today so far: about ${r} storage commands (alert at ${Math.round(limit * 0.8)} of ${limit}), ${d} Discord posts. Counts are a floor.${ai('calls') ? ` AI today: ${ai('calls')} answers, ${ai('in')} tokens in, ${ai('out')} tokens out.` : ''}`;
       return [r >= limit * 0.8 ? 'warn' : 'ok', r >= limit * 0.8 ? `${detail} Close to the daily limit: check the Upstash plan or what is polling.` : detail];
     }),
     run('outbox', 'Discord messages waiting to send', async () => {
