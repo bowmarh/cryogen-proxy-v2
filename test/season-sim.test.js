@@ -33,7 +33,9 @@ test('a ZRL round from sign-up to results runs with nothing for the staff to do 
   assert.equal(v.round.open, false, 'closed by the scheduler');
   assert.equal(Object.keys(v.placements).length, 12, 'everyone placed');
   const alpha = v.round.teams.find(t => t.name === 'Sim Alpha');
-  assert.equal(alpha.captain, '3000', 'the volunteer');
+  const beta = v.round.teams.find(t => t.name === 'Sim Beta');
+  assert.ok(alpha.captain && beta.captain && alpha.captain !== beta.captain, 'each team has its own volunteer captain');
+  assert.deepEqual([alpha.captain, beta.captain].sort(), ['3000', '3006']);
   assert.ok(adminPosts().some(c => /teams suggested automatically/.test(c)), 'staff told once');
 
   // Publish, then the riders answer: two say no for race 1, the rest yes.
