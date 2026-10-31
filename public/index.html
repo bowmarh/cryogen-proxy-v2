@@ -405,6 +405,10 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
         </div>
         <div id="health-panel" style="font-size:12px;color:#8b95a5">Press “Check now”.</div>
       </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:8px">⭐ Supporters and AI cost</div>
+        <div id="support-card" style="font-size:12px;color:#8b95a5">Loading…</div>
+      </div>
       <div id="backup-box" style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px;flex-wrap:wrap">
           <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">💾 Backups</div>
@@ -1023,7 +1027,7 @@ async function fairRun(btn){
 let healthTimer=null;
 function openAdmin(){
   document.getElementById('adminModal').style.display='flex';
-  loadHealth(); loadGoLive(); loadBackups(); loadSync(); loadStaff();
+  loadHealth(); loadGoLive(); if(window.supLoad) supLoad(); loadBackups(); loadSync(); loadStaff();
   if(healthTimer) clearInterval(healthTimer);
   healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
     const m=document.getElementById('adminModal');
@@ -5289,6 +5293,7 @@ if(role && !ssoToken){
 <script src="/js/fit.js"></script>
 <script src="/js/investigate.js"></script>
 <script src="/js/coach.js"></script>
+<script src="/js/support.js"></script>
 <script src="/js/ui.js"></script>
 </body>
 </html>

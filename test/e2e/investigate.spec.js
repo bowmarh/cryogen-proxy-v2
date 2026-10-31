@@ -36,10 +36,11 @@ test('staff open a case, add a FIT file, and see the flat stretch with the ordin
 
 test('a member says yes to the coach, asks a question, and has a FIT ride explained', async ({ page, baseURL }) => {
   let consent = false;
-  await page.route('**/api/coach/status', r => r.fulfill({ json: { enabled: true, consent, remaining: 12, limit: 12 } }));
-  await page.route('**/api/coach/consent', r => { consent = JSON.parse(r.request().postData()).on; r.fulfill({ json: { enabled: true, consent, remaining: 12, limit: 12 } }); });
-  await page.route('**/api/coach/chat', r => r.fulfill({ json: { reply: 'Plan:\n\n- Tue: 2 x 20 min at 90% FTP\n- Thu: 60 min easy', remaining: 11 } }));
-  await page.route('**/api/coach/ride', r => r.fulfill({ json: { reply: 'You started a little hard.', remaining: 10, ride: { minutes: 30, avgPower: 230, normalizedPower: 240, variabilityIndex: 1.04, bestWatts: { '1200s': 250 }, heartRate: { avg: 140, decouplingPercent: 3.2 }, minutesInZones: { 'Z2 endurance': 20, 'Z4 threshold': 10 } } } }));
+  const base = { enabled: true, tier: 'free', period: 'this week', limit: 3, ridesLeft: 1, supporterDaily: 15, payUrl: 'https://ko-fi.com/cryogen', price: 3, transparency: { month: '2026-10', cost: 14.2, supporters: 5, monthly: 15 } };
+  await page.route('**/api/coach/status', r => r.fulfill({ json: { ...base, consent, remaining: 3 } }));
+  await page.route('**/api/coach/consent', r => { consent = JSON.parse(r.request().postData()).on; r.fulfill({ json: { ...base, consent, remaining: 3 } }); });
+  await page.route('**/api/coach/chat', r => r.fulfill({ json: { ...base, consent: true, reply: 'Plan:\n\n- Tue: 2 x 20 min at 90% FTP\n- Thu: 60 min easy', remaining: 2 } }));
+  await page.route('**/api/coach/ride', r => r.fulfill({ json: { ...base, consent: true, ridesLeft: 0, reply: 'You started a little hard.', remaining: 1, ride: { minutes: 30, avgPower: 230, normalizedPower: 240, variabilityIndex: 1.04, bestWatts: { '1200s': 250 }, heartRate: { avg: 140, decouplingPercent: 3.2 }, minutesInZones: { 'Z2 endurance': 20, 'Z4 threshold': 10 } } } }));
   const ticket = h.ssoToken({ zwid: '1002', name: 'Rider Two' });
   await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(ticket)}`);
   await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
@@ -49,10 +50,26 @@ test('a member says yes to the coach, asks a question, and has a FIT ride explai
   await page.getByRole('button', { name: 'Yes, coach me' }).click();
   await page.getByRole('button', { name: 'Plan my week' }).click();
   await expect(page.locator('#coach-content li', { hasText: '2 x 20 min at 90% FTP' })).toBeVisible();
-  await expect(page.locator('#coach-content')).toContainText('11 of 12 questions left');
+  await expect(page.locator('#coach-content')).toContainText('2 of 3 questions left this week');
+  await expect(page.locator('#coach-content')).toContainText('about £14.2');
+  await page.locator('#coach-content summary', { hasText: 'Keep the coach going' }).click();
+  await expect(page.getByRole('link', { name: /Become a supporter · £3 a month/ })).toHaveAttribute('href', 'https://ko-fi.com/cryogen');
   await page.locator('#coach-content input[type=file]').setInputFiles({ name: 'ride.fit', mimeType: 'application/octet-stream', buffer: ride({ flat: false }) });
   await expect(page.locator('#coach-content')).toContainText('You started a little hard.');
   await expect(page.locator('#coach-content')).toContainText('Minutes in zones');
+  await expect(page.locator('#coach-content input[type=file]')).toBeDisabled();   // the free ride explanation for the month is used
   await page.getByRole('link', { name: 'Stop using my numbers' }).click();
   await expect(page.locator('#coach-content')).toContainText('Before you start');
+});
+
+test('the admin sees supporters and the AI cost, and can add a supporter', async ({ page, baseURL }) => {
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
+  await page.evaluate(() => openAdmin());
+  await expect(page.locator('#support-card')).toContainText('This month');
+  await expect(page.locator('#support-card')).toContainText('No supporters yet');
+  await page.locator('#sp-rider').fill('Rider 2 (1002)');
+  await page.locator('#support-card button', { hasText: 'Add' }).click();
+  await expect(page.locator('#support-card')).toContainText('⭐ Rider 2');
 });

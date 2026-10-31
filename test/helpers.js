@@ -185,7 +185,7 @@ function installFetch(world) {
     if (u.host === 'api.anthropic.com') {   // the model behind the staff assistant: world.anthropic = { reply: <text the model answers>, status, seen: [] }
       const a = world.anthropic = world.anthropic || { reply: '{"reply":"","actions":[]}', status: 200, seen: [] };
       a.seen.push({ key: (opts.headers || {})['x-api-key'], body: JSON.parse(opts.body) });
-      return json(a.status === 200 ? { content: [{ type: 'text', text: a.reply }] } : { error: { message: 'model error' } }, a.status);
+      return json(a.status === 200 ? { content: [{ type: 'text', text: a.reply }], ...(a.usage ? { usage: a.usage } : {}) } : { error: { message: 'model error' } }, a.status);
     }
     if (u.host === 'hooks.test') {   // an outbound webhook (Zapier, Make): world.hooks collects what was sent; world.hookFail makes it answer 500
       (world.hooks = world.hooks || []).push({ path: u.pathname, body: JSON.parse(opts.body) });
