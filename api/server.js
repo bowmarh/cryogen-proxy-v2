@@ -1632,7 +1632,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -1789,6 +1789,9 @@ async function loadRiders(){
   try {
     const club = await wpGet(`/zwift/public/clubs/${encodeURIComponent(ZWIFT_CLUB_ID)}/0`);
     const riders = Array.isArray(club.riders) ? club.riders.map(slimRider) : [];
+    // Registered weight is kept out of the roster that members can fetch. The fair-play check (staff only) reads it from its own private store.
+    const kg = (Array.isArray(club.riders) ? club.riders : []).filter(r => Number(r.weight) > 0).map(r => ['HSET', 'cg:fair:weights', String(r.riderId), String(Math.round(Number(r.weight) * 10) / 10)]);
+    if (kg.length) await redis(kg).catch(() => {});
     const updatedAt = Date.now();
     await redis([['SET', RIDERS_KEY, JSON.stringify({ at: updatedAt, riders }), 'EX', '604800']]).catch(() => {});
     return { riders, updatedAt, stale: false };
@@ -2714,6 +2717,10 @@ const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFro
   } });
 const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const avatars = require('../lib/avatars')({ redis, HttpError, memberFromRequest, roleFromRequest });
+const fairplay = require('../lib/fairplay')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, activeMembers, discord, siteUrl: SITE_URL });
+const fitAnalysis = require('../lib/fitanalysis');
+const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh });
+const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse });
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -2923,8 +2930,11 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
+  // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`];
+  if (bigRoute) return sendJSON(res, 200, await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query));
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
   const stagingRoute = staging.routes[`${req.method} ${pathname}`];
