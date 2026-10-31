@@ -2481,6 +2481,7 @@ async function handleSync(route, req, res){
 // The public club page (public/club.html): season tables, results and next races, with no rider names, no private links and nothing about people.
 // Off until an administrator turns it on; while it is off the address answers 404.
 const PUBLIC_KEY = 'cg:public:settings';
+let publicCache = null;
 const publicOn = async () => { try { return !!JSON.parse((await redis([['GET', PUBLIC_KEY]]))[0] || 'null').on; } catch (e) { return false; } };
 async function publicClub(now = Date.now()){
   const staff = syncReq(), out = { name: 'CRYO-GEN', generated: new Date(now).toISOString(), ladder: [], drs: [], next: [] };
@@ -2694,11 +2695,13 @@ async function route(req, res){
 
   if (pathname === '/api/public/club' && req.method === 'GET'){
     if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
-    return sendJSON(res, 200, await publicClub());
+    // Anyone can ask for this page, so the answer is made at most once a minute per server instance.
+    if (!publicCache || Date.now() - publicCache.at > 60000) publicCache = { at: Date.now(), data: await publicClub() };
+    return sendJSON(res, 200, publicCache.data);
   }
   if (pathname === '/api/public/settings'){
     const role = requireRole(req, ['admin', 'mod']);
-    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
+    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); publicCache = null; return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
     return sendJSON(res, 200, { on: await publicOn(), canChange: role === 'admin' });
   }
   const calFeed = /^\/api\/cal\/([A-Za-z0-9_-]+)\.ics$/.exec(pathname);
@@ -2718,6 +2721,10 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  if (pathname === '/api/ping' && req.method === 'GET'){   // for an uptime check: is the app up and is its database answering
+    try { await redis([['GET', 'cg:ping']]); } catch (e) { return sendJSON(res, 503, { ok: false, redis: false }); }
+    return sendJSON(res, 200, { ok: true, redis: true, at: new Date().toISOString() });
+  }
   if (pathname === '/api/discord/interactions' && req.method === 'POST'){
     const out = await discordInteractions.handle(await readRawBody(req), req.headers);
     return sendJSON(res, out.status, out.body);
@@ -2784,9 +2791,19 @@ async function route(req, res){
   serveStatic(res, pathname);
 }
 
+// An unexpected failure (not a refusal the app chose to make) is told to the admin channel, once an hour for the same place and message.
+async function reportError(req, err){
+  try {
+    const where = `${req.method} ${String((parseRequestUrl(req).pathname) || '').replace(/[0-9a-f]{12,}|\d{6,}/gi, ':id').slice(0, 80)}`, what = String((err && err.message) || err).replace(/\s+/g, ' ').slice(0, 200);
+    const hour = new Date().toISOString().slice(0, 13), key = `${hour}:${where}:${what}`.slice(0, 250);
+    const [claimed] = await redis([['HSETNX', 'cg:alerts:errors', key, new Date().toISOString()]]);
+    if (claimed) await discord('admin', { content: `🧯 **Unexpected error in the dashboard**\n\`${discordEscape(where)}\`: ${discordEscape(what)}\nIt answered "internal error". Check the Vercel logs for the full details.` });
+  } catch (e) { /* alerting must never make things worse */ }
+}
+
 function handler(req, res){
   route(req, res).catch(err => {
-    if (!err.status) console.error(err);
+    if (!err.status){ console.error(err); reportError(req, err); }
     if (res.headersSent) return res.end();
     sendJSON(res, err.status || 500, { error: err.status ? err.message : 'internal error' });
   });

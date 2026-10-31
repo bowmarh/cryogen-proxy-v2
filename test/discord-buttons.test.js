@@ -41,6 +41,10 @@ test('only requests signed by Discord are accepted; Discord\'s ping is answered'
   assert.equal((await signed({ type: 1 }, { key: other })).status, 401, 'signed by someone else');
   const raw = JSON.stringify({ type: 1 }), sig = crypto.sign(null, Buffer.from('1' + raw), privateKey).toString('hex');
   assert.equal((await app.call('POST', '/api/discord/interactions', { body: { type: 1 }, headers: { 'X-Signature-Ed25519': sig, 'X-Signature-Timestamp': '2' } })).status, 401, 'the timestamp is part of what is signed');
+  const old = String(Math.floor(Date.now() / 1000) - 3600), oldRaw = JSON.stringify({ type: 1 });
+  assert.equal((await app.call('POST', '/api/discord/interactions', { body: { type: 1 }, headers: { 'X-Signature-Ed25519': crypto.sign(null, Buffer.from(old + oldRaw), privateKey).toString('hex'), 'X-Signature-Timestamp': old } })).status, 401, 'a correctly signed request an hour old is a replay');
+  const fresh = String(Math.floor(Date.now() / 1000));
+  assert.equal((await app.call('POST', '/api/discord/interactions', { body: { type: 1 }, headers: { 'X-Signature-Ed25519': crypto.sign(null, Buffer.from(fresh + oldRaw), privateKey).toString('hex'), 'X-Signature-Timestamp': fresh } })).status, 200, 'Discord sends seconds');
   const keep = process.env.DISCORD_PUBLIC_KEY; delete process.env.DISCORD_PUBLIC_KEY;
   assert.equal((await signed({ type: 1 })).status, 401, 'no key set: nothing is accepted');
   process.env.DISCORD_PUBLIC_KEY = keep;

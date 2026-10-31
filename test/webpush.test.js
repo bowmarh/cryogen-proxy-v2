@@ -11,7 +11,8 @@ before(async () => {
   world = h.createWorld({ riders: [{ riderId: 2000, name: 'Lad 0', country: 'gb', zpCategory: 'B', race: { current: { rating: 2000, mixed: { category: 'Ruby' } } } }] });
   app = await h.startApp(world); admin = await app.login('admin');
 });
-after(() => { for (const k of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) delete process.env[k]; return app.close(); });
+before(() => { process.env.PUSH_EXTRA_HOSTS = 'push.test'; });
+after(() => { delete process.env.PUSH_EXTRA_HOSTS; for (const k of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) delete process.env[k]; return app.close(); });
 const A = { get token() { return admin; } };
 const b64 = b => Buffer.from(b).toString('base64url'), unb64 = s => Buffer.from(s, 'base64url');
 const tick = () => app.call('GET', '/api/cron/tick', { headers: { Authorization: 'Bearer cron-secret' } });
@@ -99,4 +100,13 @@ test('a device the push service says is gone is forgotten; a rider who opted out
   world.pushes = [];
   await tick();
   assert.equal(world.pushes.length, 0);
+});
+
+test('only the browsers\' own push services are accepted, so a rider cannot make the server call an address of their choosing', async () => {
+  await setup();
+  const rider = await app.memberSession('2000', { name: 'Lad 0' }), b = browser();
+  for (const endpoint of ['https://169.254.169.254/latest/meta-data/xxxxxxxx', 'https://internal.example.com/hook/xxxxxxxx', 'https://push.test.evil.com/x/xxxxxxxxxx', 'https://localhost/x/xxxxxxxxxxxxx'])
+    assert.equal((await app.post('/api/push/subscribe', { ...b.sub, endpoint }, { token: rider })).status, 400, endpoint);
+  for (const endpoint of ['https://fcm.googleapis.com/fcm/send/abcdefghij', 'https://updates.push.services.mozilla.com/wpush/v2/abcdefghij', 'https://web.push.apple.com/abcdefghij', 'https://wns2-par02p.notify.windows.com/w/?token=abcdefghij'])
+    assert.equal((await app.post('/api/push/subscribe', { ...b.sub, endpoint }, { token: rider })).status, 200, endpoint);
 });

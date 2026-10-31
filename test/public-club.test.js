@@ -63,3 +63,12 @@ test('the page itself is served', async () => {
   assert.equal(r.status, 200);
   assert.match(String(r.body), /CRYO-GEN/);
 });
+
+test('the answer is made at most once a minute, and switching the page on again starts it afresh', async () => {
+  await app.post('/api/public/settings', { on: true }, A);
+  const first = (await app.get('/api/public/club')).body.generated;
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal((await app.get('/api/public/club')).body.generated, first, 'the same answer within the minute');
+  await app.post('/api/public/settings', { on: true }, A);
+  assert.notEqual((await app.get('/api/public/club')).body.generated, first, 'a settings change clears it');
+});
