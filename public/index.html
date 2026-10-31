@@ -354,6 +354,10 @@ table{width:100%;border-collapse:collapse}
       </div>
       <a href="https://www.zwift.com/uk/clubs/cryogen" target="_blank" style="display:block;padding:10px;background:rgba(251,191,36,0.1);color:#FBBF24;border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;text-decoration:none">🚴 Zwift Club Page →</a>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
+        <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:8px">🚦 Go-live checklist</div>
+        <div id="golive-card" style="font-size:12px;color:#6b7280">Loading…</div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">🩺 System health</div>
           <button onclick="loadHealth()" style="padding:5px 10px;background:rgba(0,212,255,0.1);color:#00D4FF;border:1px solid rgba(0,212,255,0.2);border-radius:6px;font-size:11px;font-weight:700">Check now</button>
@@ -903,7 +907,7 @@ async function backupRestore(id){
 let healthTimer=null;
 function openAdmin(){
   document.getElementById('adminModal').style.display='flex';
-  loadHealth(); loadBackups(); loadSync(); loadStaff();
+  loadHealth(); loadGoLive(); loadBackups(); loadSync(); loadStaff();
   if(healthTimer) clearInterval(healthTimer);
   healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
     const m=document.getElementById('adminModal');
@@ -914,6 +918,39 @@ function openAdmin(){
 function closeAdmin(){
   document.getElementById('adminModal').style.display='none';
   if(healthTimer){ clearInterval(healthTimer); healthTimer=null; }
+}
+async function stagingSeed(){
+  try{
+    const res=await fetch('/api/staging/seed',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:'{}'});
+    const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    alert(d.message);
+  }catch(e){ alert(e.message); }
+}
+// A coloured bar on a staging copy so nobody mistakes it for the real thing.
+(async function stagingBanner(){
+  try{
+    const d=await (await fetch('/api/auth/status')).json();
+    if(!d.staging) return;
+    const b=document.createElement('div');
+    b.textContent='🧪 STAGING — practice copy with made-up data. Nothing here is real.';
+    b.style.cssText='position:sticky;top:0;z-index:9999;background:#FBBF24;color:#111;font:700 12px sans-serif;text-align:center;padding:5px';
+    document.body.prepend(b);
+  }catch(e){ /* no banner is not a problem */ }
+})();
+// What is switched on and what still needs doing before race week.
+async function loadGoLive(){
+  const el=document.getElementById('golive-card'); if(!el) return;
+  try{
+    const res=await fetch('/api/golive',{headers:tttHeaders()});
+    const d=await res.json();
+    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
+    const icon={ok:'✅',todo:'⬜',off:'💤'};
+    const row=i=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[i.state]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(i.title)}</div><div style="color:#9ca3af">${esc(i.detail||'')}</div>${i.state!=='ok'&&i.how?`<div style="color:#FBBF24;margin-top:2px">${esc(i.how)}</div>`:''}</div></div>`;
+    const todo=d.items.filter(i=>i.state!=='ok'), done=d.items.filter(i=>i.state==='ok');
+    el.innerHTML=(d.staging?`<div style="margin-bottom:8px"><button onclick="stagingSeed()" style="padding:6px 10px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;font-size:11px;font-weight:700">🧪 Fill with test data</button></div>`:'')+`<div style="margin-bottom:6px;color:#9ca3af">${d.ready?'<b style="color:#10B981">Ready for race week</b>':`<b style="color:#FBBF24">${d.todo} to do</b>`} · ${done.length} of ${d.items.length} done</div>`
+      +todo.map(row).join('')
+      +(done.length?`<details style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.05)"><summary style="cursor:pointer;padding:6px 0;color:#9ca3af">${done.length} done</summary>${done.map(row).join('')}</details>`:'');
+  }catch(e){ el.innerHTML=`<span style="color:#f87171">Could not load: ${esc(e.message)}</span>`; }
 }
 // Problems first and open; the checks that are fine are folded away so the panel stays short.
 async function loadHealth(quiet){
@@ -1078,7 +1115,11 @@ function renderMyWeek(){
     return `<div style="margin-top:6px"><button ${done?'disabled':''} onclick="myWeekPenTap('${esc(u.pen.kind)}','${esc(u.pen.id)}')" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(16,185,129,0.5);background:${done?'rgba(16,185,129,0.2)':'transparent'};color:#34d399">${done?'✅ Your captain can see you are in the pen':'🏁 I\'m in the pen'}</button></div>`; };
   const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="${u.avail.series?`myWeekAnswer('${u.avail.series}','${esc(u.avail.id)}','${u.avail.mine===v?'':v}')`:`myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')`}" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(0,212,255,0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(0,212,255,0.15)':'transparent'};color:${u.avail.mine===v?'#00D4FF':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
   const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(0,212,255,0.1);color:#00D4FF;margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}${penBtn(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
-  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${rows}</div>`;
+  // One plain sentence at the top: the first thing that needs an answer, else the next thing you are in.
+  const first=d.items.find(u=>u.state==='todo'), nextIn=d.items.find(u=>u.state==='in');
+  const nowLine=first?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,0.1);font-size:13px">👉 <b>Do this now:</b> answer ${esc(first.kind)} “${esc(first.title)}” — ${esc(first.note||'')} <a href="#" onclick="weekGo('${esc(first.go)}');return false" style="color:#00D4FF;white-space:nowrap">Open →</a></div>`
+    :nextIn?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(16,185,129,0.1);font-size:13px">✅ <b>Nothing to do.</b> Next up: ${esc(nextIn.kind)} “${esc(nextIn.title)}”${nextIn.timed?' at '+esc(new Date(nextIn.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})):''}.</div>`:'';
+  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:16px;border-color:${d.todo?'rgba(251,191,36,0.4)':'rgba(255,255,255,0.08)'}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">📅 My week <span style="font-size:12px;font-weight:600;color:${d.todo?'#FBBF24':'#10B981'}">${d.todo?d.todo+' for you to answer':'you are all set'}</span></div></div>${nowLine}${rows}</div>`;
 }
 
 // ── This week (staff): what needs attention and what is coming up ───────────────────────

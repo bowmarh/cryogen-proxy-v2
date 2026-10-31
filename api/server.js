@@ -466,7 +466,7 @@ async function discord(channel, payload){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // Never let rider-entered text ping @everyone, roles or users.
-      body: JSON.stringify({ username: 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
+      body: JSON.stringify({ username: process.env.STAGING === '1' ? '[STAGING] CRYO-GEN TTT' : 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
       signal: AbortSignal.timeout(4000),
     });
     if (!r.ok) console.error(`Discord ${channel} webhook returned ${r.status}`);
@@ -2558,6 +2558,33 @@ function readRawBody(req, limit = 20000){
   });
 }
 
+// The go-live checklist (lib/golive.js): what is on, what is half set up, and the next step for each.
+const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
+const golive = require('../lib/golive')({
+  requireRole,
+  gather: async () => {
+    const [checks, ids, stats, devices, users, settings, sync, lt, dt] = await Promise.all([
+      healthChecks().catch(() => []), activeMembers().catch(() => []), comms.stats().catch(() => ({ verified: 0 })), redis([['HLEN', push.KEY]]).then(r => Number(r[0]) || 0).catch(() => 0),
+      redis([['HLEN', staff.KEY]]).then(r => Number(r[0]) || 0).catch(() => 0), comms.getSettings().catch(() => ({})), sheetSync.load().catch(() => ({ settings: {} })),
+      ladder.view(syncReq(), undefined).catch(() => null), drs.view(syncReq(), undefined).catch(() => null)]);
+    const row = id => checks.find(c => c.id === id) || {}, links = await redis([['HGETALL', comms.KEYS.links]]).then(r => r[0] || []).catch(() => []), verifiedIds = new Set(), pushIds = new Set((await redis([['HKEYS', push.KEY]]).catch(() => [[]]))[0] || []);
+    for (let i = 0; i < links.length; i += 2) { try { if (JSON.parse(links[i + 1]).verified) verifiedIds.add(links[i]); } catch (e) { /* skip */ } }
+    const teams = []; for (const t of (lt ? lt.teams : [])) teams.push(['ladder', t.id]); for (const t of (dt ? dt.teams : [])) teams.push(['drs', t.id]);
+    let named = 0, total = 0;   // teams that are in use (a ladder team with riders, a DIRT team with a season) and how many have a captain
+    for (const [kind, id] of teams) {
+      try {
+        const v = kind === 'ladder' ? await ladder.view(syncReq(), id) : await drs.view(syncReq(), id);
+        if (kind === 'ladder' ? !v.roster.length : !v.season) continue;
+        total++; if ((kind === 'ladder' ? v.meta.captains : v.season.captains || []).length) named++;
+      } catch (e) { /* skip */ }
+    }
+    return { env: process.env, redis: row('db').status !== 'fail', cron: ['ok', 'info'].includes(row('cron').status) ? 'ok' : 'todo', cronDetail: row('cron').detail || '', backup: row('backup').status === 'ok' && !/FAILED/.test(row('backup').detail || '') ? 'ok' : 'todo', backupDetail: row('backup').detail || '',
+      members: ids.length, verified: ids.filter(z => verifiedIds.has(z)).length, reachable: ids.filter(z => verifiedIds.has(z) || pushIds.has(z)).length, push: { configured: push.configured(), devices },
+      auto: !!settings.autoNudge, staffAccounts: users, captains: { total, named }, google: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON_B64, sync: Object.values(sync.settings || {}).some(s => s.push || s.pull),
+      digest: await redis([['GET', DIGEST_KEYS.settings]]).then(r => { try { return JSON.parse(r[0] || 'null').on === true; } catch (e) { return false; } }).catch(() => false), publicPage: await publicOn() };
+  },
+});
+
 // The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
 async function runDigest(now = Date.now()){
@@ -2663,7 +2690,7 @@ async function route(req, res){
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
-    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired() });
+    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
@@ -2736,6 +2763,11 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const stagingRoute = staging.routes[`${req.method} ${pathname}`];
+  if (stagingRoute) return sendJSON(res, 200, await stagingRoute(req));
+  const goliveRoute = golive.routes[`${req.method} ${pathname}`];
+  if (goliveRoute) return sendJSON(res, 200, await goliveRoute(req));
+
   const lifecycleRoute = lifecycle.routes[`${req.method} ${pathname}`];
   if (lifecycleRoute) return sendJSON(res, 200, await lifecycleRoute(req));
 

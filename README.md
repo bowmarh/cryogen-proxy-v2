@@ -12,7 +12,7 @@ Members dashboard for the CRYO-GEN Zwift cycling club (Zwift club 2740), live at
 | `vercel.json` | Vercel config pointing at `api/server.js`. |
 | `schema.sql` | Empty placeholder. |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together and [PROJECT_STATUS.md](PROJECT_STATUS.md) for known issues.
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) for running the club week to week, [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together and [PROJECT_STATUS.md](PROJECT_STATUS.md) for known issues.
 
 ## Running locally
 
@@ -48,6 +48,7 @@ When you change behaviour, change or add a test with it. A test file runs in its
 | `SHEET_TAB_RIDES`, `SHEET_TAB_TTT` *(optional)* | Tab names. Default `Social Rides` and `TEAM LIST`. |
 | `SHEET_TIMEOUT_MS` *(optional)* | How long to wait for Google before answering "did not answer in time" (504). Default 6000. |
 | `SITE_URL` *(optional)* | Public portal URL, used for links and as the only allowed browser origin for API mutations. Defaults to `https://club.cryo-gen.team`. |
+| `STAGING` *(optional)* | Set to `1` on a practice copy only: shows a STAGING banner, tags Discord posts `[STAGING]`, and enables the "Fill with test data" button. Use a separate database. |
 | `SESSION_SECRET` *(optional)* | Key for signing staff login tokens. Derived from the passwords if unset. |
 | `DISCORD_WEBHOOK_PUBLIC` *(optional)* | Discord webhook for the club channel: sign-ups open, day-before reminder, sign-ups closed, line-ups published. |
 | `DISCORD_WEBHOOK_ADMIN` *(optional)* | Discord webhook for the private admin channel: "sign-ups closed, N unplaced", late withdrawals after publishing. |
