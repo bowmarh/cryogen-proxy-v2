@@ -325,3 +325,10 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Club history** (`GET /api/history/export`, staff; `lib/history.js`): one workbook of finished ZRL rounds (rounds, results, riders), Ladder seasons and DIRT seasons. Read only.
 - **Pen reminders and no-show alerts** already exist in `lib/live.js` (20 minutes before: riders who said yes and are not in the pen; 10 minutes: admin channel and the bench).
 - **Load test** (`test/load.test.js`): 300 riders, 40 teams, Discord failing while sign-ups close; checks the outbox, repeat runs and line-ups.
+
+## Visual and customisation
+- **`public/js/ui.js`** holds the look: accent colour (`--accent`, `--accent-rgb`; the page uses these everywhere, the Diamond tier colour stays cyan), spacing, text size, the page the app opens on, which dashboard cards show and their order (`[data-card]` blocks, set with CSS `order`), charts, avatars, team colours, the race-day card and the season picture. A rider's choices are stored in this browser (`ui:prefs`); the 🎨 button opens the window.
+- **Club look** (`lib/clubtheme.js`, `GET/POST /api/club/theme`, admin to set): accent, a welcome line (plain text, 140 characters) and an https logo address. A rider's own accent wins over the club's.
+- **Charts** use `GET /api/club/trend` (`lib/trend.js`): one daily snapshot of the active roster (average vELO, size, riders per category; totals only, kept 120 days; the scheduled "Trend" job writes it) and ride RSVPs per week for eight weeks. The vELO line shows after the second day.
+- **Race-day card** on My week: from three hours before to 45 minutes after a start the rider is racing in. Big countdown, teammates in the pen (`GET /api/live/pen`: names and a tick only, racers only) and the "I'm in the pen" button.
+- **Season picture:** rings for races picked, answers given and social rides; "Save my season as a picture" draws a PNG in the browser (shares through the phone's share sheet where available).

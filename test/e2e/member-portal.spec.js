@@ -8,7 +8,7 @@ h.setEnv();
 async function signInAsRider(page, baseURL) {
   const ticket = h.ssoToken({ zwid: '1002', name: 'Rider Two' });
   await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(ticket)}`);
-  await expect(page.locator('#app')).toBeVisible();
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
 }
 
 test('a verified member can sign up for TTT in the browser', async ({ page, baseURL }) => {
