@@ -106,3 +106,18 @@ test('ten minutes out, starters who are not in the pen are reported once and the
   const after = (await app.get('/api/ladder', A)).body.matches[0];
   assert.ok(after.lineup.includes(inn) && !after.lineup.includes(out));
 });
+
+test('a rider racing sees who of the line-up is in the pen (names and a tick only); a rider who is not racing cannot', async () => {
+  const m = await ladderMatch(50);
+  const [a, b] = m.lineup, outsider = '1002';   // not on the ladder roster
+  await app.post('/api/live/checkin', { kind: 'ladder', id: m.id }, { token: await app.memberSession(a, { name: 'First' }) });
+  const me = { token: await app.memberSession(b, { name: 'Second' }) };
+  const pen = await app.get(`/api/live/pen?kind=ladder&id=${encodeURIComponent(m.id)}`, me);
+  assert.equal(pen.status, 200, JSON.stringify(pen.body));
+  assert.equal(pen.body.riders.length, 5, 'the reserve is not listed');
+  assert.equal(pen.body.riders.filter(r => r.inPen).length, 1);
+  assert.equal(pen.body.riders.filter(r => r.me).length, 1);
+  assert.ok(!JSON.stringify(pen.body).match(/"zwid"/), 'no Zwift IDs');
+  assert.equal((await app.get(`/api/live/pen?kind=ladder&id=${encodeURIComponent(m.id)}`, { token: await app.memberSession(outsider, { name: 'Outsider' }) })).status, 403);
+  assert.equal((await app.get(`/api/live/pen?kind=ladder&id=${encodeURIComponent(m.id)}`)).status, 401);
+});

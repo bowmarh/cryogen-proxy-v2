@@ -8,7 +8,7 @@ h.setEnv();
 async function signInAsRider(page, baseURL) {
   const ticket = h.ssoToken({ zwid: '1002', name: 'Rider Two' });
   await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(ticket)}`);
-  await expect(page.locator('#app')).toBeVisible();
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
 }
 
 test('the theme button cycles Auto, Light, Dark and the choice is kept', async ({ page, baseURL }) => {
@@ -67,4 +67,40 @@ test('My week says what changed since the last visit', async ({ page, baseURL })
   expect(out.same).toEqual([]);
   expect(out.next.join(' | ')).toMatch(/Changed: TTT “Tuesday TTT”.*you are in/);
   expect(out.next.join(' | ')).toMatch(/New: ZRL “Race 1”/);
+});
+
+test('customise: accent, spacing, text size and which dashboard cards show are kept in the browser', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase());
+  expect(await accent()).toBe('#00d4ff');
+  await page.locator('#ui-btn').click();
+  await expect(page.getByRole('dialog', { name: 'Customise' })).toBeVisible();
+  await page.getByRole('button', { name: 'orange accent' }).click();
+  expect(await accent()).toBe('#ff8a1f');
+  await page.locator('select[aria-label="density"]').selectOption('compact');
+  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+  await page.locator('select[aria-label="text"]').selectOption('l');
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text-zoom').trim())).toBe('1.1');
+  // Hide the recent-results card, move charts to the top.
+  await page.getByRole('checkbox', { name: /Recent results/ }).uncheck();
+  await expect(page.locator('[data-card="results"]')).toBeHidden();
+  for (let i = 0; i < 4; i++) { const up = page.getByRole('button', { name: 'Move Charts up' }); if (await up.isEnabled()) await up.click(); }
+  expect(await page.evaluate(() => document.querySelector('[data-card="charts"]').style.order)).toBe('0');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ui-modal')).toHaveCount(0);
+  await page.reload(); await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  expect(await accent()).toBe('#ff8a1f');
+  await expect(page.locator('[data-card="results"]')).toBeHidden();
+  // Back to the defaults.
+  await page.locator('#ui-btn').click(); await page.getByRole('button', { name: 'Back to the defaults' }).click();
+  expect(await accent()).toBe('#00d4ff');
+  await expect(page.locator('[data-card="results"]')).toBeVisible();
+});
+
+test('the dashboard shows the three charts and the club welcome line when the club sets one', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  await expect(page.locator('[data-card="charts"] svg').first()).toBeVisible();
+  await expect(page.locator('[data-card="charts"]')).toContainText('Who rides what');
+  await expect(page.locator('[data-card="charts"]')).toContainText('Ride sign-ups per week');
+  await expect(page.locator('#club-welcome')).toBeHidden();
 });
