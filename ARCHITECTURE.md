@@ -340,3 +340,11 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **Pinned pages:** up to four, shown under "Pinned" at the top of the menu.
 - **Avatars:** a rider picks one emoji (`lib/avatars.js`, `POST /api/me/avatar`, `GET /api/avatars` for signed-in members and staff). Zwift's profile pictures are not part of the data the club gets, and photos would need a public address each, so they are not used.
 - **Month view** on My week: `GET /api/me/week?days=` widens the window (7 to 42). **Empty states** (`uiEmpty`) name the next step. **Standings** show a podium and a points-over-the-round line chart; team colour stripes appear on ZRL line-ups, standings rows and the Ladder and DIRT headings.
+
+## Round 3: staff charts, profile charts, club wall, picture cards, seasonal looks
+- **Staff chart** on This week (`GET /api/staff/trend`, admin and moderators): one point a day of "needs attention", ZRL riders racing and riders without a team. The scheduled Trend job writes it (`cg:staff:trend`, 120 days).
+- **Rider charts** on My Profile: the power curve (from the profile numbers) and the rider's own vELO line (`GET /api/me/velo`, own data only; one point a day in `cg:rider:velo`, 60 days).
+- **Club wall** (`public/club.html`, `/api/public/club`): club accent and welcome line, a countdown to the next race, and the top three of each ZRL division (team names and points only). Still off until the public page is switched on.
+- **Picture cards:** "🖼️ Picture" on a ZRL line-up and on each standings table draws a PNG in the browser (phone share sheet where available).
+- **Seasonal looks** (`lib/clubtheme.js`): up to four dated looks (month-day to month-day, may wrap New Year) override the club accent and welcome line; the saved base look is kept for editing.
+- **Unplaced riders:** the ZRL readiness item now says how many can be placed now and counts the reasons the rest cannot be (full zone, no room in their category).

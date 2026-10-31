@@ -100,6 +100,22 @@
     if (btn && btn.offsetParent !== null && typeof showTab === 'function') showTab(p.start, btn);
   }
 
+  // Up to four dated looks: a name, the first and last day (the year is ignored), an accent colour and a welcome line.
+  function seasonRows() {
+    const list = (club.seasons || []).slice(0, 4);
+    while (list.length < 3) list.push({ label: '', from: '', to: '', accent: '#ff0000', welcome: '' });
+    return list.map((x, i) => `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;margin-bottom:6px" data-season="${i}">
+      <input class="inp" aria-label="Name of look ${i + 1}" placeholder="Name (e.g. Christmas)" maxlength="30" value="${esc(x.label)}" data-f="label"/>
+      <input type="date" class="inp" aria-label="First day of look ${i + 1}" value="${x.from ? '2000-' + esc(x.from) : ''}" data-f="from" style="width:auto"/>
+      <input type="date" class="inp" aria-label="Last day of look ${i + 1}" value="${x.to ? '2000-' + esc(x.to) : ''}" data-f="to" style="width:auto"/>
+      <input type="color" aria-label="Accent colour of look ${i + 1}" value="${esc(x.accent || '#ff0000')}" data-f="accent" style="width:40px;height:34px;padding:0;border:none;background:none"/>
+      <input class="inp" aria-label="Welcome line of look ${i + 1}" placeholder="Welcome line for this look" maxlength="140" value="${esc(x.welcome)}" data-f="welcome" style="grid-column:1 / -1"/></div>`).join('');
+  }
+  function seasonQuick(kind) {
+    const rows = [...document.querySelectorAll('[data-season]')], row = rows.find(r => !r.querySelector('[data-f="label"]').value) || rows[0]; if (!row) return;
+    const set = (f, v) => { row.querySelector(`[data-f="${f}"]`).value = v; };
+    if (kind === 'christmas') { set('label', 'Christmas'); set('from', '2000-12-01'); set('to', '2000-01-01'); set('accent', '#d9202b'); set('welcome', 'Happy Christmas from Team CRYO-GEN! 🎄'); }
+  }
   // ── The customise window ──────────────────────────────────
   function open() {
     close();
@@ -110,9 +126,12 @@
     const sel = (name, opts, cur) => `<select class="inp" aria-label="${name}" onchange="uiSet('${name}',this.value)" style="width:auto">${opts.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
     const cards = p.order.map((id, i) => { const c = CARDS.find(x => x.id === id); return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid rgba(255,255,255,.06)"><label style="flex:1;font-size:13px"><input type="checkbox" ${p.hidden.includes(id) ? '' : 'checked'} onchange="uiToggle('${id}',this.checked)"/> ${esc(c.label)}</label><button type="button" aria-label="Move ${esc(c.label)} up" ${i === 0 ? 'disabled' : ''} onclick="uiMove('${id}',-1)" style="padding:2px 8px">↑</button><button type="button" aria-label="Move ${esc(c.label)} down" ${i === p.order.length - 1 ? 'disabled' : ''} onclick="uiMove('${id}',1)" style="padding:2px 8px">↓</button></div>`; }).join('');
     const clubBox = isAdmin ? `<div style="border-top:1px solid rgba(255,255,255,.1);padding-top:12px"><div class="lbl">Club look (everyone sees this)</div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="color" id="ui-club-accent" aria-label="Club accent colour" value="${esc(club.accent || '#00d4ff')}" style="width:44px;height:30px;padding:0;border:none;background:none"/><span style="font-size:12px;color:#8b95a5">Accent colour</span></div>
-        <input id="ui-club-welcome" class="inp" maxlength="140" placeholder="A welcome line for the dashboard" value="${esc(club.welcome)}" style="margin-bottom:8px"/>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="color" id="ui-club-accent" aria-label="Club accent colour" value="${esc((club.base && club.base.accent) || club.accent || '#00d4ff')}" style="width:44px;height:30px;padding:0;border:none;background:none"/><span style="font-size:12px;color:#8b95a5">Accent colour</span></div>
+        <input id="ui-club-welcome" class="inp" maxlength="140" placeholder="A welcome line for the dashboard" value="${esc((club.base && club.base.welcome) != null ? club.base.welcome : club.welcome)}" style="margin-bottom:8px"/>
         <input id="ui-club-logo" class="inp" placeholder="Logo address (https://…)" value="${esc(club.logo)}" style="margin-bottom:8px"/>
+        <div class="lbl" style="margin-top:6px">Seasonal looks (they take over between two dates every year)${club.active ? ` · on now: ${esc(club.active)}` : ''}</div>
+        ${seasonRows()}
+        <button type="button" onclick="uiSeasonQuick('christmas')" style="padding:4px 10px;font-size:12px;border-radius:99px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#e5e7eb;cursor:pointer;margin-bottom:10px">＋ Christmas</button>
         <button type="button" class="btn-cyan" onclick="uiSaveClub()" style="width:auto;padding:7px 16px;font-size:13px">Save club look</button> <span id="ui-club-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div>` : '';
     const bg = document.createElement('div');
     bg.className = 'modal-bg'; bg.id = 'ui-modal'; bg.onclick = e => { if (e.target === bg) close(); };
@@ -141,7 +160,8 @@
   function reset() { try { localStorage.removeItem(KEY); } catch (e) { /* nothing saved */ } apply(); open(); }
   async function saveClub() {
     const msg = document.getElementById('ui-club-msg');
-    const body = { accent: document.getElementById('ui-club-accent').value, welcome: document.getElementById('ui-club-welcome').value, logo: document.getElementById('ui-club-logo').value.trim() };
+    const seasons = [...document.querySelectorAll('[data-season]')].map(r => { const g = f => r.querySelector(`[data-f="${f}"]`).value; return { label: g('label'), from: g('from').slice(5), to: g('to').slice(5), accent: g('accent'), welcome: g('welcome') }; }).filter(x => x.from && x.to);
+    const body = { accent: document.getElementById('ui-club-accent').value, welcome: document.getElementById('ui-club-welcome').value, logo: document.getElementById('ui-club-logo').value.trim(), seasons };
     try {
       if (body.logo && !(await isPicture(body.logo))) throw new Error('That address is not a picture. Use the direct link to an image file (ending .png, .jpg or .svg), not a web page. Leave it empty to keep the CRYO-GEN logo.');
       const res = await fetch('/api/club/theme', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -363,9 +383,71 @@
     return `<div style="margin:0 0 8px"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Team points after each race">${series.map(({ t, pts }) => `<path d="${pts.map((v, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(v)).join(' ')}" fill="none" stroke="${teamColor(t.id || t.name)}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}</svg>
       <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#9ca3af">${series.map(({ t }) => `<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${teamColor(t.id || t.name)};margin-right:4px"></span>${esc(t.name.replace(/^CRYO-GEN\s+/, ''))}</span>`).join('')}</div></div>`;
   }
+
+  // ── Pictures to post: a line-up and a results table ──────
+  async function shareCanvas(c, name, title) {
+    const blob = await new Promise(res => c.toBlob(res, 'image/png')); if (!blob) return;
+    const file = new File([blob], name, { type: 'image/png' });
+    try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  const accentNow = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00D4FF';
+  function card(W, H) {
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), a = accentNow();
+    const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#060a14'); bg.addColorStop(1, '#10203a'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.fillStyle = a; g.fillRect(0, 0, W, 12); g.textAlign = 'center';
+    return { c, g, a };
+  }
+  function lineupCard(team, sub, names) {
+    const list = (Array.isArray(names) ? names : []).slice(0, 10), H = 420 + list.length * 96, { c, g, a } = card(1080, H);
+    g.fillStyle = a; g.font = '700 34px system-ui,sans-serif'; g.fillText('TEAM CRYO-GEN · LINE-UP', 540, 100);
+    g.fillStyle = '#fff'; g.font = '800 68px system-ui,sans-serif'; g.fillText(String(team || '').slice(0, 26), 540, 200);
+    g.fillStyle = '#9ca3af'; g.font = '500 34px system-ui,sans-serif'; g.fillText(String(sub || '').slice(0, 60), 540, 255);
+    list.forEach((n, i) => { const y = 330 + i * 96; g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(140, y - 56, 800, 78); g.fillStyle = a; g.font = '800 40px system-ui,sans-serif'; g.textAlign = 'left'; g.fillText(String(i + 1), 170, y); g.fillStyle = '#fff'; g.font = '700 42px system-ui,sans-serif'; g.fillText(String(n).slice(0, 28), 240, y); g.textAlign = 'center'; });
+    g.fillStyle = '#7b8494'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
+    return shareCanvas(c, 'cryogen-lineup.png', 'Line-up');
+  }
+  function resultsCard(title, rows) {
+    const list = (Array.isArray(rows) ? rows : []).slice(0, 10), H = 380 + list.length * 90, { c, g, a } = card(1080, H);
+    g.fillStyle = a; g.font = '700 34px system-ui,sans-serif'; g.fillText('TEAM CRYO-GEN · STANDINGS', 540, 100);
+    g.fillStyle = '#fff'; g.font = '800 64px system-ui,sans-serif'; g.fillText(String(title || '').slice(0, 28), 540, 200);
+    const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    list.forEach((r, i) => { const y = 300 + i * 90; g.fillStyle = i < 3 ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)'; g.fillRect(100, y - 54, 880, 74); g.textAlign = 'left'; g.font = '40px system-ui,sans-serif'; g.fillStyle = '#fff'; g.fillText(medal[r.rank] || String(r.rank), 130, y); g.font = '700 40px system-ui,sans-serif'; g.fillText(String(r.name).slice(0, 24), 230, y); g.textAlign = 'right'; g.fillStyle = a; g.font = '800 42px system-ui,sans-serif'; g.fillText(r.total + ' pts', 950, y); g.textAlign = 'center'; });
+    g.fillStyle = '#7b8494'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
+    return shareCanvas(c, 'cryogen-results.png', 'Results');
+  }
+
+  // ── Small line charts for the staff page and the rider profile ──
+  function mini(points, label, color, unit) {
+    const vs = points.filter(v => v != null);
+    if (vs.length < 2) return `<div style="flex:1;min-width:150px"><div class="lbl">${esc(label)}</div><div style="font-size:22px;font-weight:900">${vs.length ? esc(vs[vs.length - 1]) : '—'}</div><div style="font-size:11px;color:#8b95a5">The line appears after the second day.</div></div>`;
+    const W = 160, H = 46, lo = Math.min(...vs), hi = Math.max(...vs), span = Math.max(hi - lo, 1), n = points.length;
+    const d = points.map((v, i) => v == null ? null : [Math.round(i / (n - 1) * W), Math.round(H - 4 - (v - lo) / span * (H - 8))]).filter(Boolean).map((q, i) => (i ? 'L' : 'M') + q[0] + ' ' + q[1]).join(' ');
+    return `<div style="flex:1;min-width:150px"><div class="lbl">${esc(label)}</div><div style="font-size:22px;font-weight:900">${esc(vs[vs.length - 1])}${unit || ''}</div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(label)}: ${esc(vs[0])} to ${esc(vs[vs.length - 1])}"><path d="${d}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+  }
+  async function staffTrend(el) {
+    if (!el) return;
+    try {
+      const r = await fetch('/api/staff/trend', { headers: tttHeaders() }); if (!r.ok) { el.innerHTML = ''; return; }
+      const days = (await r.json()).days;
+      el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:8px">📈 How the club is doing <span style="font-size:11px;font-weight:600;color:#8b95a5">one point a day</span></div><div style="display:flex;gap:16px;flex-wrap:wrap">${mini(days.map(x => x.attention), 'Needs attention', '#FBBF24')}${mini(days.map(x => x.racing), 'ZRL riders racing', 'var(--accent)')}${mini(days.map(x => x.unplaced), 'Riders without a team', '#f87171')}</div></div>`;
+    } catch (e) { el.innerHTML = ''; }
+  }
+  // My Profile: the power curve (from the numbers already on the page) and my vELO over the last weeks.
+  async function profileCharts(el, pow, own) {
+    if (!el) return;
+    const pts = [['5s', pow.wkg5], ['15s', pow.wkg15], ['30s', pow.wkg30], ['1m', pow.wkg60], ['5m', pow.wkg300], ['20m', pow.wkg1200]].map(([l, v]) => [l, Number(v) || 0]);
+    const W = 300, H = 110, max = Math.max(...pts.map(p => p[1]), 1);
+    const xy = pts.map((p, i) => [Math.round(10 + i / (pts.length - 1) * (W - 20)), Math.round(H - 22 - p[1] / max * (H - 40))]);
+    const curve = pts.some(p => p[1]) ? `<div style="flex:2;min-width:240px"><div class="lbl">Power curve (W/kg)</div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Power curve: ${pts.map(p => p[0] + ' ' + p[1].toFixed(2)).join(', ')}"><path d="${xy.map((q, i) => (i ? 'L' : 'M') + q[0] + ' ' + q[1]).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${xy.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="var(--accent)"/><text x="${q[0]}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#8b95a5">${pts[i][0]}</text>`).join('')}</svg></div>` : '';
+    let velo = '';
+    if (own) { try { const r = await fetch('/api/me/velo', { headers: tttHeaders() }); if (r.ok) velo = mini((await r.json()).history.map(x => x.v), 'My vELO', '#10B981'); } catch (e) { /* the curve still shows */ } }
+    el.innerHTML = curve || velo ? `<div class="card" style="padding:16px;margin-bottom:16px"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">${curve}${velo}</div></div>` : '';
+  }
   // Called once a rider is signed in: avatars, pinned pages, charts.
   async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
 
+  window.uiLineupCard = lineupCard; window.uiResultsCard = resultsCard; window.uiStaffTrend = staffTrend; window.uiProfileCharts = profileCharts; window.uiSeasonQuick = seasonQuick;
   window.uiPreset = preset; window.uiPin = pin; window.uiAvatarSet = avatarSet; window.uiEmpty = empty; window.uiMonthBox = monthBox; window.uiCalendarInto = calendarInto;
   window.uiPodium = podium; window.uiPointsChart = pointsChart; window.uiSeries = seriesAccent; window.uiLogin = afterLogin;
   window.uiSet = set; window.uiToggle = toggle; window.uiMove = move; window.uiReset = reset; window.uiClose = close; window.uiOpen = open; window.uiSaveClub = saveClub;

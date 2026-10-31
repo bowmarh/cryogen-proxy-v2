@@ -1271,6 +1271,7 @@ function weekBadge(){
 function renderWeek(){
   const el=document.getElementById('week-content'); if(!el) return;
   weekBadge();
+  setTimeout(()=>{ if(window.uiStaffTrend) uiStaffTrend(document.getElementById('staff-trend')); },0);
   if(weekErr&&!weekData){ el.innerHTML=`<div class="card" style="padding:20px;color:#f87171">${esc(weekErr)}</div>`; return; }
   const d=weekData; if(!d) return;
   const col={fail:'#f87171',warn:'#FBBF24',todo:'#9ca3af',ok:'#10B981'}, ico={fail:'🔴',warn:'🟡',todo:'⚪',ok:'✅'};
@@ -1289,6 +1290,7 @@ function renderWeek(){
   ${weekSeriesStrip(d)}
   ${d.problems.length?`<div class="card" style="padding:10px 14px;margin-bottom:12px;font-size:12px;color:#FBBF24">Could not read: ${d.problems.map(esc).join(' · ')}</div>`:''}
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Needs attention <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.attention.length||'none'}</span></div>${att}</div>
+  <div id="staff-trend"></div>
   <div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">Coming up</div>${coming}</div>
   ${weekAutoCard(d)}
   ${d.digest?`<label style="display:block;font-size:12px;color:#9ca3af;margin-top:12px"><input type="checkbox" ${d.digest.on?'checked':''} ${d.digest.canChange?'':'disabled'} onchange="weekDigestSet(this.checked)"> <b>Morning digest:</b> post what needs attention, what is on today and what the automation did to the admin channel once a day, from about 07:00 UK. Off until you tick it.</label>`:''}
@@ -3588,6 +3590,7 @@ function renderProfile(){
     <div class="cal-slot" style="margin-top:16px"></div>`
   ;
   fillDiscordSlots(); fillCalSlots(); fillPushSlots();
+  { const host=document.getElementById('profile-content'); const box=document.createElement('div'); box.id='prof-charts'; const first=host.querySelector('.card'); if(first) first.after(box); else host.prepend(box); if(window.uiProfileCharts) uiProfileCharts(box,pow,role==='member'); }
   loadMySeason();
   loadMyTtt();
   loadMyZrl();
@@ -4210,7 +4213,7 @@ function zrlLineupHtml(t,racing){
     ${t.weeks.map(w=>`<details ${w.i===nextI?'open':''} style="border-top:1px solid rgba(255,255,255,0.06);border-left:3px solid ${window.uiTeamColor?uiTeamColor(t.id):'transparent'};padding:6px 0 6px 8px;${w.date<today?'opacity:.55':''}"><summary style="cursor:pointer;font-size:13px"><b>Race ${w.i+1}</b> <span style="color:#8b95a5">${esc(seasonDay(w.date))}</span> · <span style="color:${w.lineup.length===racing?'#10B981':'#FBBF24'}">${w.lineup.length}/${racing} picked</span></summary>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${w.riders.map(r=>`<tr><td style="padding:3px 6px;width:26px"><input type="checkbox" class="zl-${esc(t.id)}-${w.i}" value="${esc(r.zwid)}" ${w.lineup.includes(r.zwid)?'checked':''} ${r.status==='no'?'disabled':''}></td><td style="padding:3px 6px">${window.uiAvatar?uiAvatar(r.name,(riders.find(x=>String(x.id)===String(r.zwid))||{}).cat,r.zwid):''}${rn(r.name,r.zwid,'',true)}</td>
         <td style="padding:3px 0;text-align:right"><select class="inp" onchange="zrlAvail(${w.i},this.value,'${esc(r.zwid)}','${esc(t.id)}')" style="width:auto;font-size:12px"><option value="">no answer</option>${ZRL_AVAIL.map(([v,l])=>`<option value="${v}" ${r.status===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
-      <button onclick="zrlLineupAuto('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">✨ Pick for me</button> <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
+       <button type="button" data-t="${esc(t.name)}" data-s="${esc('Race '+(w.i+1)+' · '+seasonDay(w.date))}" data-n="${esc(JSON.stringify(w.riders.filter(r=>w.lineup.includes(r.zwid)).map(r=>r.name)))}" onclick="uiLineupCard(this.dataset.t,this.dataset.s,JSON.parse(this.dataset.n))" style="${btn};margin-top:6px">🖼️ Picture</button> <button onclick="zrlLineupAuto('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">✨ Pick for me</button> <button onclick="zrlLineupSave('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">Save line-up</button> ${waBtn('zrl-lu-'+t.id+'-'+w.i,waZrlLineupText(t.id,w,w.riders),'Share line-up')} <button onclick="zrlSubs('${esc(t.id)}',${w.i})" style="${btn};margin-top:6px">🔎 Find subs</button>
       <div id="zl-subs-${esc(t.id)}-${w.i}" style="margin-top:6px"></div></details>`).join('')}</div>`;
 }
 async function zrlWeeklyLoad(){
@@ -4262,7 +4265,7 @@ function zrlStandingsHtml(){
   const s=zrlStand; if(!s||!s.groups.length) return '';
   const th='padding:5px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5';
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin:0 0 8px">🏆 Standings</div>
-    ${s.groups.map(g=>`<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px">${esc(g.name)}</div>${window.uiPodium?uiPodium(g):''}${window.uiPointsChart?uiPointsChart(g,s.dates):''}
+    ${s.groups.map(g=>`<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:800;margin-bottom:4px;display:flex;justify-content:space-between;gap:8px">${esc(g.name)} <button type="button" data-t="${esc(g.name)}" data-n="${esc(JSON.stringify(g.teams.slice(0,10).map(t=>({rank:t.rank,name:t.name.replace(/^CRYO-GEN\s+/,''),total:t.total}))))}" onclick="uiResultsCard(this.dataset.t,JSON.parse(this.dataset.n))" style="padding:2px 10px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">🖼️ Picture</button></div>${window.uiPodium?uiPodium(g):''}${window.uiPointsChart?uiPointsChart(g,s.dates):''}
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="${th}">#</th><th style="${th}">Team</th>${s.dates.map((d,i)=>`<th style="${th}">R${i+1}</th>`).join('')}<th style="${th}">Points</th></tr></thead>
       <tbody>${g.teams.map(t=>`<tr style="border-top:1px solid rgba(255,255,255,0.06)"><td style="padding:5px 8px;color:#9ca3af;box-shadow:inset 4px 0 0 ${window.uiTeamColor?uiTeamColor(t.id||t.name):'transparent'}">${t.rank}</td><td style="padding:5px 8px;font-weight:700">${esc(t.name.replace(/^CRYO-GEN\s+/,''))}</td>
         ${t.weeks.map(w=>`<td style="padding:5px 8px;color:#9ca3af;white-space:nowrap">${w?(w.pos?w.pos+(w.pos===1?'st':w.pos===2?'nd':w.pos===3?'rd':'th'):'')+(w.pts!==null?(w.pos?' · ':'')+w.pts:''):'–'}</td>`).join('')}<td style="padding:5px 8px;font-weight:800">${t.total}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>`;
