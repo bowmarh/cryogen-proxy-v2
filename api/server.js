@@ -466,7 +466,7 @@ async function discord(channel, payload){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // Never let rider-entered text ping @everyone, roles or users.
-      body: JSON.stringify({ username: 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
+      body: JSON.stringify({ username: process.env.STAGING === '1' ? '[STAGING] CRYO-GEN TTT' : 'CRYO-GEN TTT', allowed_mentions: { parse: [] }, ...payload }),
       signal: AbortSignal.timeout(4000),
     });
     if (!r.ok) console.error(`Discord ${channel} webhook returned ${r.status}`);
@@ -2481,6 +2481,7 @@ async function handleSync(route, req, res){
 // The public club page (public/club.html): season tables, results and next races, with no rider names, no private links and nothing about people.
 // Off until an administrator turns it on; while it is off the address answers 404.
 const PUBLIC_KEY = 'cg:public:settings';
+let publicCache = null;
 const publicOn = async () => { try { return !!JSON.parse((await redis([['GET', PUBLIC_KEY]]))[0] || 'null').on; } catch (e) { return false; } };
 async function publicClub(now = Date.now()){
   const staff = syncReq(), out = { name: 'CRYO-GEN', generated: new Date(now).toISOString(), ladder: [], drs: [], next: [] };
@@ -2556,6 +2557,33 @@ function readRawBody(req, limit = 20000){
     req.on('error', reject);
   });
 }
+
+// The go-live checklist (lib/golive.js): what is on, what is half set up, and the next step for each.
+const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
+const golive = require('../lib/golive')({
+  requireRole,
+  gather: async () => {
+    const [checks, ids, stats, devices, users, settings, sync, lt, dt] = await Promise.all([
+      healthChecks().catch(() => []), activeMembers().catch(() => []), comms.stats().catch(() => ({ verified: 0 })), redis([['HLEN', push.KEY]]).then(r => Number(r[0]) || 0).catch(() => 0),
+      redis([['HLEN', staff.KEY]]).then(r => Number(r[0]) || 0).catch(() => 0), comms.getSettings().catch(() => ({})), sheetSync.load().catch(() => ({ settings: {} })),
+      ladder.view(syncReq(), undefined).catch(() => null), drs.view(syncReq(), undefined).catch(() => null)]);
+    const row = id => checks.find(c => c.id === id) || {}, links = await redis([['HGETALL', comms.KEYS.links]]).then(r => r[0] || []).catch(() => []), verifiedIds = new Set(), pushIds = new Set((await redis([['HKEYS', push.KEY]]).catch(() => [[]]))[0] || []);
+    for (let i = 0; i < links.length; i += 2) { try { if (JSON.parse(links[i + 1]).verified) verifiedIds.add(links[i]); } catch (e) { /* skip */ } }
+    const teams = []; for (const t of (lt ? lt.teams : [])) teams.push(['ladder', t.id]); for (const t of (dt ? dt.teams : [])) teams.push(['drs', t.id]);
+    let named = 0, total = 0;   // teams that are in use (a ladder team with riders, a DIRT team with a season) and how many have a captain
+    for (const [kind, id] of teams) {
+      try {
+        const v = kind === 'ladder' ? await ladder.view(syncReq(), id) : await drs.view(syncReq(), id);
+        if (kind === 'ladder' ? !v.roster.length : !v.season) continue;
+        total++; if ((kind === 'ladder' ? v.meta.captains : v.season.captains || []).length) named++;
+      } catch (e) { /* skip */ }
+    }
+    return { env: process.env, redis: row('db').status !== 'fail', cron: ['ok', 'info'].includes(row('cron').status) ? 'ok' : 'todo', cronDetail: row('cron').detail || '', backup: row('backup').status === 'ok' && !/FAILED/.test(row('backup').detail || '') ? 'ok' : 'todo', backupDetail: row('backup').detail || '',
+      members: ids.length, verified: ids.filter(z => verifiedIds.has(z)).length, reachable: ids.filter(z => verifiedIds.has(z) || pushIds.has(z)).length, push: { configured: push.configured(), devices },
+      auto: !!settings.autoNudge, staffAccounts: users, captains: { total, named }, google: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON_B64, sync: Object.values(sync.settings || {}).some(s => s.push || s.pull),
+      digest: await redis([['GET', DIGEST_KEYS.settings]]).then(r => { try { return JSON.parse(r[0] || 'null').on === true; } catch (e) { return false; } }).catch(() => false), publicPage: await publicOn() };
+  },
+});
 
 // The morning digest for the admin channel: what needs attention, what is on today and tomorrow, and what the automation did, once a day after 07:00 UK.
 const DIGEST_KEYS = { settings: 'cg:digest:settings', sent: 'cg:digest:sent' };
@@ -2662,7 +2690,7 @@ async function route(req, res){
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
-    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired() });
+    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
@@ -2694,11 +2722,13 @@ async function route(req, res){
 
   if (pathname === '/api/public/club' && req.method === 'GET'){
     if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
-    return sendJSON(res, 200, await publicClub());
+    // Anyone can ask for this page, so the answer is made at most once a minute per server instance.
+    if (!publicCache || Date.now() - publicCache.at > 60000) publicCache = { at: Date.now(), data: await publicClub() };
+    return sendJSON(res, 200, publicCache.data);
   }
   if (pathname === '/api/public/settings'){
     const role = requireRole(req, ['admin', 'mod']);
-    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
+    if (req.method === 'POST'){ requireRole(req, ['admin']); const b = await readJSONBody(req); await redis([['SET', PUBLIC_KEY, JSON.stringify({ on: b.on === true })]]); publicCache = null; return sendJSON(res, 200, { on: b.on === true, canChange: true }); }
     return sendJSON(res, 200, { on: await publicOn(), canChange: role === 'admin' });
   }
   const calFeed = /^\/api\/cal\/([A-Za-z0-9_-]+)\.ics$/.exec(pathname);
@@ -2718,6 +2748,10 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  if (pathname === '/api/ping' && req.method === 'GET'){   // for an uptime check: is the app up and is its database answering
+    try { await redis([['GET', 'cg:ping']]); } catch (e) { return sendJSON(res, 503, { ok: false, redis: false }); }
+    return sendJSON(res, 200, { ok: true, redis: true, at: new Date().toISOString() });
+  }
   if (pathname === '/api/discord/interactions' && req.method === 'POST'){
     const out = await discordInteractions.handle(await readRawBody(req), req.headers);
     return sendJSON(res, out.status, out.body);
@@ -2729,6 +2763,11 @@ async function route(req, res){
     let on = false; try { on = !!(raw && JSON.parse(raw).on === true); } catch (e) { /* off */ }
     return sendJSON(res, 200, { on, canChange: role === 'admin' });
   }
+  const stagingRoute = staging.routes[`${req.method} ${pathname}`];
+  if (stagingRoute) return sendJSON(res, 200, await stagingRoute(req));
+  const goliveRoute = golive.routes[`${req.method} ${pathname}`];
+  if (goliveRoute) return sendJSON(res, 200, await goliveRoute(req));
+
   const lifecycleRoute = lifecycle.routes[`${req.method} ${pathname}`];
   if (lifecycleRoute) return sendJSON(res, 200, await lifecycleRoute(req));
 
@@ -2784,9 +2823,19 @@ async function route(req, res){
   serveStatic(res, pathname);
 }
 
+// An unexpected failure (not a refusal the app chose to make) is told to the admin channel, once an hour for the same place and message.
+async function reportError(req, err){
+  try {
+    const where = `${req.method} ${String((parseRequestUrl(req).pathname) || '').replace(/[0-9a-f]{12,}|\d{6,}/gi, ':id').slice(0, 80)}`, what = String((err && err.message) || err).replace(/\s+/g, ' ').slice(0, 200);
+    const hour = new Date().toISOString().slice(0, 13), key = `${hour}:${where}:${what}`.slice(0, 250);
+    const [claimed] = await redis([['HSETNX', 'cg:alerts:errors', key, new Date().toISOString()]]);
+    if (claimed) await discord('admin', { content: `🧯 **Unexpected error in the dashboard**\n\`${discordEscape(where)}\`: ${discordEscape(what)}\nIt answered "internal error". Check the Vercel logs for the full details.` });
+  } catch (e) { /* alerting must never make things worse */ }
+}
+
 function handler(req, res){
   route(req, res).catch(err => {
-    if (!err.status) console.error(err);
+    if (!err.status){ console.error(err); reportError(req, err); }
     if (res.headersSent) return res.end();
     sendJSON(res, err.status || 500, { error: err.status ? err.message : 'internal error' });
   });

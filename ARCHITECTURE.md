@@ -291,3 +291,12 @@ Everything is off until an administrator ticks it in Admin → Google Sheet sync
 - **What they can call**: the `ASSOCIATE_ALLOWED` list in `api/server.js` (TTT and ZRL sign-up, other race sign-ups, social-ride RSVPs, what the pages read, their own `/api/assoc/*`). Everything else under `/api/` answers 403 with `associate: true`. The gate re-checks `stillAssociate` on every call, so an approval unlocks a live session at once.
 - **The checklist** (`progress`): in the club on Zwift, joined Discord (self-ticked), `RULES.rsvps` social rides, one team event, `RULES.days` days since first seen. When complete they can request; staff are told on the admin channel. Staff can approve anyone at any time (`approve` also sets the WordPress tier to full when there is a record), or decline with a note.
 - **Schedule** (cron job "Associates"): a weekly admin digest of requests waiting more than three days and associates ready to ask. A health row reports the pipeline. Backups include the assoc keys.
+
+## Hardening, go-live checklist and staging
+- **Discord requests** are signed and must carry a timestamp within 5 minutes (`lib/discord-interactions.js`), so a captured request cannot be replayed later.
+- **Push endpoints** must be on a known push service (`PUSH_HOSTS` in `lib/webpush.js`; extra hosts via `PUSH_EXTRA_HOSTS`), checked on subscribe and before every send (no server-side requests to arbitrary addresses).
+- **Public club page** answer is cached for 60 seconds, cleared when its settings change.
+- **Monitoring:** `GET /api/ping` (no login; checks the database) is polled every 30 minutes by `.github/workflows/uptime.yml`; a failure emails the repository watchers. Unexpected (non-`HttpError`) failures post "🧯 Unexpected error" to the admin channel, at most once an hour per route and message.
+- **Go-live checklist:** `lib/golive.js`, `GET /api/golive` (admin), shown at the top of the Admin panel. It reads environment names and counts only, never values.
+- **Staging:** `STAGING=1` shows a banner (`/api/auth/status` → `staging`), names every Discord post `[STAGING] …`, and enables `POST /api/staging/seed` (`lib/staging.js`), which makes a test ZRL round with made-up riders. Use a separate Vercel project and database; see `docs/RUNBOOK.md`.
+- **Runbook:** `docs/RUNBOOK.md`.
