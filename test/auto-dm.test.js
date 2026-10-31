@@ -64,3 +64,21 @@ test('a captain whose team has no line-up two days before the race gets a DM too
   await tick();
   assert.equal(world.dms.filter(d => /has not picked a full line-up/.test(d.body.content)).length, 1, 'once');
 });
+
+test('the day before a race each captain gets one note: where the line-up stands and who has not answered', async () => {
+  await link(1);
+  await app.post('/api/comms/auto', { nudge: true }, A);
+  await app.post('/api/zrl/round', { name: 'Round 2', start: h.ymd(1), closes: h.ymd(10), weeks: 2 }, A);
+  await app.post('/api/zrl/teams', { teams: [{ name: 'Alpha', region: 'eu' }] }, A);
+  for (const [n, i] of [['Lad 0', 0], ['Lad 2', 2]]) { await app.post('/api/zrl/signup', { name: n, zwid: ID(i), regions: ['eu'], cat: 'B' }); await app.post('/api/zrl/assign', { key: ID(i), team: 'alpha' }, A); }
+  await app.post('/api/zrl/captain', { team: 'alpha', key: ID(0) }, A);
+  const r = JSON.parse(app.world.db['cg:zrl:round']);
+  app.world.db['cg:zrl:round'] = JSON.stringify({ ...r, open: false, published: true, autoFix: { place: true, lineups: false } });
+  await tick();
+  const notes = world.dms.filter(d => /Captain's note for Alpha/.test(d.body.content));
+  assert.equal(notes.length, 1);
+  assert.match(notes[0].body.content, /0 of 5 picked.*Pick for me/);
+  assert.match(notes[0].body.content, /Not answered yet: Lad 0, Lad 2/);
+  await tick();
+  assert.equal(world.dms.filter(d => /Captain's note for Alpha/.test(d.body.content)).length, 1, 'once');
+});

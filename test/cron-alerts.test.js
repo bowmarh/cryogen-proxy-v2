@@ -39,6 +39,10 @@ test('a clean run reports nothing and clears the failure', async () => {
   delete app.world.db['cg:zrl:round']; app.world.discord.length = 0;
   const r = await tick();
   assert.equal(r.body.failed, undefined);
-  assert.equal(adminPosts().length, 0);
+  assert.equal(adminPosts().length, 1, 'one message: it fixed itself');
+  assert.match(adminPosts()[0], /Fixed itself.*ZRL/);
+  app.world.discord.length = 0;
+  await tick();
+  assert.equal(adminPosts().length, 0, 'and it is not repeated');
   assert.notEqual((await health()).cron.status, 'fail');
 });

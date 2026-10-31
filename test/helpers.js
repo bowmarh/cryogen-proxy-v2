@@ -227,6 +227,7 @@ function installFetch(world) {
         return json(all.slice(start, start + Number(u.searchParams.get('limit') || 1000)));
       }
       if (u.pathname.endsWith('/oauth2/token')) { (world.oauthCalls = world.oauthCalls || []).push(String(opts.body)); return world.oauthFail ? json({ error: 'invalid_grant' }, 400) : json({ access_token: 'user-token' }); }   // "Sign in with Discord"
+      if (u.pathname === '/api/v10/users/@me' && /^Bot /.test((opts.headers || {}).Authorization || '')) return world.botBad ? json({}, 401) : json({ id: 'bot' });
       if (u.pathname === '/api/v10/users/@me') return (opts.headers || {}).Authorization === 'Bearer user-token' && world.oauthUser ? json(world.oauthUser) : json({}, 401);
       if (u.pathname.endsWith('/users/@me/channels')) { const id = JSON.parse(opts.body).recipient_id; return json(world.dmFail && world.dmFail.has(id) ? { code: 50007 } : { id: `dm-${id}` }, world.dmFail && world.dmFail.has(id) ? 403 : 200); }
       if (m) { (world.dms = world.dms || []).push({ userId: m[1], body: JSON.parse(opts.body), auth: (opts.headers || {}).Authorization }); return json({ id: 'msg' }); }
