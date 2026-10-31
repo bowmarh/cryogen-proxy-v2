@@ -51,8 +51,16 @@
   function welcome() {
     const el = document.getElementById('club-welcome');
     if (el) { el.textContent = club.welcome || ''; el.style.display = club.welcome ? '' : 'none'; }
-    if (club.logo) document.querySelectorAll('img[src="/logo.png"]').forEach(i => { i.src = club.logo; });
+    // The club logo replaces ours; if the address is not a picture that loads, the original comes straight back.
+    document.querySelectorAll('img[src="/logo.png"],img[data-brand]').forEach(i => {
+      i.dataset.brand = '1';
+      i.onerror = () => { i.onerror = null; i.src = '/logo.png'; };
+      const want = club.logo || '/logo.png';
+      if (i.getAttribute('src') !== want) i.src = want;
+    });
   }
+  // True when the address loads as a picture.
+  const isPicture = url => new Promise(ok => { const i = new Image(); const t = setTimeout(() => ok(false), 6000); i.onload = () => { clearTimeout(t); ok(true); }; i.onerror = () => { clearTimeout(t); ok(false); }; i.src = url; });
 
   async function loadClub() {
     try { const r = await fetch('/api/club/theme'); if (r.ok) club = await r.json(); } catch (e) { /* the default look */ }
@@ -105,6 +113,7 @@
     const msg = document.getElementById('ui-club-msg');
     const body = { accent: document.getElementById('ui-club-accent').value, welcome: document.getElementById('ui-club-welcome').value, logo: document.getElementById('ui-club-logo').value.trim() };
     try {
+      if (body.logo && !(await isPicture(body.logo))) throw new Error('That address is not a picture. Use the direct link to an image file (ending .png, .jpg or .svg), not a web page. Leave it empty to keep the CRYO-GEN logo.');
       const res = await fetch('/api/club/theme', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json(); if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
       club = d; apply(); msg.textContent = 'Saved.';

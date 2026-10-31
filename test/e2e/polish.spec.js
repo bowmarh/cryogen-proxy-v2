@@ -104,3 +104,10 @@ test('the dashboard shows the three charts and the club welcome line when the cl
   await expect(page.locator('[data-card="charts"]')).toContainText('Ride sign-ups per week');
   await expect(page.locator('#club-welcome')).toBeHidden();
 });
+
+test('a club logo address that is not a picture falls back to the CRYO-GEN logo instead of a broken image', async ({ page, baseURL }) => {
+  await page.route('**/api/club/theme', r => r.fulfill({ json: { accent: '', welcome: '', logo: 'https://not-a-picture.invalid/home' } }));
+  await signInAsRider(page, baseURL);
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].map(i => i.getAttribute('src')).join(','))).toMatch(/^(\/logo\.png,?)+$/);
+  expect(await page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].every(i => i.complete && i.naturalWidth > 0))).toBe(true);
+});
