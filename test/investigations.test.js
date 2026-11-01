@@ -75,3 +75,23 @@ test('the AI summary: needs the key, sends the numbers and not the rider’s nam
   assert.match(sent, /sticky_run/); assert.match(sent, /Ignore previous instructions/, 'notes are passed as data');
   world.anthropic.reply = 'not json'; assert.equal((await app.post('/api/inv/ai', { id: c.id }, A)).status, 502);
 });
+
+test('a case brings in everything the club already holds about the rider, and "ask the case" answers from it without the rider\'s name', async () => {
+  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  const day = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  app.world.db['cg:fair:snap'] = { 1002: JSON.stringify([{ d: day(30), w: 78, p5: 3.9, p20: 3.0, v: 1100 }, { d: day(1), w: 75, p5: 4.1, p20: 3.5, v: 1200 }]) };
+  app.world.db['cg:rider:velo'] = { 1002: JSON.stringify([[day(30), 1100], [day(1), 1200]]) };
+  app.world.db['cg:fair:flags'] = { '1002:weight_drop': JSON.stringify({ id: '1002:weight_drop', zwid: '1002', type: 'weight_drop', severity: 1, metric: '78 kg → 75 kg', status: 'open', at: day(1), note: 'staff-private' }) };
+  const c = (await app.post('/api/inv/create', { zwid: '1002', title: 'Everything' }, A)).body.case;
+  assert.equal((await app.get('/api/inv/rider?zwid=1002')).status, 401);
+  const r = (await app.get('/api/inv/rider?zwid=1002', { token: mod })).body.rider;
+  assert.deepEqual([r.roster.name, r.roster.category, r.weightKg, r.history.daily.length, r.history.vELO.length, r.flags[0].type, r.otherCases.length >= 1], ['Rider 2', 'C', 75, 2, 2, 'weight_drop', true]);
+  assert.ok(r.teams && r.career !== undefined, 'the existing staff profile is brought in too');
+  world.anthropic.reply = 'Her weight fell 3 kg in a month while 5 minute power rose 5%; both fit a training block.';
+  const a = await app.post('/api/inv/ask', { id: c.id, question: 'What changed over the last month?' }, A);
+  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.match(a.body.answer, /fit a training block/);
+  const sent = JSON.stringify(world.anthropic.seen.at(-1).body);
+  assert.ok(!/Rider 2|"1002"|staff-private/.test(sent), 'no name, no ID, no private notes'); assert.match(sent, /vELO/); assert.match(sent, /weight_drop/);
+  assert.match(world.anthropic.seen.at(-1).body.system, /Answer ONLY from the data given/);
+  assert.equal((await app.post('/api/inv/ask', { id: c.id, question: ' ' }, A)).status, 400);
+});

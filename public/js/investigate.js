@@ -2,7 +2,7 @@
 // Staff: investigation files. A FIT file is read here in the browser (js/fit.js) and only the recorded numbers are sent; the server describes what
 // stands out and what could innocently explain it. Everything on this page is a prompt for a person, not a verdict.
 (function () {
-  let list = null, cur = null, aiOn = false, busy = '';
+  let list = null, cur = null, aiOn = false, busy = '', rider = null, riderFor = '', asks = [];
   const E = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const SEV = { 1: ['Low', '#FBBF24'], 2: ['Medium', '#FB923C'], 3: ['High', '#f87171'] };
   const btn = 'padding:5px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18);border-radius:6px;cursor:pointer';
@@ -23,6 +23,7 @@
   function render() {
     const el = root(); if (!el) return;
     el.innerHTML = cur ? caseView(cur) : listView();
+    if (cur) loadRider();
   }
 
   function listView() {
@@ -75,6 +76,7 @@
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:2px">${E(c.title)}</h2><div style="font-size:13px;color:#8b95a5">${typeof rn === 'function' ? rn(c.name, c.zwid, '') : E(c.name)} · ${E(c.status)} · opened ${E(c.createdAt.slice(0, 10))} by ${E(c.createdBy)}</div></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap"><a href="https://www.zwiftracing.app/riders/${E(c.zwid)}" target="_blank" rel="noopener" style="${btn};text-decoration:none">Rider on ZwiftRacing ↗</a>${c.status === 'open' ? `<button type="button" style="${btn}" onclick="invStatus('closed')">Close</button>` : `<button type="button" style="${btn}" onclick="invStatus('open')">Reopen</button>`}${role === 'admin' ? `<button type="button" style="${btn};color:#f87171" onclick="invDelete()">Delete</button>` : ''}</div></div>
       ${c.outcome ? `<div class="card" style="padding:10px 14px;margin-bottom:10px;font-size:13px"><b>Outcome:</b> ${E(c.outcome)}</div>` : ''}
+      <div id="inv-rider-data">${riderCard(c)}</div>
       <div class="card" style="padding:14px 16px;margin-bottom:12px"><div class="lbl">Notes (only staff see these)</div><textarea id="inv-n" class="inp" rows="4">${E(c.notes)}</textarea>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="font-size:12px;color:#8b95a5">Weight to use (kg) <input id="inv-kg" class="inp" type="number" min="31" max="199" step="0.1" value="${c.declaredKg || ''}" style="width:90px;display:inline-block"/></label><button type="button" style="${btn}" onclick="invSaveNotes()">Save</button><span id="inv-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div>
         <div style="font-size:11px;color:#8b95a5;margin-top:4px">The weight comes from the club roster. Correct it here if you know it is different and the W/kg figures and the weight check re-run.</div></div>
@@ -85,7 +87,36 @@
       <details class="card" style="padding:10px 16px"><summary style="cursor:pointer;font-size:12px;color:#8b95a5">History</summary>${(c.history || []).slice().reverse().map(h => `<div style="font-size:12px;color:#9ca3af;padding:2px 0">${E(h.at.slice(0, 16).replace('T', ' '))} · ${E(h.by)} · ${E(h.what)}</div>`).join('')}</details>`;
   }
 
+  // What the club already holds about the rider, so nobody has to go and look in five places.
+  function riderCard(c) {
+    if (riderFor !== c.zwid || !rider) return '<div class="card" style="padding:14px 16px;margin-bottom:12px;font-size:12px;color:#8b95a5">Loading everything the club holds about this rider…</div>';
+    const r = rider, ro = r.roster || {}, tile = (l, v) => `<div style="min-width:84px"><div class="lbl" style="margin:0">${l}</div><div style="font-weight:800">${E(v == null ? '–' : v)}</div></div>`, w = ro.wkg || {};
+    const daily = (r.history && r.history.daily) || [], line = (k, label, color, unit) => (window.uiMini ? uiMini(daily.map(x => x[k] || null), label, color, unit) : '');
+    const z = r.zrl, teams = r.teams || {}, flags = (r.flags || []).map(f => `<div style="font-size:12px;padding:3px 0">${badge(f.severity)} ${E(f.type.replace('_', ' '))} · ${E(f.metric)} <span style="color:#8b95a5">(${E(f.status)}, ${E(f.at)})</span></div>`).join('');
+    const others = (r.otherCases || []).filter(x => x.id !== (cur && cur.id)).map(x => `<a href="#" onclick="invOpen('${E(x.id)}');return false" style="font-size:12px;margin-right:10px">${E(x.title)} (${E(x.status)})</a>`).join('');
+    return `<details class="card" open style="padding:14px 16px;margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">📋 Everything the club holds on this rider</summary>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin:10px 0">${tile('Category', ro.category)}${tile('FTP', ro.ftp ? ro.ftp + ' W' : null)}${tile('vELO', ro.vELO)}${tile('Best 5 min', w['5m'] ? w['5m'] + ' W/kg' : null)}${tile('Best 20 min', w['20m'] ? w['20m'] + ' W/kg' : null)}${tile('Races', ro.finishes)}${tile('Wins', ro.wins)}${tile('Podiums', ro.podiums)}${tile('DNFs', ro.dnfs)}${tile('Type', ro.type)}${tile('Registered weight', r.weightKg ? r.weightKg + ' kg' : null)}${tile('Last race', ro.lastRace)}${tile('Membership', r.membership ? [r.membership.tier, r.membership.status].filter(Boolean).join(' · ') : null)}</div>
+      ${daily.length > 1 ? `<div style="display:flex;gap:16px;flex-wrap:wrap">${line('w', 'Weight', '#FBBF24', ' kg')}${line('p5', '5 min W/kg', 'var(--accent)')}${line('p20', '20 min W/kg', '#10B981')}${line('v', 'vELO', '#f87171')}</div>` : '<div style="font-size:12px;color:#8b95a5">The weight and power lines build up from a daily reading and need a few days.</div>'}
+      ${z ? `<div style="font-size:13px;margin-top:8px"><b>ZRL ${E(z.round)}:</b> ${z.signedUp ? `picked for ${z.picked} of ${z.racesSoFar} races so far, answered ${z.answered} race questions (${z.said.yes} yes, ${z.said.maybe} maybe, ${z.said.no} no), ${z.podiumsWhenPicked} team podium${z.podiumsWhenPicked === 1 ? '' : 's'} when picked.` : 'not signed up this round.'}</div>` : ''}
+      ${teams.zrl ? `<div style="font-size:13px;margin-top:4px"><b>Teams:</b> ${[teams.zrl.teams && teams.zrl.teams.length ? 'ZRL ' + teams.zrl.teams.join(', ') : '', (teams.ladder || []).length ? 'Ladder ' + teams.ladder.join(', ') : '', (teams.drs || []).length ? 'DIRT ' + teams.drs.join(', ') : ''].filter(Boolean).map(E).join(' · ') || 'none'}</div>` : ''}
+      ${r.setup && (r.setup.trainer || r.setup.bike || r.setup.note) ? `<div style="font-size:13px;margin-top:4px"><b>Set-up on file:</b> ${[r.setup.trainer && 'trainer ' + r.setup.trainer, r.setup.bike && 'bike ' + r.setup.bike].filter(Boolean).map(E).join(' · ')}${r.setup.note ? `<div style="color:#9ca3af">Note: ${E(r.setup.note)}</div>` : ''}</div>` : ''}
+      ${flags ? `<div class="lbl" style="margin-top:8px">Fair play items</div>${flags}` : ''}${others ? `<div class="lbl" style="margin-top:8px">Other cases for this rider</div>${others}` : ''}</details>
+      <div class="card" style="padding:14px 16px;margin-bottom:12px"><div class="lbl">Ask about this case</div><div style="font-size:12px;color:#8b95a5;margin-bottom:6px">For example: what changed in the last month? Could the weight and power numbers fit together? ${aiOn ? '' : '(needs the AI switched on)'}</div>
+        ${asks.filter(a => a.id === cur.id).map(a => `<div style="margin:6px 0"><div style="font-size:12px;color:#8b95a5">You: ${E(a.q)}</div><div style="font-size:13px;white-space:pre-wrap;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.05)">${E(a.a)}</div></div>`).join('')}
+        <div style="display:flex;gap:6px"><input id="inv-q" class="inp" maxlength="500" placeholder="Ask a question about this case…" ${aiOn ? '' : 'disabled'} onkeydown="if(event.key==='Enter')invAsk()" style="flex:1"/><button type="button" style="${btn}" ${aiOn && busy !== 'ask' ? '' : 'disabled'} onclick="invAsk()">${busy === 'ask' ? 'Thinking…' : 'Ask'}</button></div><div style="font-size:11px;color:#8b95a5;margin-top:4px">An AI answers from the numbers only, without the rider's name. It can be wrong: check it against the figures.</div></div>`;
+  }
+  async function loadRider() {
+    if (!cur) return; const z = cur.zwid; if (riderFor === z && rider) return;
+    try { rider = (await api('/api/inv/rider?zwid=' + encodeURIComponent(z))).rider; riderFor = z; } catch (e) { rider = null; riderFor = ''; }
+    const box = document.getElementById('inv-rider-data'); if (box && cur && cur.zwid === z) box.innerHTML = riderCard(cur);
+  }
   const msg = t => { const m = document.getElementById('inv-msg'); if (m) m.textContent = t; };
+  window.invAsk = async () => {
+    const q = document.getElementById('inv-q').value.trim(); if (!q || !cur) return;
+    busy = 'ask'; render();
+    try { const r = await api('/api/inv/ask', { id: cur.id, question: q }); asks.push({ id: cur.id, q, a: r.answer }); } catch (e) { alert(e.message); }
+    busy = ''; render();
+  };
   window.invLoad = load;
   window.invOpen = async id => { try { cur = (await api('/api/inv/case?id=' + encodeURIComponent(id))).case; render(); } catch (e) { alert(e.message); } };
   window.invBack = () => { cur = null; load(); };

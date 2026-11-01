@@ -480,7 +480,7 @@
   async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
 
   window.uiLineupCard = lineupCard; window.uiResultsCard = resultsCard; window.uiStaffTrend = staffTrend; window.uiProfileCharts = profileCharts; window.uiSeasonQuick = seasonQuick;
-  window.uiPostCardPng = postCardPng; window.uiRingSmall = ringSmall; window.uiRadar = radar;
+  window.uiMini = mini; window.uiPostCardPng = postCardPng; window.uiRingSmall = ringSmall; window.uiRadar = radar;
   window.uiPreset = preset; window.uiPin = pin; window.uiAvatarSet = avatarSet; window.uiEmpty = empty; window.uiMonthBox = monthBox; window.uiCalendarInto = calendarInto;
   window.uiPodium = podium; window.uiPointsChart = pointsChart; window.uiSeries = seriesAccent; window.uiLogin = afterLogin;
   window.uiSet = set; window.uiToggle = toggle; window.uiMove = move; window.uiReset = reset; window.uiClose = close; window.uiOpen = open; window.uiSaveClub = saveClub;
