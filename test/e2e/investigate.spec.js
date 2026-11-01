@@ -116,3 +116,38 @@ test('staff see the weekly report, the quiet riders with a draft button, and the
   await page.getByRole('button', { name: /Write the story/ }).click();
   await expect(page.locator('#staff-ai textarea[aria-label="The club story"]')).toHaveValue('Our season so far…');
 });
+
+test('a rider chooses whether to be featured, and the studio lets staff read, change and approve a post and copy the hand-posted ones', async ({ page, baseURL }) => {
+  let on = false, saved = null;
+  const post = { id: 'p1', kind: 'manual', headline: 'Sunday social ride', status: 'pending', createdAt: '2026-11-01T09:00:00Z', via: 'ai', named: [], imageId: '', results: {}, channels: [],
+    variants: { discord: 'Social ride Sunday 9am! All welcome.', telegram: 'T', bluesky: 'B', facebook: 'F', instagram: 'I', hook: 'H', whatsapp: 'Social ride Sunday 9am, all welcome', strava: 'S', website: { title: 'Sunday social ride', body: 'Come along.' }, email: { subject: 'Sunday social ride', body: 'Come along.' } } };
+  const channels = ['discord', 'website', 'telegram', 'bluesky', 'facebook', 'instagram', 'hook'].map(id => ({ id, label: id[0].toUpperCase() + id.slice(1), type: 'app', configured: id !== 'instagram', enabled: id !== 'instagram' })).concat([{ id: 'whatsapp', label: 'WhatsApp', type: 'manual', configured: true, enabled: true }, { id: 'strava', label: 'Strava', type: 'manual', configured: true, enabled: true }, { id: 'email', label: 'Email', type: 'manual', configured: false, enabled: true }]);
+  await page.route('**/api/studio/feature', r => { if (r.request().method() === 'POST') on = JSON.parse(r.request().postData()).on; r.fulfill({ json: { on } }); });
+  await page.route('**/api/studio', r => r.fulfill({ json: { posts: [post], channels, settings: { paused: false, voice: 'v', hashtags: '#x', websiteStatus: 'draft', dailyLimit: 3, autoKinds: [], disabled: [], stravaUrl: 'https://www.strava.com/clubs/1' }, aiOn: true, kinds: [{ id: 'week_ahead', label: 'This week' }], stravaUrl: 'https://www.strava.com/clubs/1' } }));
+  await page.route('**/api/studio/edit', r => { saved = JSON.parse(r.request().postData()); r.fulfill({ json: { post } }); });
+  await page.route('**/api/studio/approve', r => { saved = { ...saved, approve: JSON.parse(r.request().postData()) }; r.fulfill({ json: { post: { ...post, status: 'posted', results: { discord: { ok: true }, telegram: { ok: false, error: 'chat not found' } } } } }); });
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: /My Profile/ }).click();
+  await expect(page.locator('#prof-feature')).toContainText('OK to feature me by name');
+  await expect(page.locator('#prof-feature input')).not.toBeChecked();
+  await page.locator('#prof-feature input').check();
+  await expect.poll(() => on).toBe(true);
+  // Staff view.
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  await page.evaluate(t => { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); }, tok);
+  await page.reload(); await page.evaluate(() => launchApp('admin'));
+  await page.locator('#nav-studio').click();
+  await expect(page.locator('#studio-content')).toContainText('Sunday social ride');
+  await expect(page.locator('#studio-content')).toContainText('written by AI');
+  await expect(page.locator('#studio-content')).toContainText('Instagram (not set up)');
+  await expect(page.locator('#studio-content')).toContainText('no riders named');
+  await page.locator('#studio-content summary', { hasText: 'Read and change the wording' }).click();
+  await page.locator('textarea[data-c="telegram"]').fill('Telegram version');
+  page.once('dialog', d => d.accept());
+  await page.getByRole('button', { name: /Approve and post/ }).click();
+  await expect(page.locator('#studio-content')).toContainText('✓ Discord'); await expect(page.locator('#studio-content')).toContainText('✗ Telegram: chat not found');
+  expect(saved.variants.telegram).toBe('Telegram version'); expect(saved.approve.channels).toEqual(['discord', 'website', 'telegram', 'bluesky', 'hook']);
+  expect(await page.locator('a', { hasText: 'Open WhatsApp' }).getAttribute('href')).toContain('https://wa.me/?text=Social%20ride%20Sunday');
+  await expect(page.getByRole('link', { name: 'Open the Strava club' })).toHaveAttribute('href', 'https://www.strava.com/clubs/1');
+});

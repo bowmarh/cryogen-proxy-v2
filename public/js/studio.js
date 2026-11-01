@@ -78,8 +78,9 @@
     const chs = [...document.querySelectorAll(`[data-pick="${id}"]:checked`)].map(x => x.value);
     if (!chs.length) { alert('Tick at least one platform.'); return; }
     if (!confirm(`Post this to ${chs.length} platform${chs.length === 1 ? '' : 's'} now?`)) return;
+    const variants = collect(id);   // read the boxes before the page is drawn again, or the changes would be lost
     busy = id; render();
-    try { await api('/api/studio/edit', { id, variants: collect(id) }); refresh((await api('/api/studio/approve', { id, channels: chs })).post); } catch (e) { alert(e.message); }
+    try { await api('/api/studio/edit', { id, variants }); refresh((await api('/api/studio/approve', { id, channels: chs })).post); } catch (e) { alert(e.message); }
     busy = ''; render();
   };
   window.studioReject = async id => { try { refresh((await api('/api/studio/reject', { id })).post); } catch (e) { alert(e.message); } };

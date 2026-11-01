@@ -208,6 +208,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
       <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
       <button class="navbtn" id="nav-fair" style="display:none" onclick="showTab('fair',this)">🔎 Fair play</button>
+ <button class="navbtn" id="nav-studio" style="display:none" onclick="showTab('studio',this)">📣 Studio</button>
       <button class="navbtn" id="nav-inv" style="display:none" onclick="showTab('inv',this)">🕵️ Investigations</button>
       <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
     </nav>
@@ -356,6 +357,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
   </div>
 
   <div id="page-fair" class="page"><div id="fair-content"></div></div>
+  <div id="page-studio" class="page"><div id="studio-content"></div></div>
   <div id="page-inv" class="page"><div id="inv-content"></div></div>
   <div id="page-coach" class="page"><div id="coach-content"></div></div>
 
@@ -1838,7 +1840,7 @@ function setupRole(){
     }
     document.getElementById('nav-upgrade').style.display='flex';
   }
-  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-inv').style.display='flex'; }
+  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
@@ -1865,6 +1867,7 @@ function showTab(id,btn){
   if(id==='comms')loadComms();
   if(id==='fair')loadFair();
   if(id==='inv'&&window.invLoad)invLoad();
+  if(id==='studio'&&window.studioLoad)studioLoad();
   if(id==='coach'&&window.coachOpen)coachOpen();
   if(window.uiSeries) uiSeries(id);
 }
@@ -3602,6 +3605,7 @@ function renderProfile(){
     <div id="my-ttt" style="margin-bottom:24px"></div>
     <div id="my-zrl" style="margin-bottom:24px"></div>
     <div id="my-rides" style="margin-bottom:24px"></div>
+    <div id="prof-feature" style="margin-bottom:16px"></div>
     <div id="prof-charts" style="margin-bottom:24px"></div>
 
     <div class="stat4" style="margin-bottom:24px">
@@ -3649,6 +3653,7 @@ function renderProfile(){
   ;
   fillDiscordSlots(); fillCalSlots(); fillPushSlots();
   if(window.uiProfileCharts) uiProfileCharts(document.getElementById('prof-charts'),pow,role==='member');
+  if(role==='member'&&window.studioFeatureCard) studioFeatureCard(document.getElementById('prof-feature'));
   loadMySeason();
   loadMyTtt();
   loadMyZrl();
@@ -5298,6 +5303,7 @@ if(role && !ssoToken){
 <script src="/js/coach.js"></script>
 <script src="/js/support.js"></script>
 <script src="/js/aistaff.js"></script>
+<script src="/js/studio.js"></script>
 <script src="/js/ui.js"></script>
 </body>
 </html>
