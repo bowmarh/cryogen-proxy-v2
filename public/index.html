@@ -3602,21 +3602,23 @@ function renderProfile(){
     <div id="my-ttt" style="margin-bottom:24px"></div>
     <div id="my-zrl" style="margin-bottom:24px"></div>
     <div id="my-rides" style="margin-bottom:24px"></div>
+    <div id="prof-charts" style="margin-bottom:24px"></div>
 
     <div class="stat4" style="margin-bottom:24px">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:8px">FTP</div><div style="font-size:22px;font-weight:900;color:var(--accent)">${r.ftp}w</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.wkg} w/kg @ 20min</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:8px">Races</div><div style="font-size:22px;font-weight:900">${r.finishes||'—'}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.dnfs||0} DNFs</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">Wins</div><div style="font-size:22px;font-weight:900;color:#10B981">${r.wins||0}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.finishes?Math.round(r.wins/r.finishes*100):0}% win rate</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#FBBF24;margin-bottom:8px">Podiums</div><div style="font-size:22px;font-weight:900;color:#FBBF24">${r.podiums||0}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.finishes?Math.round(r.podiums/r.finishes*100):0}% podium rate</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">Wins</div><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:22px;font-weight:900;color:#10B981">${r.wins||0}</div>${window.uiRingSmall?uiRingSmall(r.finishes?r.wins/r.finishes:0,'#10B981','Win rate'):''}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.finishes?Math.round(r.wins/r.finishes*100):0}% win rate</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#FBBF24;margin-bottom:8px">Podiums</div><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:22px;font-weight:900;color:#FBBF24">${r.podiums||0}</div>${window.uiRingSmall?uiRingSmall(r.finishes?r.podiums/r.finishes:0,'#FBBF24','Podium rate'):''}</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">${r.finishes?Math.round(r.podiums/r.finishes*100):0}% podium rate</div></div>
     </div>
 
     <div class="grid2" style="margin-bottom:20px">
       <div class="card" style="padding:20px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:16px">Rider Phenotype Scores</div>
+        ${window.uiRadar?uiRadar(phItems):''}
         ${phItems.map(([lbl,val,col])=>`
           <div class="pbar-wrap">
             <div class="pbar-label"><span>${lbl}</span><span style="color:${col};font-weight:700">${val.toFixed(1)}</span></div>
-            <div class="pbar"><div class="pbar-fill" style="width:${val}%;background:${col}"></div></div>
+            <div class="pbar"><div class="pbar-fill" style="width:${Math.min(100,Math.round(val/Math.max(...phItems.map(x=>x[1]),1)*100))}%;background:${col}"></div></div>
           </div>`).join('')}
         <div style="margin-top:12px;font-size:11px;color:#7b8494">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
       </div>
@@ -3646,7 +3648,7 @@ function renderProfile(){
     <div class="cal-slot" style="margin-top:16px"></div>`
   ;
   fillDiscordSlots(); fillCalSlots(); fillPushSlots();
-  { const host=document.getElementById('profile-content'); const box=document.createElement('div'); box.id='prof-charts'; const first=host.querySelector('.card'); if(first) first.after(box); else host.prepend(box); if(window.uiProfileCharts) uiProfileCharts(box,pow,role==='member'); }
+  if(window.uiProfileCharts) uiProfileCharts(document.getElementById('prof-charts'),pow,role==='member');
   loadMySeason();
   loadMyTtt();
   loadMyZrl();

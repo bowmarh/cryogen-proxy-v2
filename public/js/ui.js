@@ -439,7 +439,7 @@
     const pts = [['5s', pow.wkg5], ['15s', pow.wkg15], ['30s', pow.wkg30], ['1m', pow.wkg60], ['5m', pow.wkg300], ['20m', pow.wkg1200]].map(([l, v]) => [l, Number(v) || 0]);
     const W = 300, H = 110, max = Math.max(...pts.map(p => p[1]), 1);
     const xy = pts.map((p, i) => [Math.round(10 + i / (pts.length - 1) * (W - 20)), Math.round(H - 22 - p[1] / max * (H - 40))]);
-    const curve = pts.some(p => p[1]) ? `<div style="flex:2;min-width:240px"><div class="lbl">Power curve (W/kg)</div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Power curve: ${pts.map(p => p[0] + ' ' + p[1].toFixed(2)).join(', ')}"><path d="${xy.map((q, i) => (i ? 'L' : 'M') + q[0] + ' ' + q[1]).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${xy.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="var(--accent)"/><text x="${q[0]}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#8b95a5">${pts[i][0]}</text>`).join('')}</svg></div>` : '';
+    const curve = pts.some(p => p[1]) ? `<div style="flex:2;min-width:240px"><div class="lbl">Power curve (W/kg)</div><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:420px" role="img" aria-label="Power curve: ${pts.map(p => p[0] + ' ' + p[1].toFixed(2)).join(', ')}"><path d="${xy.map((q, i) => (i ? 'L' : 'M') + q[0] + ' ' + q[1]).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${xy.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="var(--accent)"/><text x="${q[0]}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#8b95a5">${pts[i][0]}</text>`).join('')}</svg></div>` : '';
     let velo = '';
     if (own) { try { const r = await fetch('/api/me/velo', { headers: tttHeaders() }); if (r.ok) velo = mini((await r.json()).history.map(x => x.v), 'My vELO', '#10B981'); } catch (e) { /* the curve still shows */ } }
     el.innerHTML = curve || velo ? `<div class="card" style="padding:16px;margin-bottom:16px"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">${curve}${velo}</div></div>` : '';
@@ -461,10 +461,26 @@
     const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
     return btoa(bin);
   }
+
+  // ── Small pictures: a ring for a rate, and a radar for the five rider types ──
+  function ringSmall(frac, color, label) {
+    const R = 15, C = 2 * Math.PI * R, f = Math.max(0, Math.min(1, frac || 0));
+    return `<svg viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="${esc(label)}: ${Math.round(f * 100)}%"><circle cx="20" cy="20" r="${R}" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle cx="20" cy="20" r="${R}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(f * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 20 20)"/></svg>`;
+  }
+  // items: [[label, value, colour], ...]; the biggest value reaches the edge so the shape shows what kind of rider this is.
+  function radar(items) {
+    const n = items.length; if (n < 3) return '';
+    const max = Math.max(...items.map(x => x[1]), 1), cx = 110, cy = 100, R = 70, pt = (i, f) => [cx + Math.sin(i / n * 2 * Math.PI) * R * f, cy - Math.cos(i / n * 2 * Math.PI) * R * f];
+    const ring = f => items.map((_, i) => pt(i, f).map(v => v.toFixed(1)).join(',')).join(' ');
+    const shape = items.map((x, i) => pt(i, Math.max(0.08, x[1] / max)).map(v => v.toFixed(1)).join(',')).join(' ');
+    const labels = items.map((x, i) => { const [lx, ly] = pt(i, 1.28), a = lx < cx - 5 ? 'end' : lx > cx + 5 ? 'start' : 'middle'; return `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${a}" font-size="9" fill="${x[2]}" font-weight="700">${esc(x[0])}</text>`; }).join('');
+    return `<svg viewBox="-40 0 300 200" width="100%" style="max-width:340px;display:block;margin:0 auto 10px" role="img" aria-label="Rider type: ${items.map(x => x[0] + ' ' + Math.round(x[1])).join(', ')}">${[0.33, 0.66, 1].map(f => `<polygon points="${ring(f)}" fill="none" stroke="rgba(255,255,255,.12)"/>`).join('')}${items.map((_, i) => { const [x, y] = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.1)"/>`; }).join('')}<polygon points="${shape}" fill="var(--accent)" fill-opacity=".28" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>${labels}</svg>`;
+  }
   // Called once a rider is signed in: avatars, pinned pages, charts.
   async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
 
   window.uiLineupCard = lineupCard; window.uiResultsCard = resultsCard; window.uiStaffTrend = staffTrend; window.uiProfileCharts = profileCharts; window.uiSeasonQuick = seasonQuick;
+  window.uiRingSmall = ringSmall; window.uiRadar = radar;
   window.uiPreset = preset; window.uiPin = pin; window.uiAvatarSet = avatarSet; window.uiEmpty = empty; window.uiMonthBox = monthBox; window.uiCalendarInto = calendarInto;
   window.uiPodium = podium; window.uiPointsChart = pointsChart; window.uiSeries = seriesAccent; window.uiLogin = afterLogin;
   window.uiSet = set; window.uiToggle = toggle; window.uiMove = move; window.uiReset = reset; window.uiClose = close; window.uiOpen = open; window.uiSaveClub = saveClub;
