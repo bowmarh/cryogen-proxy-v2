@@ -444,6 +444,23 @@
     if (own) { try { const r = await fetch('/api/me/velo', { headers: tttHeaders() }); if (r.ok) velo = mini((await r.json()).history.map(x => x.v), 'My vELO', '#10B981'); } catch (e) { /* the curve still shows */ } }
     el.innerHTML = curve || velo ? `<div class="card" style="padding:16px;margin-bottom:16px"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">${curve}${velo}</div></div>` : '';
   }
+
+  // A square picture for a post (Instagram needs one): the headline and a few lines on the club colours, as base64 PNG for the studio.
+  async function postCardPng(title, lines) {
+    const W = 1080, c = document.createElement('canvas'); c.width = W; c.height = W; const g = c.getContext('2d'), a = accentNow();
+    const bg = g.createLinearGradient(0, 0, W, W); bg.addColorStop(0, '#060a14'); bg.addColorStop(1, '#10203a'); g.fillStyle = bg; g.fillRect(0, 0, W, W);
+    g.fillStyle = a; g.fillRect(0, 0, W, 16); g.textAlign = 'left';
+    g.font = '700 38px system-ui,sans-serif'; g.fillText('TEAM CRYO-GEN', 80, 120);
+    g.fillStyle = '#fff'; g.font = '800 78px system-ui,sans-serif';
+    const wrap = (t, max, font) => { g.font = font; const words = String(t).split(/\s+/), out = []; let cur = ''; for (const w of words) { if (g.measureText((cur + ' ' + w).trim()).width > max && cur) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); return out; };
+    let y = 240; for (const l of wrap(title, 920, '800 78px system-ui,sans-serif').slice(0, 3)) { g.fillText(l, 80, y); y += 92; }
+    y += 20; g.font = '500 44px system-ui,sans-serif'; g.fillStyle = '#d1d5db';
+    for (const line of (lines || []).slice(0, 6)) for (const l of wrap(line, 920, '500 44px system-ui,sans-serif').slice(0, 2)) { if (y > 940) break; g.fillText(l, 80, y); y += 60; }
+    g.fillStyle = '#7b8494'; g.font = '500 30px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 80, 1020);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png')); if (!blob) throw new Error('Could not draw the picture.');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
   // Called once a rider is signed in: avatars, pinned pages, charts.
   async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
 
