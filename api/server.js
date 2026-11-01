@@ -2718,11 +2718,11 @@ const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFro
   } });
 const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const support = require('../lib/support')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
+const ai = require('../lib/ai')({ redis, HttpError, support });
 const avatars = require('../lib/avatars')({ redis, HttpError, memberFromRequest, roleFromRequest, supporters: () => support.activeIds() });
 const fairplay = require('../lib/fairplay')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, activeMembers, discord, siteUrl: SITE_URL });
 const fitAnalysis = require('../lib/fitanalysis');
-const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh });
-const ai = require('../lib/ai')({ redis, HttpError, support });
+const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh, profile: { routes: { 'GET /api/profile': (...a) => profile.routes['GET /api/profile'](...a) } }, zrl, ai });
 const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse,
   clubData: () => publicClub(Date.now()), seasonOf: m => seasonOf(m) });
 // The AI messages that go to riders on their own (Monday plans, race-day briefings) and the AI drafts for the staff.
@@ -2731,7 +2731,7 @@ const asMember = (zwid, name) => ({ headers: { authorization: `Bearer ${signToke
 const wpSite = () => process.env.WP_SITE_URL || new URL(WP_API).origin;
 const studio = require('../lib/studio')({ redis, HttpError, requireRole, memberFromRequest, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), ai, fetchRoster, zrl, ladder, drs, adminReq: () => syncReq(), publicClub: now => publicClub(now), discord, siteUrl: SITE_URL,
   weekInfo: async now => { const w = await week.build(syncReq(), now, 'admin').catch(() => ({ newMembers: [] })); return { newMembers: (w.newMembers || []).length }; },
-  wp: { ready: () => !!wpAuth(), post: async body => {
+  wp: { ready: () => !!wpAuth(), me: async () => { const r = await fetch(`${wpSite()}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: `Basic ${Buffer.from(wpAuth()).toString('base64')}` }, signal: AbortSignal.timeout(15000) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${r.status} ${String(d.message || '').slice(0, 120)}`.trim()); return d; }, post: async body => {
     const r = await fetch(`${wpSite()}/wp-json/wp/v2/posts`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Basic ${Buffer.from(wpAuth()).toString('base64')}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
     const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${r.status} ${String(d.message || '').slice(0, 120)}`.trim()); return d;
   } } });

@@ -151,3 +151,43 @@ test('a rider chooses whether to be featured, and the studio lets staff read, ch
   expect(await page.locator('a', { hasText: 'Open WhatsApp' }).getAttribute('href')).toContain('https://wa.me/?text=Social%20ride%20Sunday');
   await expect(page.getByRole('link', { name: 'Open the Strava club' })).toHaveAttribute('href', 'https://www.strava.com/clubs/1');
 });
+
+async function asAdmin(page, baseURL) {
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
+}
+
+test('Studio: what you type is kept when you press Draft it, an empty box is told what to do, and the set-up guide tests a platform in plain words', async ({ page, baseURL }) => {
+  await asAdmin(page, baseURL);
+  await page.locator('#nav-studio').click();
+  let dialog = ''; page.on('dialog', d => { dialog = d.message(); d.accept(); });
+  await page.getByRole('button', { name: 'Draft it' }).click();
+  await expect.poll(() => dialog).toContain('Type what the post is about first');
+  await page.locator('#st-title').fill('Social ride');
+  await page.locator('#st-brief').fill('Social ride Sunday 9am, all welcome');
+  await page.getByRole('button', { name: 'Draft it' }).click();
+  await expect(page.locator('#studio-content')).toContainText('Social ride', { timeout: 15000 });
+  await expect(page.locator('#studio-content')).toContainText('plain draft');
+  await expect(page.locator('#studio-content')).toContainText('no riders named');
+  // The guide.
+  await expect(page.locator('#studio-content')).toContainText('Set up each platform');
+  await page.locator('#studio-content summary', { hasText: /^Telegram/ }).click();
+  await expect(page.locator('#studio-content')).toContainText('@BotFather');
+  await expect(page.locator('#studio-content')).toContainText('TELEGRAM_BOT_TOKEN');
+  await page.locator('#studio-content details[open] button', { hasText: 'Test the connection' }).click();
+  await expect(page.locator('#studio-content div[role=status]')).toContainText('Not working yet');
+  await expect(page.locator('#studio-content div[role=status]')).toContainText('not set yet');
+  await expect(page.locator('#studio-content div[role=status]')).toContainText('Redeploy');
+});
+
+test('an investigation shows everything the club holds about the rider and lets staff ask about the case', async ({ page, baseURL }) => {
+  await asAdmin(page, baseURL);
+  await page.locator('#nav-inv').click();
+  await page.locator('#inv-rider').fill('Rider 2 (1002)'); await page.locator('#inv-title').fill('All the data');
+  await page.getByRole('button', { name: 'Open the file' }).click();
+  await expect(page.locator('#inv-rider-data')).toContainText('Everything the club holds on this rider', { timeout: 15000 });
+  await expect(page.locator('#inv-rider-data')).toContainText('Registered weight');
+  await expect(page.locator('#inv-rider-data')).toContainText('Ask about this case');
+  await expect(page.locator('#inv-q')).toBeDisabled();   // no AI key in the test server
+});

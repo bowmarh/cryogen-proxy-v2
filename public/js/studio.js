@@ -20,13 +20,14 @@
 
   function settingsBox() {
     const s = d.settings, chk = (name, on, label) => `<label style="font-size:12px;margin-right:12px"><input type="checkbox" data-s="${name}" ${on ? 'checked' : ''}/> ${E(label)}</label>`;
-    return `<details class="card" style="padding:10px 16px;margin-bottom:12px"><summary style="cursor:pointer;font-size:13px">⚙️ Settings ${s.paused ? '<b style="color:#FBBF24">· paused</b>' : ''}</summary>
+    return `<details class="card" style="padding:10px 16px;margin-bottom:12px"><summary style="cursor:pointer;font-size:13px">⚙️ Settings ${s.paused ? '<b style="color:#FBBF24">· paused</b>' : !s.enabled ? '<b style="color:#FBBF24">· automatic drafting is off: open this and tick the first box to switch it on</b>' : ''}</summary>
       <div style="margin-top:8px;display:grid;gap:8px"><label style="font-size:12px;color:#9ca3af">The club's voice<textarea id="st-voice" class="inp" rows="2" maxlength="400">${E(s.voice)}</textarea></label>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px"><label style="font-size:12px;color:#9ca3af">Hashtags<input id="st-tags" class="inp" value="${E(s.hashtags)}"/></label><label style="font-size:12px;color:#9ca3af">Posts a day per platform<input id="st-limit" class="inp" type="number" min="1" max="20" value="${E(s.dailyLimit)}"/></label>
       <label style="font-size:12px;color:#9ca3af">Website posts are<select id="st-web" class="inp"><option value="draft" ${s.websiteStatus === 'draft' ? 'selected' : ''}>saved as a draft</option><option value="publish" ${s.websiteStatus === 'publish' ? 'selected' : ''}>published at once</option></select></label>
       <label style="font-size:12px;color:#9ca3af">Strava club address<input id="st-strava" class="inp" placeholder="https://www.strava.com/clubs/…" value="${E(s.stravaUrl)}"/></label></div>
       <div><div class="lbl">Post these kinds automatically, without approval</div>${d.kinds.map(k => chk('auto:' + k.id, s.autoKinds.includes(k.id), k.label)).join('')}</div>
       <div><div class="lbl">Platforms switched off</div>${d.channels.map(c => chk('off:' + c.id, s.disabled.includes(c.id), c.label)).join('')}</div>
+      ${chk('enabled', s.enabled, 'Draft posts automatically from what happens in the club (results, Monday posts, milestones, the Thursday tip). Writing a post by hand always works.')}<br>
       ${chk('paused', s.paused, 'Pause everything (nothing is drafted or posted)')}
       <div><button type="button" style="${btn}" onclick="studioSave()">Save settings</button> <span id="st-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div></div></details>`;
   }
@@ -60,10 +61,34 @@
     el.innerHTML = `<h2 style="font-size:20px;font-weight:900;margin-bottom:4px">📣 Comms Studio</h2><p style="font-size:13px;color:#8b95a5;margin-bottom:10px">Posts the club has drafted from what is happening. Nothing goes out until you approve it, unless you switch a kind to automatic.</p>
       <div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap">${chips}</div>
       ${role === 'admin' ? settingsBox() : ''}
-      <div class="card" style="padding:12px 16px;margin-bottom:12px"><div class="lbl">Write a post</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="st-title" class="inp" placeholder="Title (optional)" style="flex:1;min-width:160px"/><input id="st-brief" class="inp" placeholder="What is it about? e.g. Social ride Sunday 9am, all welcome" style="flex:3;min-width:240px" onkeydown="if(event.key==='Enter')studioDraft()"/><button type="button" class="btn-cyan" style="width:auto;padding:0 16px" ${busy === 'draft' ? 'disabled' : ''} onclick="studioDraft()">${busy === 'draft' ? 'Writing…' : 'Draft it'}</button></div>${d.aiOn ? '' : '<div style="font-size:11px;color:#FBBF24;margin-top:4px">The AI is off, so drafts are plain.</div>'}</div>
+      <div class="card" style="padding:12px 16px;margin-bottom:12px"><div class="lbl">Write a post</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="st-title" class="inp" placeholder="Title (optional)" value="${E(typed.title)}" style="flex:1;min-width:160px"/><input id="st-brief" class="inp" placeholder="What is it about? e.g. Social ride Sunday 9am, all welcome" value="${E(typed.brief)}" style="flex:3;min-width:240px" onkeydown="if(event.key==='Enter')studioDraft()"/><button type="button" class="btn-cyan" style="width:auto;padding:0 16px" ${busy === 'draft' ? 'disabled' : ''} onclick="studioDraft()">${busy === 'draft' ? 'Writing…' : 'Draft it'}</button></div>${d.aiOn ? '' : '<div style="font-size:11px;color:#FBBF24;margin-top:4px">The AI is off, so drafts are plain.</div>'}</div>
       ${d.posts.length ? d.posts.map(card).join('') : (window.uiEmpty ? uiEmpty('📣', 'Nothing to approve yet', 'Posts appear here after a result is entered, every Monday morning, or when you write one above.', '', '') : 'Nothing yet.')}
-      <details class="card" style="padding:10px 16px"><summary style="cursor:pointer;font-size:12px;color:#8b95a5">How to connect the platforms (keys go in Vercel)</summary><ul style="margin:8px 0 0 18px;font-size:12px;color:#9ca3af"><li><b>Website:</b> works with the WordPress login already set up, if that user may publish posts.</li><li><b>Telegram:</b> TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.</li><li><b>Bluesky:</b> BLUESKY_HANDLE and BLUESKY_APP_PASSWORD (an app password, not your own).</li><li><b>Facebook and Instagram:</b> a Zapier or Make webhook for each: STUDIO_HOOK_FACEBOOK, STUDIO_HOOK_INSTAGRAM (Instagram needs the picture card). STUDIO_HOOK_OTHER gets everything, STUDIO_HOOK_EMAIL sends email.</li><li><b>WhatsApp and Strava:</b> they do not let apps post, so the studio gives you the text to copy.</li></ul></details>`;
+      ${guideHtml()}`;
   }
+
+  // ── The set-up guide, with a test button on each platform ──
+  let tests = {}, openGuide = {};
+  window.studioGuideOpen = (id, on) => { openGuide[id] = on; };
+  function guideHtml() {
+    const chan = id => d.channels.find(c => c.id === id) || {};
+    const rows = (d.guide || []).map(g => {
+      const c = chan(g.id), ok = g.id === 'whatsapp' || g.id === 'strava' ? null : g.missing.length === 0 && (g.env.length || c.configured);
+      const badge = ok === null ? '<span class="badge" style="background:rgba(255,255,255,.07);color:#9ca3af">by hand</span>' : ok ? '<span class="badge" style="background:rgba(16,185,129,.15);color:#34d399">keys added</span>' : '<span class="badge" style="background:rgba(251,191,36,.15);color:#FBBF24">not set up</span>';
+      const t = tests[g.id];
+      return `<details class="card" ${openGuide[g.id] ? 'open' : ''} ontoggle="studioGuideOpen('${g.id}',this.open)" style="padding:10px 14px;margin-bottom:8px"><summary style="cursor:pointer;font-size:14px;font-weight:700">${E(g.title)} ${badge} <span style="font-size:11px;font-weight:500;color:#8b95a5">· ${E(g.how)}${g.minutes ? ` · about ${g.minutes} min` : ''}</span></summary>
+        <div style="font-size:13px;color:#d1d5db;margin:8px 0">${E(g.summary)}</div>
+        ${g.env.length ? `<div style="margin:6px 0"><div class="lbl">The values to add in Vercel (the Name, exactly)</div>${g.env.map(n => `<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><code style="padding:3px 8px;background:rgba(255,255,255,.07);border-radius:6px;font-size:12px">${E(n)}</code>${g.missing.includes(n) ? '<span style="font-size:11px;color:#FBBF24">not set</span>' : '<span style="font-size:11px;color:#34d399">set ✓</span>'}<button type="button" style="${btn};padding:2px 8px" onclick="navigator.clipboard&&navigator.clipboard.writeText('${E(n)}')">Copy name</button></div>`).join('')}</div>` : ''}
+        <ol style="margin:8px 0 8px 20px;font-size:13px;color:#e5e7eb;line-height:1.55">${g.steps.map(x => `<li style="margin-bottom:6px">${E(x)}</li>`).join('')}</ol>
+        ${g.env.length ? `<details style="margin:6px 0"><summary style="cursor:pointer;font-size:12px;color:#9ca3af">How to add a value in Vercel (every key needs this)</summary><ol style="margin:6px 0 0 20px;font-size:12px;color:#d1d5db;line-height:1.5">${(d.vercel || []).map(x => `<li style="margin-bottom:4px">${E(x)}</li>`).join('')}</ol></details>` : ''}
+        ${role === 'admin' && g.id !== 'whatsapp' && g.id !== 'strava' ? `<div style="margin-top:8px"><button type="button" class="btn-cyan" style="width:auto;padding:7px 16px;font-size:13px" ${t && t.busy ? 'disabled' : ''} onclick="studioTest('${g.id}')">${t && t.busy ? 'Testing…' : '🔌 Test the connection'}</button>${t && !t.busy ? `<div role="status" style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:13px;background:${t.ok ? 'rgba(16,185,129,.12)' : 'rgba(248,113,113,.12)'}"><b>${t.ok ? '✅ Working.' : '❌ Not working yet.'}</b> ${E(t.detail)}${t.hint ? `<div style="margin-top:4px;color:#FBBF24">${E(t.hint)}</div>` : ''}</div>` : ''}</div>` : ''}</details>`;
+    }).join('');
+    return `<div style="margin-top:16px"><h3 style="font-size:16px;font-weight:800;margin-bottom:4px">🧭 Set up each platform</h3><p style="font-size:12px;color:#8b95a5;margin-bottom:8px">Open a platform and follow the steps in order. Each has a Test button so you know it worked before you rely on it. Start with Telegram or Bluesky: they are the quickest.</p>${rows}</div>`;
+  }
+  window.studioTest = async id => {
+    tests[id] = { busy: true }; render();
+    try { tests[id] = await api('/api/studio/test', { channel: id }); } catch (e) { tests[id] = { ok: false, detail: e.message, hint: '' }; }
+    render();
+  };
   const collect = id => {
     const g = c => { const e = document.querySelector(`[data-p="${id}"][data-c="${c}"]`); return e ? e.value : ''; }, v = {};
     for (const c of ['discord', 'telegram', 'bluesky', 'facebook', 'instagram', 'hook', 'whatsapp', 'strava']) v[c] = g(c);
@@ -72,7 +97,15 @@
   const refresh = p => { d.posts = d.posts.map(x => (x.id === p.id ? p : x)); render(); };
   window.studioLoad = load;
   window.studioOpen = (id, on) => { open[id] = on; };
-  window.studioDraft = async () => { busy = 'draft'; render(); try { const p = (await api('/api/studio/draft', { brief: document.getElementById('st-brief').value, title: document.getElementById('st-title').value })).post; d.posts.unshift(p); open[p.id] = true; } catch (e) { alert(e.message); } busy = ''; render(); };
+  // What was typed is read before the page is drawn again, or the boxes would be empty by the time they are sent.
+  let typed = { title: '', brief: '' };
+  window.studioDraft = async () => {
+    const brief = document.getElementById('st-brief').value.trim(), title = document.getElementById('st-title').value.trim();
+    if (!brief) { alert('Type what the post is about first, for example: Social ride Sunday 9am, all welcome.'); return; }
+    typed = { title, brief }; busy = 'draft'; render();
+    try { const p = (await api('/api/studio/draft', { brief, title })).post; d.posts.unshift(p); open[p.id] = true; typed = { title: '', brief: '' }; } catch (e) { alert(e.message); }
+    busy = ''; render();
+  };
   window.studioSaveEdits = async id => { try { refresh((await api('/api/studio/edit', { id, variants: collect(id) })).post); } catch (e) { alert(e.message); } };
   window.studioApprove = async id => {
     const chs = [...document.querySelectorAll(`[data-pick="${id}"]:checked`)].map(x => x.value);
@@ -92,7 +125,7 @@
   };
   window.studioSave = async () => {
     const q = n => document.querySelector(`[data-s="${n}"]`), kinds = d.kinds.filter(k => q('auto:' + k.id).checked).map(k => k.id), off = d.channels.filter(c => q('off:' + c.id).checked).map(c => c.id);
-    try { await api('/api/studio/settings', { voice: document.getElementById('st-voice').value, hashtags: document.getElementById('st-tags').value, dailyLimit: document.getElementById('st-limit').value, websiteStatus: document.getElementById('st-web').value, stravaUrl: document.getElementById('st-strava').value, autoKinds: kinds, disabled: off, paused: q('paused').checked }); await load(); const m = document.getElementById('st-msg'); if (m) m.textContent = 'Saved.'; } catch (e) { document.getElementById('st-msg').textContent = e.message; }
+    try { await api('/api/studio/settings', { voice: document.getElementById('st-voice').value, hashtags: document.getElementById('st-tags').value, dailyLimit: document.getElementById('st-limit').value, websiteStatus: document.getElementById('st-web').value, stravaUrl: document.getElementById('st-strava').value, autoKinds: kinds, disabled: off, paused: q('paused').checked, enabled: q('enabled').checked }); await load(); const m = document.getElementById('st-msg'); if (m) m.textContent = 'Saved.'; } catch (e) { document.getElementById('st-msg').textContent = e.message; }
   };
   // Riders: "OK to feature me".
   window.studioFeatureCard = async el => {

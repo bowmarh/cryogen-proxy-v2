@@ -18,9 +18,18 @@ beforeEach(async () => {
   delete process.env.STUDIO_HOOK_EMAIL; process.env.DISCORD_WEBHOOK_PUBLIC = process.env.DISCORD_WEBHOOK_PUBLIC || 'http://discord.test/public';
   Object.assign(world, { telegram: [], bsky: [], wpPosts: [], hooks: [], telegramFail: false, bskyFail: false, wpFail: false, hookFail: false, anthropic: { reply: JSON.stringify(DRAFT), status: 200, seen: [] } });
   app.world.db = {}; app.world.discord.length = 0;
+  await app.post('/api/studio/settings', { enabled: true }, admin);
 });
 const draft = async (b = 'Our riders raced well') => (await app.post('/api/studio/draft', { brief: b }, mod)).body.post;
 const png = () => { const b = Buffer.alloc(300); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b); return b.toString('base64'); };
+
+test('automatic drafting is off until an administrator switches it on; writing by hand always works', async () => {
+  await app.post('/api/studio/settings', { enabled: false }, admin);
+  await app.call('GET', '/api/cron/tick', { headers: { Authorization: 'Bearer cron-secret' } });
+  assert.equal((await app.get('/api/studio', admin)).body.posts.length, 0); assert.equal(world.anthropic.seen.length, 0, 'no AI used');
+  assert.equal((await app.get('/api/studio', admin)).body.settings.enabled, false);
+  assert.equal((await app.post('/api/studio/draft', { brief: 'By hand' }, mod)).status, 200);
+});
 
 test('only staff see the studio; a brief becomes a draft for every platform, nothing goes out, and no names reach the model', async () => {
   assert.equal((await app.get('/api/studio')).status, 401);
@@ -50,7 +59,7 @@ test('riders are named only if they opted in, and the club (not the AI) puts the
   const list = (await app.get('/api/studio', admin)).body.posts, p = list.find(x => x.kind === 'ladder_result');
   assert.ok(p, JSON.stringify(list.map(x => x.kind)));
   assert.deepEqual(p.named, ['Club Rider 1']); assert.match(p.variants.discord, /Club Rider 1 was brilliant/); assert.ok(!/Club Rider [02-4]/.test(JSON.stringify(p.variants)));
-  const body = world.anthropic.seen.at(-1).body, sent = JSON.stringify(body), facts = JSON.parse(body.messages[0].content); assert.ok(!/Club Rider/.test(sent), 'no names to the model'); assert.deepEqual(facts.riders, ['R1']); assert.equal(facts.facts.opponent, 'Team Rocket');
+  const body = world.anthropic.seen.find(x => /Ladder result/.test(x.body.messages[0].content)).body, sent = JSON.stringify(body), facts = JSON.parse(body.messages[0].content); assert.ok(!/Club Rider/.test(sent), 'no names to the model'); assert.deepEqual(facts.riders, ['R1']); assert.equal(facts.facts.opponent, 'Team Rocket');
   await app.call('GET', '/api/cron/tick', { headers: { Authorization: 'Bearer cron-secret' } });
   assert.equal((await app.get('/api/studio', admin)).body.posts.filter(x => x.kind === 'ladder_result').length, 1, 'the same result is not posted twice');
 });
@@ -113,13 +122,60 @@ test('on Monday morning the studio finds "this week" and "last week" posts, once
   const store = {}, redis = async cmds => cmds.map(([c, k, ...a]) => { const hh = store[k] = store[k] || {}; if (c === 'GET') return null; if (c === 'HGETALL') return Object.entries(hh).flat(); if (c === 'HSETNX') { if (a[0] in hh) return 0; hh[a[0]] = a[1]; return 1; } if (c === 'HSET') { hh[a[0]] = a[1]; return 1; } if (c === 'SET') return 'OK'; if (c === 'HDEL') { delete hh[a[0]]; return 1; } return null; });
   const mk = () => create({ redis, HttpError: Error, requireRole() {}, memberFromRequest: () => null, ai: { available: async () => false, enabled: () => false, json: () => null }, fetchRoster: async () => ({ riders: [] }),
     zrl: { load: async () => ({ round: null }) }, ladder: { allMatches: async () => [] }, drs: { allStages: async () => [] }, adminReq: () => ({}), discord: async () => true, siteUrl: 'https://club.test',
-    publicClub: async now => ({ next: [{ series: 'ZRL', title: 'Round 2 · race 1', date: '2026-11-03', at: Date.parse('2026-11-03T19:00:00Z') }], ladder: [{ team: 'CRYO-GEN', recent: [{ opponent: 'Rocket', date: '2026-10-29', won: true, score: '40-15' }] }], podium: [{ division: 'Division 1', top: [{ rank: 1, team: 'Alpha', points: 30 }] }] }), weekInfo: async () => ({ newMembers: 2 }) });
+    publicClub: async now => ({ next: [{ series: 'ZRL', title: 'Round 2 · race 1', date: '2026-11-03', at: Date.parse('2026-11-03T19:00:00Z') }], ladder: [{ team: 'CRYO-GEN', recent: [{ opponent: 'Rocket', date: '2026-11-06', won: true, score: '40-15' }] }], podium: [{ division: 'Division 1', top: [{ rank: 1, team: 'Alpha', points: 30 }] }] }), weekInfo: async () => ({ newMembers: 2 }) });
   const studio = mk();
-  assert.deepEqual((await studio.findEvents(Date.parse('2026-11-01T09:00:00Z'))).map(e => e.kind), [], 'not on a Sunday');
-  assert.deepEqual((await studio.findEvents(Date.parse('2026-11-02T06:00:00Z'))).map(e => e.kind), [], 'not before 8');
-  const ev = await studio.findEvents(Date.parse('2026-11-02T09:00:00Z'));
-  assert.deepEqual(ev.map(e => [e.kind, e.key]), [['week_ahead', 'ahead:2026-11-02'], ['week_recap', 'recap:2026-11-02']]);
+  assert.deepEqual((await studio.findEvents(Date.parse('2026-11-08T09:00:00Z'))).map(e => e.kind), [], 'not on a Sunday');
+  assert.deepEqual((await studio.findEvents(Date.parse('2026-11-09T06:00:00Z'))).map(e => e.kind), [], 'not before 8');
+  const ev = await studio.findEvents(Date.parse('2026-11-09T09:00:00Z'));
+  assert.deepEqual(ev.map(e => [e.kind, e.key]), [['week_ahead', 'ahead:2026-11-09'], ['week_recap', 'recap:2026-11-09']]);
   assert.equal(ev[1].facts.newMembersJoined, 2); assert.ok(ev[1].facts.lines.some(l => /Ladder: won 40-15 v Rocket/.test(l)) && ev[1].facts.lines.some(l => /ZRL Division 1: 1\. Alpha/.test(l)));
   const p = await studio.create(ev[0], 'automatic');
   assert.equal(p.via, 'template'); assert.match(p.variants.discord, /Round 2 · race 1/);
+});
+
+test('"Test the connection": says exactly what is missing or wrong in plain words, and what to do', async () => {
+  assert.equal((await app.post('/api/studio/test', { channel: 'telegram' }, mod)).status, 403, 'admin only');
+  assert.equal((await app.post('/api/studio/test', { channel: 'nope' }, admin)).status, 400);
+  const g = (await app.get('/api/studio', admin)).body.guide; assert.deepEqual(g.map(x => x.id), ['telegram', 'bluesky', 'website', 'facebook', 'instagram', 'hook', 'email', 'whatsapp', 'strava', 'discord']);
+  assert.ok(g.every(x => x.steps.length >= 1 && x.minutes >= 0 && x.summary)); assert.ok(g.find(x => x.id === 'telegram').steps.some(s => /BotFather/.test(s)));
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  let r = (await app.post('/api/studio/test', { channel: 'telegram' }, admin)).body;
+  assert.deepEqual([r.ok, r.detail], [false, 'TELEGRAM_BOT_TOKEN is not set yet.']); assert.match(r.hint, /Redeploy/);
+  assert.deepEqual((await app.get('/api/studio', admin)).body.guide.find(x => x.id === 'telegram').missing, ['TELEGRAM_BOT_TOKEN']);
+  process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+  r = (await app.post('/api/studio/test', { channel: 'telegram' }, admin)).body; assert.equal(r.ok, true); assert.equal(world.telegram.length, 1);
+  world.telegramFail = true; r = (await app.post('/api/studio/test', { channel: 'telegram' }, admin)).body;
+  assert.equal(r.ok, false); assert.match(r.hint, /chat ID is wrong, or the bot is not an admin/);
+  r = (await app.post('/api/studio/test', { channel: 'bluesky' }, admin)).body; assert.equal(r.ok, true); assert.equal(world.bsky.length, 0, 'nothing is posted by the test');
+  world.bskyFail = true; r = (await app.post('/api/studio/test', { channel: 'bluesky' }, admin)).body; assert.equal(r.ok, false); assert.match(r.hint, /Copy it again/);
+  r = (await app.post('/api/studio/test', { channel: 'website' }, admin)).body; assert.equal(r.ok, true); assert.match(r.detail, /allowed to write posts/);
+  world.wpNoPosts = true; r = (await app.post('/api/studio/test', { channel: 'website' }, admin)).body; world.wpNoPosts = false;
+  assert.equal(r.ok, false); assert.match(r.hint, /Role to Author, Editor or Administrator/);
+  r = (await app.post('/api/studio/test', { channel: 'facebook' }, admin)).body; assert.equal(r.ok, true); assert.match(r.detail, /Test trigger/);
+  assert.deepEqual([world.hooks.at(-1).body.test, world.hooks.at(-1).body.platform], [true, 'facebook']);
+  delete process.env.STUDIO_HOOK_INSTAGRAM; r = (await app.post('/api/studio/test', { channel: 'instagram' }, admin)).body; assert.match(r.detail, /STUDIO_HOOK_INSTAGRAM is not set/);
+  assert.equal((await app.post('/api/studio/test', { channel: 'whatsapp' }, admin)).body.ok, true);
+  assert.equal((await app.post('/api/studio/test', { channel: 'discord' }, admin)).body.ok, true); assert.ok(app.world.discord.some(d => /Studio test/.test(d.body.content)));
+});
+
+test('rider milestones for riders who opted in, a tip of the week (only with the AI) and a month in review', async () => {
+  const create = require('../lib/studio');
+  const store = {}, redis = async cmds => cmds.map(([c, k, ...a]) => { const hh = store[k] = store[k] || {}; if (c === 'GET') return null; if (c === 'HGETALL') return Object.entries(hh).flat(); if (c === 'HSETNX') { if (a[0] in hh) return 0; hh[a[0]] = a[1]; return 1; } if (c === 'HSET') { hh[a[0]] = a[1]; return 1; } if (c === 'HDEL') { delete hh[a[0]]; return 1; } return null; });
+  let riders = [{ riderId: 9, name: 'Ann Able', race: { finishes: 9, wins: 0, podiums: 0 } }, { riderId: 8, name: 'Not Featured', race: { finishes: 9, wins: 0, podiums: 0 } }], aiOn = true;
+  await redis([['HSET', 'cg:studio:feature', '9', '{}']]);
+  const studio = create({ redis, HttpError: Error, requireRole() {}, memberFromRequest: () => null, ai: { available: async () => aiOn, enabled: () => aiOn, json: () => null }, fetchRoster: async () => ({ riders }), zrl: { load: async () => ({ round: null }) }, ladder: { allMatches: async () => [] }, drs: { allStages: async () => [] }, adminReq: () => ({}), discord: async () => true, siteUrl: 'https://club.test',
+    publicClub: async () => ({ ladder: [{ team: 'CRYO-GEN', won: 5, lost: 2 }], podium: [{ division: 'Division 1', top: [{ rank: 1, team: 'Alpha', points: 30 }] }], drs: [{ team: 'CRYO-GEN', teamPoints: 120 }] }), weekInfo: async () => ({}) });
+  const sat = Date.parse('2026-11-07T09:00:00Z');
+  assert.deepEqual((await studio.findEvents(sat)).map(e => e.kind), [], 'the first sight of a rider is only the starting point');
+  riders = [{ riderId: 9, name: 'Ann Able', race: { finishes: 10, wins: 1, podiums: 1 } }, { riderId: 8, name: 'Not Featured', race: { finishes: 10, wins: 1, podiums: 1 } }];
+  const ms = (await studio.findEvents(sat)).filter(e => e.kind === 'milestone');
+  assert.deepEqual(ms.map(e => e.key).sort(), ['milestone:9:podium:1', 'milestone:9:races:10', 'milestone:9:win:1'], 'only the rider who opted in');
+  assert.ok(ms.every(e => e.zwids[0] === '9' && /\{R1\}/.test(e.facts.milestone)) && !JSON.stringify(ms).includes('Ann Able'), 'the name is not in the facts');
+  assert.deepEqual((await studio.findEvents(sat)).filter(e => e.kind === 'milestone'), [], 'the same milestone is not found twice');
+  const thu = Date.parse('2026-11-05T09:00:00Z'), tip = (await studio.findEvents(thu)).find(e => e.kind === 'weekly_tip');
+  assert.ok(tip && tip.needsAi && tip.key === 'tip:2026-11-02' && tip.facts.theme);
+  const first = new Date('2026-12-01T09:00:00Z').getTime(), rec = (await studio.findEvents(first)).find(e => e.kind === 'month_recap');
+  assert.equal(rec.key, 'month:2026-12'); assert.equal(rec.headline, 'December at CRYO-GEN'); assert.ok(rec.facts.lines.some(l => /Ladder, CRYO-GEN: 5 won, 2 lost/.test(l)) && rec.facts.lines.some(l => /ZRL Division 1: 1\. Alpha \(30\)/.test(l)) && rec.facts.lines.some(l => /120 points/.test(l)));
+  await studio.runSchedule(thu); aiOn = false; const posts = Object.values(store['cg:studio:posts'] || {}).length;
+  await studio.runSchedule(Date.parse('2026-11-12T09:00:00Z')); assert.equal(Object.values(store['cg:studio:posts'] || {}).length, posts, 'no tip is posted without the AI');
 });
