@@ -445,6 +445,23 @@
     el.innerHTML = curve || velo ? `<div class="card" style="padding:16px;margin-bottom:16px"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">${curve}${velo}</div></div>` : '';
   }
 
+  // A square picture for a post (Instagram needs one): the headline and a few lines on the club colours, as base64 PNG for the studio.
+  async function postCardPng(title, lines) {
+    const W = 1080, c = document.createElement('canvas'); c.width = W; c.height = W; const g = c.getContext('2d'), a = accentNow();
+    const bg = g.createLinearGradient(0, 0, W, W); bg.addColorStop(0, '#060a14'); bg.addColorStop(1, '#10203a'); g.fillStyle = bg; g.fillRect(0, 0, W, W);
+    g.fillStyle = a; g.fillRect(0, 0, W, 16); g.textAlign = 'left';
+    g.font = '700 38px system-ui,sans-serif'; g.fillText('TEAM CRYO-GEN', 80, 120);
+    g.fillStyle = '#fff'; g.font = '800 78px system-ui,sans-serif';
+    const wrap = (t, max, font) => { g.font = font; const words = String(t).split(/\s+/), out = []; let cur = ''; for (const w of words) { if (g.measureText((cur + ' ' + w).trim()).width > max && cur) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); return out; };
+    let y = 240; for (const l of wrap(title, 920, '800 78px system-ui,sans-serif').slice(0, 3)) { g.fillText(l, 80, y); y += 92; }
+    y += 20; g.font = '500 44px system-ui,sans-serif'; g.fillStyle = '#d1d5db';
+    for (const line of (lines || []).slice(0, 6)) for (const l of wrap(line, 920, '500 44px system-ui,sans-serif').slice(0, 2)) { if (y > 940) break; g.fillText(l, 80, y); y += 60; }
+    g.fillStyle = '#7b8494'; g.font = '500 30px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 80, 1020);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png')); if (!blob) throw new Error('Could not draw the picture.');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
   // ── Small pictures: a ring for a rate, and a radar for the five rider types ──
   function ringSmall(frac, color, label) {
     const R = 15, C = 2 * Math.PI * R, f = Math.max(0, Math.min(1, frac || 0));
@@ -463,7 +480,7 @@
   async function afterLogin() { await loadAvatars(); pins(); try { if (typeof renderAll === 'function') renderAll(); } catch (e) { /* drawn later */ } }
 
   window.uiLineupCard = lineupCard; window.uiResultsCard = resultsCard; window.uiStaffTrend = staffTrend; window.uiProfileCharts = profileCharts; window.uiSeasonQuick = seasonQuick;
-  window.uiRingSmall = ringSmall; window.uiRadar = radar;
+  window.uiPostCardPng = postCardPng; window.uiRingSmall = ringSmall; window.uiRadar = radar;
   window.uiPreset = preset; window.uiPin = pin; window.uiAvatarSet = avatarSet; window.uiEmpty = empty; window.uiMonthBox = monthBox; window.uiCalendarInto = calendarInto;
   window.uiPodium = podium; window.uiPointsChart = pointsChart; window.uiSeries = seriesAccent; window.uiLogin = afterLogin;
   window.uiSet = set; window.uiToggle = toggle; window.uiMove = move; window.uiReset = reset; window.uiClose = close; window.uiOpen = open; window.uiSaveClub = saveClub;

@@ -168,6 +168,9 @@ function installFetch(world) {
       const out = JSON.parse(opts.body).map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
       return json(out);
     }
+    if (u.host === 'wp.test' && u.pathname === '/wp-json/wp/v2/posts') { (world.wpPosts = world.wpPosts || []).push({ body: JSON.parse(opts.body), auth: (opts.headers || {}).Authorization }); return world.wpFail ? json({ message: 'Sorry, you are not allowed to publish posts.' }, 403) : json({ id: 7, link: 'https://cryogen.team/?p=7' }, 201); }   // publishing to the website
+    if (u.host === 'api.telegram.org') { (world.telegram = world.telegram || []).push({ path: u.pathname, body: JSON.parse(opts.body) }); return world.telegramFail ? json({ ok: false, description: 'chat not found' }, 400) : json({ ok: true }); }
+    if (u.host === 'bsky.social') { if (u.pathname.endsWith('createSession')) return world.bskyFail ? json({ message: 'Invalid identifier or password' }, 401) : json({ did: 'did:plc:club', accessJwt: 'jwt' }); (world.bsky = world.bsky || []).push({ path: u.pathname, auth: (opts.headers || {}).authorization, body: JSON.parse(opts.body) }); return json({ uri: 'at://did:plc:club/app.bsky.feed.post/3kpost' }); }
     if (u.host === 'wp.test') return handleWp(world, u, opts);
     if (u.host === 'docs.google.com') return handleSheet(world, u, opts);
     if (u.host === 'zwiftracing.app' || u.host === 'api.zwiftracing.app') {   // the ZwiftRacing.app organizer API: world.zr = { status, body, seen: [] }

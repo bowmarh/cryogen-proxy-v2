@@ -1632,7 +1632,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2727,6 +2727,14 @@ const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fet
   clubData: () => publicClub(Date.now()), seasonOf: m => seasonOf(m) });
 // The AI messages that go to riders on their own (Monday plans, race-day briefings) and the AI drafts for the staff.
 const asMember = (zwid, name) => ({ headers: { authorization: `Bearer ${signToken('member', { zwid, name })}` } });
+// Publishing to the cryogen.team website with the same WordPress login the member records use (the standard WordPress posts endpoint).
+const wpSite = () => process.env.WP_SITE_URL || new URL(WP_API).origin;
+const studio = require('../lib/studio')({ redis, HttpError, requireRole, memberFromRequest, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), ai, fetchRoster, zrl, ladder, drs, adminReq: () => syncReq(), publicClub: now => publicClub(now), discord, siteUrl: SITE_URL,
+  weekInfo: async now => { const w = await week.build(syncReq(), now, 'admin').catch(() => ({ newMembers: [] })); return { newMembers: (w.newMembers || []).length }; },
+  wp: { ready: () => !!wpAuth(), post: async body => {
+    const r = await fetch(`${wpSite()}/wp-json/wp/v2/posts`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Basic ${Buffer.from(wpAuth()).toString('base64')}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${r.status} ${String(d.message || '').slice(0, 120)}`.trim()); return d;
+  } } });
 const aiplans = require('../lib/aiplans')({ redis, HttpError, memberFromRequest, ai, coach, support, notify: (...a) => comms.notify(...a), live: { events: (...a) => live.events(...a) }, adminReq: () => syncReq(), fetchRoster, siteUrl: SITE_URL, coachSystem: coach.SYSTEM, asMember });
 const aiStaff = require('../lib/aistaff')({ redis, HttpError, requireRole, memberFromRequest, roleFromRequest, ai, zrl, lifecycle: { quiet: () => lifecycle.quiet() }, discord, publicClub: now => publicClub(now), fetchRoster, siteUrl: SITE_URL,
   // The facts the weekly report is written from: counts and titles, no rider names.
@@ -2929,6 +2937,13 @@ async function route(req, res){
   const commsRoute = comms.routes[`${req.method} ${pathname}`];
   if (commsRoute) return handleComms(commsRoute, req, res);
 
+  // A studio picture: an unguessable address, so a social platform (or Zapier) can fetch it. Nothing else here is public.
+  const imgMatch = /^\/api\/studio\/img\/([0-9a-f]{24})\.png$/.exec(pathname);
+  if (imgMatch && req.method === 'GET'){
+    const png = await studio.getImage(imgMatch[1]);
+    if (!png) return sendJSON(res, 404, { error: 'not found' });
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' }); return res.end(png);
+  }
   if (pathname === '/api/ping' && req.method === 'GET'){   // for an uptime check: is the app up and is its database answering
     try { await redis([['GET', 'cg:ping']]); } catch (e) { return sendJSON(res, 503, { ok: false, redis: false }); }
     return sendJSON(res, 200, { ok: true, redis: true, at: new Date().toISOString() });
@@ -2949,7 +2964,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
   if (bigRoute) return sendJSON(res, 200, await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query));
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
