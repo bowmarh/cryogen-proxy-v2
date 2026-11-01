@@ -205,3 +205,12 @@ test('the public club wall shows the club colour, a countdown and the top three,
   await expect(page.locator('.pod')).toContainText('Alpha'); await expect(page.locator('.pod')).toContainText('🥇');
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())).toBe('#a78bfa');
 });
+
+test('the profile keeps its stat tiles in one row, the charts have their own slot, and the rider type bars stay inside their card', async ({ page, baseURL }) => {
+  await signInAsRider(page, baseURL);
+  await page.getByRole('button', { name: /My Profile/ }).click();
+  await expect(page.locator('#prof-charts')).toContainText('Power curve');
+  expect(await page.locator('#profile-content .stat4 > .card').count()).toBe(4);
+  expect(await page.evaluate(() => [...document.querySelectorAll('#profile-content .pbar-fill')].every(b => b.getBoundingClientRect().right <= b.closest('.card').getBoundingClientRect().right + 1))).toBe(true);
+  expect(await page.evaluate(() => document.getElementById('prof-charts').nextElementSibling.classList.contains('stat4'))).toBe(true);
+});
