@@ -1,4 +1,4 @@
-# Runs unit tests, browser tests, and Gemini CLI analysis on pull requests and main pushes.
+# Runs unit tests, browser tests, and Gemini analysis on pull requests and main pushes.
 name: Tests
 
 on:
@@ -39,16 +39,14 @@ jobs:
       - name: Run browser tests
         run: npm run test:e2e
 
-# Step 7: Run Gemini API call via Node.js
+      # Step 7: Run Gemini API call via Node.js
       - name: Run Gemini analysis
         if: always()
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Install the official Google Gen AI SDK into the runner workspace
           npm install --no-save @google/genai
 
-          # Execute a Node.js script using the SDK
           node -e '
             const { GoogleGenAI } = require("@google/genai");
 
@@ -59,7 +57,7 @@ jobs:
               }
 
               const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-              
+
               const response = await ai.models.generateContent({
                 model: "gemini-3.8-flash",
                 contents: "Verify test environment run completion and output a short summary.",
@@ -75,16 +73,7 @@ jobs:
             });
           '
 
-      # Step 8: Execute Gemini CLI step
-      # Replace the prompt below with your specific test analysis or task command
-      - name: Run Gemini analysis
-        if: always()
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          gemini run --prompt "Verify test environment run completion"
-
-      # Step 9: Save Playwright reports/traces if tests fail or finish
+      # Step 8: Save Playwright reports/traces if tests fail or finish
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
@@ -92,15 +81,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Run unit tests
-        run: npm test
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run browser tests
-        run: npm run test:e2e
