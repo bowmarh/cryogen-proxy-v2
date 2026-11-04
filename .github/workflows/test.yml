@@ -8,22 +8,23 @@ on:
 
 jobs:
   test:
+    name: Test Suite & Gemini Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      # Step 1: Check out the repository code
+      # Step 1: Check out the repository
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js environment with package caching
+      # Step 2: Set up Node.js 22 runtime with npm dependency caching
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      # Step 3: Clean install of project dependencies
+      # Step 3: Install exact project dependencies
       - name: Install dependencies
         run: npm ci
 
@@ -31,49 +32,17 @@ jobs:
       - name: Run unit tests
         run: npm test
 
-      # Step 5: Install Playwright's Chromium browser and required Linux system libraries
+      # Step 5: Install Playwright Chromium browser and Linux system libraries
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      # Step 6: Run end-to-end browser tests
+      # Step 6: Run browser tests (capture failure without breaking artifact generation)
       - name: Run browser tests
+        id: browser_tests
         run: npm run test:e2e
+        continue-on-error: true
 
-      # Step 7: Run Gemini API call via Node.js
-      - name: Run Gemini analysis
-        if: always()
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          npm install --no-save @google/genai
-
-          node -e '
-            const { GoogleGenAI } = require("@google/genai");
-
-            async function run() {
-              if (!process.env.GEMINI_API_KEY) {
-                console.error("Error: GEMINI_API_KEY secret is not set.");
-                process.exit(1);
-              }
-
-              const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-              const response = await ai.models.generateContent({
-                model: "gemini-3.8-flash",
-                contents: "Verify test environment run completion and output a short summary.",
-              });
-
-              console.log("--- Gemini Response ---");
-              console.log(response.text);
-            }
-
-            run().catch((err) => {
-              console.error("Gemini step encountered an error:", err.message);
-              process.exit(1);
-            });
-          '
-
-      # Step 8: Save Playwright reports/traces if tests fail or finish
+      # Step 7: Upload Playwright artifacts (runs whether tests pass or fail)
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
@@ -81,3 +50,52 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+          if-no-files-found: ignore
+
+      # Step 8: Run Gemini analysis
+      - name: Run Gemini analysis
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TEST_STATUS: ${{ steps.browser_tests.outcome }}
+        run: |
+          npm install --no-save @google/genai
+
+          node -e '
+            const { GoogleGenAI } = require("@google/genai");
+
+            async function run() {
+              const apiKey = process.env.GEMINI_API_KEY;
+              if (!apiKey) {
+                console.log("ℹ️ GEMINI_API_KEY not found in repository secrets. Skipping Gemini step.");
+                return;
+              }
+
+              const ai = new GoogleGenAI({ apiKey });
+              const testOutcome = process.env.TEST_STATUS || "unknown";
+
+              const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `The test suite finished with status: ${testOutcome}. Provide a concise 2-sentence summary confirming CI pipeline completion.`,
+              });
+
+              console.log("\n==========================================");
+              console.log("          GEMINI CI SUMMARY               ");
+              console.log("==========================================");
+              console.log(response.text);
+              console.log("==========================================\n");
+            }
+
+            run().catch((err) => {
+              console.warn("⚠️ Gemini analysis encountered a non-fatal issue:", err.message);
+              // Avoid failing the entire CI job if the summary API encounters an issue
+              process.exit(0);
+            });
+          '
+
+      # Step 9: Enforce build status based on test outcomes
+      - name: Check test status
+        if: steps.browser_tests.outcome == 'failure'
+        run: |
+          echo "❌ Playwright browser tests failed. Please review the test logs above."
+          exit 1
