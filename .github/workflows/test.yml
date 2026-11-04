@@ -1,4 +1,4 @@
-# Runs unit and browser tests on every pull request and push to main.
+# Runs unit tests and Playwright browser tests on every pull request and push to main.
 name: Tests
 
 on:
@@ -8,18 +8,44 @@ on:
 
 jobs:
   test:
+    name: Run Test Suite
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Step 1: Check out the repository files
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js 22 with dependency caching
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+
+      # Step 3: Clean install of package dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Execute unit tests
       - name: Run unit tests
         run: npm test
+
+      # Step 5: Install Chromium browser and Linux system packages for Playwright
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+
+      # Step 6: Execute end-to-end browser tests
       - name: Run browser tests
         run: npm run test:e2e
+
+      # Step 7: Upload Playwright test reports (runs even if tests fail)
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
