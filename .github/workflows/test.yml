@@ -1,4 +1,4 @@
-# Runs unit and browser tests on every pull request and push to main.
+# Runs unit tests, browser tests, and Gemini CLI analysis on pull requests and main pushes.
 name: Tests
 
 on:
@@ -10,7 +10,88 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
+      # Step 1: Check out the repository code
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js environment with package caching
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Step 3: Clean install of project dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run unit tests
+      - name: Run unit tests
+        run: npm test
+
+      # Step 5: Install Playwright's Chromium browser and required Linux system libraries
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Step 6: Run end-to-end browser tests
+      - name: Run browser tests
+        run: npm run test:e2e
+
+# Step 7: Run Gemini API call via Node.js
+      - name: Run Gemini analysis
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Install the official Google Gen AI SDK into the runner workspace
+          npm install --no-save @google/genai
+
+          # Execute a Node.js script using the SDK
+          node -e '
+            const { GoogleGenAI } = require("@google/genai");
+
+            async function run() {
+              if (!process.env.GEMINI_API_KEY) {
+                console.error("Error: GEMINI_API_KEY secret is not set.");
+                process.exit(1);
+              }
+
+              const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+              
+              const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: "Verify test environment run completion and output a short summary.",
+              });
+
+              console.log("--- Gemini Response ---");
+              console.log(response.text);
+            }
+
+            run().catch((err) => {
+              console.error("Gemini step encountered an error:", err.message);
+              process.exit(1);
+            });
+          '
+
+      # Step 8: Execute Gemini CLI step
+      # Replace the prompt below with your specific test analysis or task command
+      - name: Run Gemini analysis
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          gemini run --prompt "Verify test environment run completion"
+
+      # Step 9: Save Playwright reports/traces if tests fail or finish
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
