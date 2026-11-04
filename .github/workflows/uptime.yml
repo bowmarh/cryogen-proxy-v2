@@ -1,5 +1,5 @@
-# Checks every 30 minutes that the dashboard is up and its database answers. A failed run is emailed to the people who watch this repository
-# (GitHub's own notification), so an outage is noticed without anyone opening the app.
+# Checks every 30 minutes that the dashboard is up and its database answers.
+# A failed run triggers GitHub email notifications to repository watchers.
 name: Uptime
 
 on:
@@ -9,15 +9,33 @@ on:
 
 jobs:
   ping:
+    name: Ping Dashboard & Check Health
     runs-on: ubuntu-latest
     timeout-minutes: 2
+
     steps:
-      - name: Run Gemini CLI
-      - uses: google-github-actions/run-gemini-cli@v0.1.22
+      # Step 1: Ping the API endpoint (up to 3 attempts)
       - name: Is the dashboard up?
+        id: health_check
         run: |
           for i in 1 2 3; do
-            if curl -fsS --max-time 20 https://club.cryo-gen.team/api/ping | grep -q '"ok":true'; then echo "up"; exit 0; fi
-            echo "attempt $i failed"; sleep 15
+            echo "Attempt $i: Checking https://club.cryo-gen.team/api/ping..."
+            if curl -fsS --max-time 20 https://club.cryo-gen.team/api/ping | grep -q '"ok":true'; then
+              echo "✅ Dashboard is up and database is responding."
+              exit 0
+            fi
+            echo "⚠️ Attempt $i failed. Retrying in 15 seconds..."
+            sleep 15
           done
-          echo "The dashboard did not answer, or its database is down."; exit 1
+          echo "❌ Outage detected: The dashboard did not answer or the database is down."
+          exit 1
+
+      # Step 2: Run Gemini CLI for automated downtime diagnostics (runs only if Step 1 fails)
+      - name: Run Gemini Downtime Diagnosis
+        if: failure()
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        with:
+          gemini_model: "gemini-2.5-flash"
+          prompt: "The endpoint https://club.cryo-gen.team/api/ping failed 3 consecutive health checks. Provide a brief checklist of common causes (DNS, Vercel deployment, Supabase database connection pool) to assist with recovery."
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
