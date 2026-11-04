@@ -13,8 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Run Gemini CLI
-      - uses: google-github-actions/run-gemini-cli@v0.1.22
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Gemini CLI
+        run: |
+          npm install -g @google/genai
+          # or the specific CLI package your workflow targets
+
+      - name: Run Gemini Task
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Replace with your exact CLI command and prompt/input file
+          gemini run --prompt "Review schedule data"562095
       - name: Run due TTT events
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
