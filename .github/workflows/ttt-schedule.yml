@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      - name: Run Gemini CLI
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
       - name: Run due TTT events
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
