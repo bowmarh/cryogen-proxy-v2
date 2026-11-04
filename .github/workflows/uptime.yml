@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      - name: Run Gemini CLI
+      - uses: google-github-actions/run-gemini-cli@v0.1.22
       - name: Is the dashboard up?
         run: |
           for i in 1 2 3; do
