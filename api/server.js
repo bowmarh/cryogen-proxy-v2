@@ -192,7 +192,7 @@ function redisConfig(){
 // Rough daily usage so a quota is seen coming: counted in this process and added to the day's totals on every scheduled run.
 // Each running copy of the app counts its own, so the totals are a floor, not an exact bill.
 const usage = { redis: 0, discord: 0 };
-async function redis(commands){
+async function redisRaw(commands){
   const cfg = redisConfig();
   usage.redis += commands.length;
   if (!cfg) throw new HttpError(503, 'Shared storage is not set up yet.');
@@ -213,6 +213,8 @@ async function redis(commands){
   if (failed) throw new HttpError(502, `storage error: ${failed.error}`);
   return out.map(x => x.result);
 }
+// Identical reads within a few seconds are answered from memory (see lib/rediscache.js); REDIS_CACHE_MS=0 turns this off.
+const redis = require('../lib/rediscache')(redisRaw, { ttlMs: process.env.REDIS_CACHE_MS === undefined ? 5000 : Number(process.env.REDIS_CACHE_MS) || 0 });
 
 // HGETALL comes back as a flat [field, value, field, value, ...] array.
 function pairs(flat){
@@ -2173,6 +2175,7 @@ const ago = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 90
 const ukWhen = ms => `${new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} UK`;
 const wpAuth = () => (process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null);
 
+let healthCache = { at: 0, body: null };
 async function healthChecks(){
   const run = (id, label, fn) => withTimeout(Promise.resolve().then(fn))
     .then(([status, detail]) => ({ id, label, status, detail }))
@@ -2887,7 +2890,11 @@ async function route(req, res){
   if (pathname === '/api/me/season/share' && req.method === 'POST') return handleMeSeasonShare(req, res);
   if (pathname === '/api/health' && req.method === 'GET'){
     requireRole(req, ['admin']);
-    return sendJSON(res, 200, { checked: new Date().toISOString(), checks: await healthChecks() });
+    // The status dot in the header asks with ?cached=1 so an open tab does not re-run every check (dozens of storage reads) every few minutes;
+    // the health panel itself always gets fresh checks.
+    const cachedOk = parseRequestUrl(req).query.cached === '1' && healthCache.at > Date.now() - 600000;
+    if (!cachedOk) healthCache = { at: Date.now(), body: { checked: new Date().toISOString(), checks: await healthChecks() } };
+    return sendJSON(res, 200, healthCache.body);
   }
   const memberMatch = /^\/api\/members\/(\d+)$/.exec(pathname);
   if (pathname === '/api/members/bulk' && req.method === 'POST') return handleMemberBulk(req, res);

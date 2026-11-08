@@ -82,3 +82,12 @@ test('a day with nothing to check changes nothing, and the scheduled run is quie
   assert.equal(r.status, 200);
   assert.equal(JSON.stringify(r.body.ran || []).includes('fair'), false);
 });
+
+test('the daily check writes every rider in one storage command, not one per rider', async () => {
+  const sent = [];
+  const fp = createFairPlay({ redis: async cmds => { sent.push(...cmds); return cmds.map(() => null); }, HttpError: Error, requireRole() {},
+    fetchRoster: async () => ({ riders: ['1', '2', '3', '4'].map(id => ({ riderId: id, name: 'R' + id, power: { wkg300: 4, wkg1200: 3.2 }, race: { current: { rating: 1500 } } })) }), activeMembers: async () => ['1', '2', '3', '4'] });
+  await fp.run(Date.UTC(2026, 10, 8), true);
+  assert.equal(sent.filter(c => c[0] === 'HSET' && c[1] === fp.SNAP).length, 1, 'four riders fit in one command (25 riders a command at most)');
+  assert.equal(sent.find(c => c[0] === 'HSET' && c[1] === fp.SNAP).length, 2 + 4 * 2, 'command and key, then four id/value pairs');
+});
