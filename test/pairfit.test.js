@@ -81,3 +81,13 @@ test('raw identity is shown side by side without translation', async () => {
   assert.strictEqual(res.identity.second.fileId.serial, 3400001234);
   assert.strictEqual(res.identity.zwift.powerSensors[0].serial, 55501);
 });
+
+test('member Fair play page is static, names no third-party tool, and the staff flags page still exists', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../public/index.html'), 'utf8');
+  const page = html.slice(html.indexOf('id="page-standard"'), html.indexOf('id="page-standard"') + 2500);
+  assert.match(page, /second recording running as a backup/);
+  assert.match(page, /Discord DM/);
+  assert.match(page, /support\.zwift\.com/);
+  assert.doesNotMatch(page, /zwiftpower|<script|fetch\(/i);
+  assert.match(html, /id="page-fair"/);
+});
