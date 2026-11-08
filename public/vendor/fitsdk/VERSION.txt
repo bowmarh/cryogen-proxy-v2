@@ -1,0 +1,1 @@
+@garmin/fitsdk 21.221.0 (exact copy of node_modules/@garmin/fitsdk/src). Refresh with: npm run vendor:fitsdk

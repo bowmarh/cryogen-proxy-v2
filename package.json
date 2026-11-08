@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "test": "node --test --test-timeout=30000 test/*.test.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "vendor:fitsdk": "mkdir -p public/vendor/fitsdk && rm -rf public/vendor/fitsdk/src && cp -r node_modules/@garmin/fitsdk/src public/vendor/fitsdk/ && cp node_modules/@garmin/fitsdk/LICENSE.txt public/vendor/fitsdk/"
   },
   "devDependencies": {
+    "@garmin/fitsdk": "21.221.0",
     "@playwright/test": "^1.64.1"
   }
 }
