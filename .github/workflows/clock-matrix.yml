@@ -1,0 +1,37 @@
+# Runs the unit tests on each day of the week (the test clock is pinned, see test/helpers.js) so a test that only passes on certain weekdays is
+# found here, not on the one morning it breaks a pull request. A last entry runs on the real clock and is allowed to fail: it is a smoke check only.
+name: Clock matrix
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: ${{ matrix.clock == 'real' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        clock:
+          - '2026-11-02T10:00:00Z'   # Monday
+          - '2026-11-03T10:00:00Z'
+          - '2026-11-04T10:00:00Z'
+          - '2026-11-05T10:00:00Z'
+          - '2026-11-06T23:50:00Z'   # late Friday
+          - '2026-11-07T10:00:00Z'
+          - '2026-11-08T10:00:00Z'   # Sunday
+          - 'real'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run unit tests on ${{ matrix.clock }}
+        env:
+          TEST_CLOCK: ${{ matrix.clock }}
+        run: npm test

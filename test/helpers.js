@@ -24,8 +24,26 @@ const BASE_ENV = {
   REDIS_CACHE_MS: '0',   // tests change the fake database directly, so the read cache is off; it has its own test
 };
 
+// The tests run on a pinned calendar day, so what they see never depends on the day they are run (Monday reports, the 1st of the month, month ends).
+// The clock still moves forward in real time from that moment. TEST_CLOCK overrides the start (an ISO date and time, used by the nightly weekday
+// matrix in CI); TEST_CLOCK=real turns the pin off.
+const DEFAULT_TEST_CLOCK = '2026-11-04T10:00:00Z';   // a Wednesday, neither the 1st nor a month end
+function pinClock() {
+  const want = process.env.TEST_CLOCK || DEFAULT_TEST_CLOCK;
+  if (want === 'real' || Date.__pinned) return;
+  const start = Date.parse(want); if (Number.isNaN(start)) throw new Error(`TEST_CLOCK is not a date: ${want}`);
+  const real = Date, began = real.now();
+  class PinnedDate extends real {
+    constructor(...a) { if (a.length) super(...a); else super(PinnedDate.now()); }
+    static now() { return start + (real.now() - began); }
+  }
+  PinnedDate.__pinned = start;
+  global.Date = PinnedDate;
+}
+
 // Must run before the server module is loaded: some settings are read at load time.
 function setEnv(extra = {}) {
+  pinClock();
   for (const k of ['SESSION_SECRET', 'REQUIRE_MEMBER_LOGIN', 'WP_SSO_LOGIN_URL', 'SITE_URL', 'VERCEL_ENV', 'VERCEL_GIT_COMMIT_SHA']) delete process.env[k];
   Object.assign(process.env, BASE_ENV);
   for (const [k, v] of Object.entries(extra)) {
