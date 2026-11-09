@@ -54,3 +54,16 @@ test('a rider sees their Wrapped card and, on an iPhone, how to add the app to t
   await expect(page.locator('#install-card')).toBeEmpty();
   await ctx.close();
 });
+
+test('the race-day board shows a countdown, the pen count and standings, and nothing about people', async ({ page, baseURL }) => {
+  const at = Date.now() + 25 * 60000;
+  await page.route('**/api/public/live', r => r.fulfill({ json: { generated: new Date().toISOString(), next: null, leaders: [{ division: 'Division 1', top: [{ rank: 1, team: 'Alpha', points: 90 }, { rank: 2, team: 'Beta', points: 70 }] }],
+    events: [{ series: 'ZRL', title: 'CRYO-GEN Alpha · ZRL race 2', at, minutes: 25, phase: 'pen', need: 4, ready: 3, full: false }] } }));
+  await page.goto(`${baseURL}/live.html`);
+  await expect(page.locator('.hero')).toContainText('CRYO-GEN Alpha · ZRL race 2');
+  await expect(page.locator('.hero')).toContainText('3 of 4 riders in the pen');
+  await expect(page.locator('#count')).toHaveText(/^2[45]:\d\d$/);
+  await expect(page.locator('[role=progressbar]')).toHaveAttribute('aria-valuenow', '3');
+  await expect(page.locator('.pod')).toContainText('Alpha');
+  await expect(page.locator('#updated')).toContainText('Updated');
+});

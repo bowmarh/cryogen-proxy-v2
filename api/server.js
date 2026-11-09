@@ -2214,6 +2214,7 @@ const ukWhen = ms => `${new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe
 const wpAuth = () => (process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null);
 
 let healthCache = { at: 0, body: null };
+let liveBoardCache = null;
 async function healthChecks(){
   const run = (id, label, fn) => withTimeout(Promise.resolve().then(fn))
     .then(([status, detail]) => ({ id, label, status, detail }))
@@ -2985,6 +2986,16 @@ async function route(req, res){
     // Anyone can ask for this page, so the answer is made at most once a minute per server instance.
     if (!publicCache || Date.now() - publicCache.at > 60000) publicCache = { at: Date.now(), data: await publicClub() };
     return sendJSON(res, 200, publicCache.data);
+  }
+  // The race-day board: the same on/off switch as the public club page, answered at most every 20 seconds per server instance (it is open on screens).
+  if (pathname === '/api/public/live' && req.method === 'GET'){
+    if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
+    if (!liveBoardCache || Date.now() - liveBoardCache.at > 20000){
+      const board = require('../lib/liveboard').publicLive(await live.events(syncReq()).catch(() => []), Date.now());
+      let leaders = []; try { leaders = (publicCache && Date.now() - publicCache.at < 60000 ? publicCache.data : await publicClub()).podium || []; } catch (e) { /* the board still shows the races */ }
+      liveBoardCache = { at: Date.now(), data: { ...board, leaders } };
+    }
+    return sendJSON(res, 200, liveBoardCache.data);
   }
   if (pathname === '/api/public/settings'){
     const role = requireRole(req, ['admin', 'mod']);
