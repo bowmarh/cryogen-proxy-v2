@@ -103,6 +103,27 @@
   };
   window.wrappedShare = async () => { const m = document.getElementById('wrapped-msg'); m.textContent = 'Sharing…'; try { await api('/api/me/wrapped/share', true); m.textContent = 'Shared. Nice season!'; } catch (e) { m.textContent = e.message; } };
 
+  // ── My data: download what the app holds about you, or ask for it to be erased ──
+  async function loadMyData() {
+    const el = document.getElementById('mydata-card'); if (!el) return;
+    el.innerHTML = `<div class="card" style="padding:14px 16px;margin-top:16px"><div style="font-weight:800">🔒 My data</div>
+      <p style="font-size:12px;color:#8b95a5;margin:4px 0 8px">The club app keeps your sign-ups and answers, your vELO line, a daily snapshot of your numbers (including the weight on file), your Discord link and your choices. Daily snapshots are kept for 100 days and the vELO line for 60. Staff also keep fair play and safeguarding records, which are not in the download: ask an administrator about those.</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button type="button" style="${btn}" onclick="myDataDownload()">Download my data</button><button type="button" style="${btn}" onclick="myDataErase()">Ask for my data to be erased</button><span id="mydata-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div></div>`;
+  }
+  window.myDataDownload = async () => {
+    const m = document.getElementById('mydata-msg'); m.textContent = 'Preparing…';
+    try {
+      const d = await api('/api/me/data'), a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })); a.download = 'cryogen-my-data.json'; document.body.appendChild(a); a.click(); a.remove();
+      m.textContent = `Downloaded (${d.stores.length} kinds of record).`;
+    } catch (e) { m.textContent = e.message; }
+  };
+  window.myDataErase = async () => {
+    if (!confirm('Ask the club to erase what the app holds about you? An administrator will review it. Your sign-ups and answers will be removed, and you will drop off teams you are on.')) return;
+    const m = document.getElementById('mydata-msg');
+    try { const d = await api('/api/me/data/erase-request', true); m.textContent = d.already ? 'You have already asked: an administrator will be in touch.' : 'Asked. An administrator will review it.'; } catch (e) { m.textContent = e.message; }
+  };
+
   // ── Install the app, and a note while the phone is offline ──
   let installEvent = null;
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -125,5 +146,5 @@
   };
   window.addEventListener('offline', offlineNote); window.addEventListener('online', offlineNote);
   if (document.readyState !== 'loading') offlineNote(); else document.addEventListener('DOMContentLoaded', offlineNote);
-  window.MemberCards = { load: () => { showInstall(); loadOnboard(); loadRecap(); loadBadges(); loadWrapped(); loadCockpit(); } };
+  window.MemberCards = { loadMyData, load: () => { showInstall(); loadOnboard(); loadRecap(); loadBadges(); loadWrapped(); loadCockpit(); } };
 })();

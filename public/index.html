@@ -58,7 +58,7 @@ table{width:100%;border-collapse:collapse}
 .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8b95a5;display:block;margin-bottom:5px}
 .cat{padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;display:inline-block}
 .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
-.navgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;padding:12px 12px 4px}
+.navgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9aa3b2;padding:12px 12px 4px}
 .navbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:#8b95a5;text-align:left;font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap}
 .navbtn.active{border-color:rgba(var(--accent-rgb),0.2);background:rgba(var(--accent-rgb),0.08);color:var(--accent)}
 .navbtn:hover:not(.active){background:rgba(255,255,255,0.03);color:#9ca3af}
@@ -172,7 +172,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
     <div style="flex:1">
       <div style="font-size:15px;font-weight:900;background:linear-gradient(90deg,var(--accent),#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
-      <div style="font-size:10px;color:#7b8494">Cycling Club · Member Portal</div>
+      <div style="font-size:10px;color:#9aa3b2">Cycling Club · Member Portal</div>
     </div>
     <div id="role-display" style="display:flex;align-items:center;gap:10px">
       <span id="role-badge" class="role-badge"></span>
@@ -236,7 +236,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     <div class="stat4" data-card="stats">
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--accent);margin-bottom:8px">👥 Roster</div><div id="s-riders" style="font-size:22px;font-weight:900">—</div><div id="s-riders-s" style="font-size:11px;color:#8b95a5;margin-top:3px">loading</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#10B981;margin-bottom:8px">📈 Avg vELO</div><div id="s-velo" style="font-size:22px;font-weight:900">—</div><div id="s-velo-s" style="font-size:11px;color:#8b95a5;margin-top:3px">loading</div></div>
-      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">—</div><div id="s-ttt-s" style="font-size:11px;color:#8b95a5;margin-top:3px">TTT Week</div></div>
+      <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#A78BFA;margin-bottom:8px">⏱️ TTT Signups</div><div id="s-ttt" style="font-size:22px;font-weight:900">—</div><div id="s-ttt-s" style="font-size:11px;color:#8b95a5;margin-top:3px">TTT Week</div></div>
       <div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#F59E0B;margin-bottom:8px">🚴 Rides</div><div id="s-rides" style="font-size:22px;font-weight:900">—</div><div style="font-size:11px;color:#8b95a5;margin-top:3px">upcoming</div></div>
     </div>
     <div data-card="charts"></div>
@@ -258,11 +258,11 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <input id="r-search" class="inp" placeholder="Search rider…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
-      <select id="r-cat" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+      <select id="r-cat" aria-label="Category" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
       <select id="r-zra" class="inp" style="width:110px" onchange="renderRacing()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
       <select id="r-ph" class="inp" style="width:120px" onchange="renderRacing()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
     </div>
-    <div class="card"><div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5">Rider Rankings — vELO</span><span id="r-badge" style="font-size:10px;color:#7b8494;background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:99px">—</span></div>
+    <div class="card"><div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5">Rider Rankings — vELO</span><span id="r-badge" style="font-size:10px;color:#9aa3b2;background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:99px">—</span></div>
     <div style="overflow-x:auto"><table><thead><tr>
       <th onclick="rSortBy('rank')">#<span class="sortarrow" id="rsa-rank"></span></th>
       <th onclick="rSortBy('name')">Rider<span class="sortarrow" id="rsa-name"></span></th>
@@ -346,7 +346,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
    <div id="offboarding-panel"></div>   
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
-      <select id="m-cat" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+      <select id="m-cat" aria-label="Category" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
       <select id="m-ph" class="inp" style="width:120px" onchange="mPage=1;renderMembers()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
       <select id="m-tier" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All tiers</option><option value="full">Full</option><option value="associate">Associate</option></select>
       <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
@@ -356,7 +356,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
       </tr></thead><tbody id="members-body"></tbody></table></div>
     <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
-      <span id="m-page-info" style="font-size:12px;color:#7b8494"></span>
+      <span id="m-page-info" style="font-size:12px;color:#9aa3b2"></span>
       <div style="display:flex;gap:6px">
         <button onclick="changeMPage(-1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">←</button>
         <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
@@ -395,6 +395,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 
   <div id="page-profile" class="page">
     <div id="profile-content"></div>
+    <div id="mydata-card"></div>
   </div>
 
   </div></main>
@@ -439,7 +440,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
         <div id="backup-panel" style="font-size:12px;color:#8b95a5">Loading…</div>
       </div>
       <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
-        <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
+        <div style="font-size:10px;font-weight:700;color:#f87171;text-transform:uppercase;margin-bottom:8px">Danger Zone</div>
         <button onclick="if(confirm('Clear ALL event sign-ups?')){sharedWrite('/api/signups/clear').then(ok=>{if(ok)document.getElementById('adminModal').style.display='none'})}" style="width:100%;padding:9px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px">Clear All Sign-ups</button>
       </div>
     </div>
@@ -470,12 +471,14 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
   </div>
 </div>
 
+<script src="/js/errors.js"></script>
 <script src="/js/calendar-settings.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/fit.js"></script>
 <script src="/js/pairfit.js"></script>
 <script src="/js/pairui.js"></script>
 <script src="/js/caselogui.js"></script>
+<script src="/js/privacyui.js"></script>
 <script src="/js/membercards.js"></script>
 <script src="/js/clubstatsui.js"></script>
 <script src="/js/investigate.js"></script>

@@ -12,10 +12,16 @@
       <div class="card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">New members per month</div>${d.joiners.map(j => bar(j.month, j.n, jmax, 'var(--accent,#22d3ee)')).join('')}<div style="font-size:11px;color:#8b95a5;margin-top:6px">${E(d.joinersNote)}</div></div>
       ${d.size.length ? `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">Active riders, month by month</div>${d.size.map(s => bar(s.d.slice(0, 7) + (s.avg ? ` · avg vELO ${s.avg}` : ''), s.n, smax, '#a78bfa')).join('')}</div>` : ''}`;
   }
+  // Browser errors reported by the pages (js/errors.js), most recent first.
+  function brokenHtml(list) {
+    const rows = list.map(e => `<tr><td style="font-size:12px;max-width:340px;word-break:break-word">${E(e.message)}<div style="color:#8b95a5">${E(e.file || '')}${e.line ? ':' + e.line : ''}</div></td><td>${e.count}</td><td style="font-size:12px">${E(Object.keys(e.browsers).join(', '))}</td><td style="font-size:12px">${E(Object.keys(e.pages).join(', '))}</td><td style="white-space:nowrap;font-size:12px">${E((e.last || '').slice(0, 16).replace('T', ' '))}</td>${role === 'admin' ? `<td><button type="button" style="padding:3px 8px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#e5e7eb;cursor:pointer" onclick="clientErrClear('${E(e.sig)}')">Clear</button></td>` : '<td></td>'}</tr>`).join('');
+    return `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">What broke (browser errors reported by the pages)</div>${list.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Error</th><th>Times</th><th>Browsers</th><th>Page</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p style="font-size:13px;color:#34d399;margin:4px 0">Nothing reported. 🎉</p>'}<div style="font-size:11px;color:#8b95a5;margin-top:6px">Nothing identifies the rider: no name, ID or address is kept.</div></div>`;
+  }
+  window.clientErrClear = async sig => { try { await fetch('/api/staff/client-errors/clear', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ sig }) }); load(); } catch (e) { alert(e.message); } };
   async function load() {
     const el = document.getElementById('clubstats-content'); if (!el) return;
     if (!el.innerHTML) el.innerHTML = '<div style="color:#8b95a5;padding:20px">Loading…</div>';
-    try { const r = await fetch('/api/staff/clubstats', { headers: tttHeaders() }); const d = await r.json(); if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); el.innerHTML = html(d); }
+    try { const r = await fetch('/api/staff/clubstats', { headers: tttHeaders() }); const d = await r.json(); if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); el.innerHTML = html(d); try { const er = await fetch('/api/staff/client-errors', { headers: tttHeaders() }); if (er.ok) el.insertAdjacentHTML('beforeend', brokenHtml((await er.json()).errors)); } catch (e) { /* the page still works without it */ } }
     catch (e) { el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; }
   }
   window.ClubStatsUI = { load };

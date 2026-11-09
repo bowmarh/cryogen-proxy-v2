@@ -68,7 +68,7 @@ test('ride cover shows names, not other people\'s Zwift IDs or the owner\'s ID, 
 });
 
 test('the page escapes the names it shows (a member name with HTML in it must not run)', () => {
-  const html = ['index.html', 'js/app.js'].map(f => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8')).join('\n');
+  const html = ['index.html', 'js/app.js', 'js/staff.js'].map(f => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8')).join('\n');
   const raw = [...html.matchAll(/\$\{\s*(?:r|m|s|t|rider|ride|slot|e)\.(?:name|title|ownerName)\s*\}/g)].map(m => m[0]);
   // Allowed only where the surrounding code is not HTML (confirm() text, textContent). Everything in a template that becomes markup goes through esc().
   const lines = html.split('\n').filter(l => /\$\{\s*(?:r|m|s|t|rider|ride|slot|e)\.(?:name|title|ownerName)\s*\}/.test(l));

@@ -1,6 +1,21 @@
 // ── Constants ──────────────────────────────────────────────
-const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
-const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
+// ── Staff code: the parts only an administrator or moderator uses are in js/staff.js, loaded once after sign-in ──
+let staffChunk=null;
+function staffReady(){ return staffChunk||(staffChunk=new Promise((ok,fail)=>{ const s=document.createElement('script'); s.src='/js/staff.js'; s.onload=ok; s.onerror=()=>{ staffChunk=null; fail(new Error('The staff tools did not load. Check your connection and try again.')); }; document.head.appendChild(s); })); }
+function syncAuto(...a){ return staffReady().then(() => syncAuto(...a)); }
+function loadFair(...a){ return staffReady().then(() => loadFair(...a)); }
+function openTidy(...a){ return staffReady().then(() => openTidy(...a)); }
+function backupVerify(...a){ return staffReady().then(() => backupVerify(...a)); }
+function backupNow(...a){ return staffReady().then(() => backupNow(...a)); }
+function backupDownload(...a){ return staffReady().then(() => backupDownload(...a)); }
+function openAdmin(...a){ return staffReady().then(() => openAdmin(...a)); }
+function closeAdmin(...a){ return staffReady().then(() => closeAdmin(...a)); }
+function historyDownload(...a){ return staffReady().then(() => historyDownload(...a)); }
+function selfCheck(...a){ return staffReady().then(() => selfCheck(...a)); }
+function loadHealth(...a){ return staffReady().then(() => loadHealth(...a)); }
+
+const CAT_COLOR = {"A+":"#FFD700",A:"#F87171",B:"#3B82F6",C:"#10B981",D:"#A78BFA"};
+const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#F87171",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#A78BFA",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
 const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
 const ZRA_RANK  = {Diamond:1,Ruby:2,Emerald:3,Sapphire:4,Amethyst:5,Platinum:6,Gold:7,Silver:8,Bronze:9,Copper:10};
 const CAT_RANK  = {"A+":1,A:2,B:3,C:4,D:5};
@@ -68,190 +83,6 @@ function setZRA(color, msg) {
 function setRosterLoginStatus(message, color='#8b95a5') {
   const el=document.getElementById('roster-login-status');
   if(el){el.textContent=message;el.style.color=color;}
-}
-
-// ── Duplicate and inactive members ──
-let tidyData=null, tidyErr='', tidyTab='dup', tidyDays=180, tidyReason='all', tidySel=new Set(), tidyBusy=false, tidyMsg='';
-async function openTidy(){
-  let m=document.getElementById('tidyModal');
-  if(!m){ m=document.createElement('div'); m.id='tidyModal'; m.className='modal-bg'; m.onclick=e=>{ if(e.target===m) closeTidy(); }; document.body.appendChild(m); }
-  m.style.display='flex'; tidyData=null; tidyErr=''; tidySel=new Set(); tidyMsg=''; renderTidy();
-  try{ const r=await fetch('/api/members/tidy',{headers:tttHeaders()}), d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); tidyData=d; }catch(e){ tidyErr=e.message; }
-  renderTidy();
-}
-function closeTidy(){ const m=document.getElementById('tidyModal'); if(m) m.style.display='none'; }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=document.getElementById('tidyModal'); if(m&&m.style.display==='flex') closeTidy(); } });
-const tidyAgo=d=>d===null||d===undefined?'unknown':d<2?'today':d<60?d+' days ago':d<700?Math.round(d/30)+' months ago':Math.round(d/365)+' years ago';
-function tidyInactive(){
-  const d=tidyData; if(!d) return [];
-  return d.inactive.map(i=>({ ...i, why:[i.reasons.includes('not-in-club')?'Not in the Zwift club':'', i.reasons.includes('never-raced')?'Never raced':'', i.daysSinceRace!==null&&i.daysSinceRace>=tidyDays?'No race for '+tidyAgo(i.daysSinceRace).replace(' ago',''):''].filter(Boolean) })).filter(i=>i.why.length&&(tidyReason==='all'||(tidyReason==='club'&&i.reasons.includes('not-in-club'))||(tidyReason==='never'&&i.reasons.includes('never-raced'))||(tidyReason==='old'&&i.daysSinceRace!==null&&i.daysSinceRace>=tidyDays)));
-}
-function renderTidy(){
-  const m=document.getElementById('tidyModal'); if(!m) return;
-  const d=tidyData, btn='padding:5px 11px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15)';
-  const tab=(id,l,n)=>`<button onclick="tidyTab='${id}';tidyMsg='';renderTidy()" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${tidyTab===id?'rgba(var(--accent-rgb),0.5)':'rgba(255,255,255,0.12)'};background:${tidyTab===id?'rgba(var(--accent-rgb),0.12)':'transparent'};color:${tidyTab===id?'var(--accent)':'#9ca3af'}">${l}${n!==undefined?` <span style="font-size:11px;opacity:.8">${n}</span>`:''}</button>`;
-  const stCol=s=>s==='active'?'#10B981':s==='suspended'?'#F59E0B':s==='left'?'#EF4444':'#8b95a5';
-  let body='<div style="font-size:13px;color:#9ca3af">Looking through the members…</div>';
-  if(tidyErr) body=`<div style="font-size:13px;color:#f87171">${esc(tidyErr)}</div>`;
-  else if(d&&!d.hasMembers) body='<div style="font-size:13px;color:#FBBF24">The WordPress member records could not be read, so there is nothing to compare yet. '+esc(d.membersError||'')+'</div>';
-  else if(d){
-    const dup=d.duplicates, inact=tidyInactive();
-    if(tidyTab==='dup'){
-      const grp=g=>`<div style="padding:10px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:8px"><div style="font-weight:800;font-size:14px;margin-bottom:6px">${esc(g.name)}</div>
-        ${g.members.map(x=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><span style="min-width:74px;color:#9ca3af">${esc(x.zwid)}</span><span style="color:${stCol(x.status)};min-width:62px">${esc(x.status)}</span><span style="min-width:62px">${esc(x.tier||'—')}</span><span style="min-width:96px;color:${x.inClub?'#10B981':'#8b95a5'}">${x.inClub?'in Zwift club':'not in club'}</span><span style="flex:1;color:#9ca3af">raced ${esc(tidyAgo(x.daysSinceRace))}</span>
-          ${x.zwid===g.keep?'<span style="font-size:11px;color:#10B981;font-weight:700">suggested to keep</span>':''}${x.hasRecord&&x.status!=='left'?`<button onclick="tidySet('${esc(x.zwid)}','left')" style="${btn}">Mark as left</button>`:''}<button onclick="openRider('${esc(x.zwid)}')" title="Open profile" style="${btn}">👤</button></div>`).join('')}
-        ${g.members.filter(x=>x.zwid!==g.keep&&x.hasRecord&&x.status!=='left').length?`<div style="margin-top:6px"><button onclick="tidyKeep('${esc(g.keep)}','${esc(g.key)}')" style="${btn};background:rgba(16,185,129,0.1);color:#10B981;border-color:rgba(16,185,129,0.4)">Keep the suggested one, mark the others as left</button></div>`:''}</div>`;
-      body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">The same name under more than one Zwift ID. People with a common name can be different riders, so check before marking anyone. Marking a member as left saves to WordPress and can be undone from the Members table.</div>
-        ${dup.sameName.length?dup.sameName.map(grp).join(''):'<div style="font-size:13px;color:#10B981;margin-bottom:10px">✅ No one is listed under two Zwift IDs.</div>'}
-        ${dup.sameId.length?`<div style="font-weight:800;font-size:13px;margin:16px 0 4px;color:#FBBF24">WordPress holds a Zwift ID twice (${dup.sameId.length})</div><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">The app can only see one of the two records. Delete the extra one on cryogen.team.</div>${dup.sameId.map(x=>`<div style="font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b>${esc(x.zwid)}</b> · ${x.records.map(r=>esc(r.name)+' ('+esc(r.status)+', '+esc(r.tier||'—')+')').join(' and ')}</div>`).join('')}`:''}
-        ${dup.noId.length?`<div style="font-weight:800;font-size:13px;margin:16px 0 4px;color:#FBBF24">No usable Zwift ID in WordPress (${dup.noId.length})</div><div style="font-size:12px;color:#9ca3af;margin-bottom:6px">The app cannot manage these records because it finds a member by Zwift ID. Add the ID, or remove the record, on cryogen.team.</div><div style="max-height:160px;overflow:auto">${dup.noId.map(x=>`<div style="font-size:12px;padding:3px 0;border-top:1px solid rgba(255,255,255,0.05)">${esc(x.name||'(no name)')} · ${esc(x.status)} · ${esc(x.tier||'—')}${x.zwid?' · “'+esc(x.zwid)+'”':''}</div>`).join('')}</div>`:''}`;
-    }else{
-      const rb=(id,l)=>`<button onclick="tidyReason='${id}';renderTidy()" style="padding:3px 11px;font-size:12px;border-radius:99px;cursor:pointer;border:1px solid ${tidyReason===id?'rgba(var(--accent-rgb),0.5)':'rgba(255,255,255,0.12)'};background:${tidyReason===id?'rgba(var(--accent-rgb),0.12)':'transparent'};color:${tidyReason===id?'var(--accent)':'#9ca3af'}">${l}</button>`;
-      const all=inact.map(i=>String(i.zwid)), allIn=all.length&&all.every(z=>tidySel.has(z));
-      body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Active members who may have drifted away. Associates are not flagged for being outside the Zwift club.</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span style="font-size:11px;font-weight:700;color:#8b95a5;text-transform:uppercase">Show</span>${rb('all','All')}${rb('club','Not in the Zwift club')}${rb('never','Never raced')}${rb('old','No race for…')}
-          <select class="inp" style="width:auto" onchange="tidyDays=+this.value;renderTidy()">${[[60,'60 days'],[90,'90 days'],[180,'6 months'],[365,'a year']].map(([v,l])=>`<option value="${v}" ${tidyDays===v?'selected':''}>${l}</option>`).join('')}</select></div>
-        ${inact.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label style="font-size:12px;cursor:pointer"><input type="checkbox" ${allIn?'checked':''} onchange="tidyAll(this.checked)"/> Select all ${inact.length}</label>${tidySel.size?`<b style="font-size:12px;color:var(--accent)">${tidySel.size} selected</b><button onclick="tidyBulk('suspended')" ${tidyBusy?'disabled':''} style="${btn};color:#F59E0B;border-color:rgba(245,158,11,0.4)">Suspend</button><button onclick="tidyBulk('left')" ${tidyBusy?'disabled':''} style="${btn};color:#f87171;border-color:rgba(239,68,68,0.4)">Mark as left</button><button onclick="tidyMessage()" style="${btn};color:#a5b4fc;border-color:rgba(88,101,242,0.45)">💬 Message them</button>`:''}</div>
-          <div style="max-height:360px;overflow:auto">${inact.slice(0,300).map(i=>`<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05);font-size:12px"><input type="checkbox" ${tidySel.has(String(i.zwid))?'checked':''} onchange="tidyPick('${esc(String(i.zwid))}',this.checked)"/><span style="flex:1;min-width:130px"><b>${rn(i.name,i.zwid,'',true)}</b> <span style="color:#8b95a5">${esc(i.zwid)}</span></span><span style="color:#FBBF24;flex:2;min-width:150px">${esc(i.why.join(' · '))}</span><span style="color:#9ca3af;min-width:90px">${i.inClub?'last raced '+esc(tidyAgo(i.daysSinceRace)):'not in club'}</span><button onclick="openRider('${esc(String(i.zwid))}')" title="Open profile" style="${btn}">👤</button></div>`).join('')}${inact.length>300?`<div style="font-size:11px;color:#8b95a5;padding:6px">Showing the first 300 of ${inact.length}: use the filters.</div>`:''}</div>`:'<div style="font-size:13px;color:#10B981">✅ Nobody matches.</div>'}`;
-    }
-    body+=tidyMsg?`<div style="font-size:12px;margin-top:10px;color:${tidyMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(tidyMsg)}</div>`:'';
-  }
-  const dup=d&&d.hasMembers?d.counts.sameName+d.counts.sameId+d.counts.noId:undefined;
-  m.innerHTML=`<div class="modal" style="max-width:760px"><div class="modal-head"><span>🧹 Duplicates &amp; inactive members</span><button onclick="closeTidy()" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:0 4px;cursor:pointer">×</button></div>
-    <div class="modal-body"><div style="display:flex;gap:8px;margin-bottom:14px">${tab('dup','Duplicates',dup)}${tab('inact','Inactive',d&&d.hasMembers?tidyInactive().length:undefined)}</div>${body}</div></div>`;
-}
-function tidyPick(z,on){ if(on) tidySel.add(z); else tidySel.delete(z); renderTidy(); }
-function tidyAll(on){ tidyInactive().forEach(i=>{ if(on) tidySel.add(String(i.zwid)); else tidySel.delete(String(i.zwid)); }); renderTidy(); }
-async function tidyApply(zwids,changes){
-  const r=await fetch('/api/members/bulk',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ zwids, changes })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
-  const done=new Set(d.results.filter(x=>x.ok).map(x=>x.zwid));
-  for(const rec of [...riders,...wpOnly]) if(done.has(String(rec.id))) applyMemberRecord(rec,changes);
-  if(tidyData){ const gone=changes.status==='left'||changes.status==='suspended'; tidyData.inactive=tidyData.inactive.filter(i=>!(done.has(String(i.zwid))&&gone)); tidyData.duplicates.sameName.forEach(g=>g.members.forEach(x=>{ if(done.has(String(x.zwid))) x.status=changes.status; })); }
-  renderMembers();
-  return d;
-}
-async function tidySet(zwid,status){
-  if(!confirm('Mark this member as '+(status==='left'?'having left the club':status)+'?')) return;
-  try{ const d=await tidyApply([zwid],{ status }); tidyMsg=d.failed?('Not saved: '+(d.results.find(x=>!x.ok)||{}).error):'✓ Saved.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
-  renderTidy();
-}
-async function tidyKeep(keep,key){
-  const g=tidyData.duplicates.sameName.find(x=>x.key===key); const ids=g.members.filter(x=>x.zwid!==keep&&x.hasRecord&&x.status!=='left').map(x=>x.zwid);
-  if(!ids.length||!confirm('Keep '+g.name+' ('+keep+') and mark '+ids.length+' other record'+(ids.length===1?'':'s')+' as left?')) return;
-  try{ const d=await tidyApply(ids,{ status:'left' }); tidyMsg=d.failed?('Saved '+d.saved+'. Not saved: '+d.results.filter(x=>!x.ok).map(x=>x.zwid+' '+x.error).join('; ')):'✓ Saved.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
-  renderTidy();
-}
-async function tidyBulk(status){
-  const ids=[...tidySel]; if(!ids.length) return;
-  if(ids.length>100){ tidyMsg='Choose at most 100 at a time.'; renderTidy(); return; }
-  if(!confirm((status==='left'?'Mark ':'Suspend ')+ids.length+' member'+(ids.length===1?'':'s')+(status==='left'?' as having left the club?':'?')+'\n\nThis saves to WordPress. You can change it back in the Members table.')) return;
-  tidyBusy=true; renderTidy();
-  try{ const d=await tidyApply(ids,{ status }); ids.forEach(z=>{ if(d.results.find(x=>x.zwid===z&&x.ok)) tidySel.delete(z); }); tidyMsg=d.failed?('Saved '+d.saved+'. '+d.failed+' not saved: '+d.results.filter(x=>!x.ok).slice(0,4).map(x=>x.zwid+' '+x.error).join('; ')):'✓ Saved '+d.saved+'.'; }catch(e){ tidyMsg='Not saved: '+e.message; }
-  tidyBusy=false; renderTidy();
-}
-function tidyMessage(){ mSel=new Set(tidySel); closeTidy(); commsFromMembers(); }
-
-
-// ── Google Sheet sync (Admin): pull the sheet into the app (the sheet wins), push the app's teams to a mirror tab ──
-let syncData=null, syncErr='', syncBusy='', syncMsg='';
-async function syncCall(method,path,body){
-  const r=await fetch(path,{method,headers:tttHeaders(),body:method==='GET'?undefined:JSON.stringify(body||{})});
-  const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); return d;
-}
-// Personal staff accounts (administrators only): each person signs in as themselves and their name appears in the change log.
-let staffList=null, staffMsg='';
-async function loadStaff(){
-  const el=document.getElementById('staff-card'); if(!el) return;
-  if(role!=='admin'){ el.innerHTML=''; return; }
-  try{ const r=await fetch('/api/staff',{headers:tttHeaders()}); const d=await r.json(); staffList=r.ok?d.users:[]; }catch(e){ staffList=[]; }
-  renderStaff();
-}
-function renderStaff(){
-  const el=document.getElementById('staff-card'); if(!el||role!=='admin'||!staffList) return;
-  const btn='padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer';
-  el.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px;margin-top:12px"><div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔑 Staff accounts</div>
-    <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Each person signs in with their own username and password, and their name appears in the change log. The shared passwords keep working until you retire them.</div>
-    ${staffList.map(u=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b style="flex:1">${esc(u.name)} <span style="color:#8b95a5;font-weight:400">${esc(u.username)} · ${u.role==='admin'?'administrator':'moderator'}</span></b><button onclick="staffEdit('${esc(u.username)}')" style="${btn}">Edit</button><button onclick="staffRemove('${esc(u.username)}')" style="${btn}">Remove</button></div>`).join('')||'<div style="font-size:12px;color:#8b95a5">No personal accounts yet.</div>'}
-    <button onclick="staffEdit('')" style="${btn};margin-top:8px">+ Add a person</button> <button onclick="pushKeys()" title="Makes the keys that switch on notifications for riders' devices" style="${btn};margin-top:8px">🔔 Make push keys</button>${staffMsg?`<div style="font-size:12px;margin-top:6px;color:${staffMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(staffMsg)}</div>`:''}</div>`;
-}
-async function staffEdit(username){
-  const cur=(staffList||[]).find(u=>u.username===username)||{};
-  const uname=username||prompt('Username (letters, numbers, dots or dashes):'); if(!uname) return;
-  const name=prompt('Name shown in the change log:',cur.name||''); if(!name) return;
-  const roleIn=(prompt('Role: type admin or mod',cur.role||'mod')||'').trim(); if(!roleIn) return;
-  const pw=prompt(username?'New password (leave empty to keep the current one):':'Password (at least 10 characters):','');
-  if(pw===null) return;
-  try{ const r=await fetch('/api/staff',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ username:uname, name, role:roleIn, password:pw })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not save.'); staffMsg='✓ Saved.'; }catch(e){ staffMsg=e.message; }
-  loadStaff();
-}
-async function pushKeys(){
-  if(!confirm('This makes a new key pair for notifications. Add the two values in Vercel (Settings, Environment Variables) as VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, then redeploy. Keep the private one secret. Changing keys later switches every device off. Continue?')) return;
-  try{ const r=await fetch('/api/push/generate-keys',{method:'POST',headers:tttHeaders(),body:'{}'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not make keys.');
-    prompt('Copy these two lines into Vercel as environment variables (the private key is a secret):','VAPID_PUBLIC_KEY='+d.publicKey+'\nVAPID_PRIVATE_KEY='+d.privateKey); }catch(e){ alert(e.message); }
-}
-async function staffRemove(username){
-  if(!confirm('Remove '+username+'? They can no longer sign in (a session already open lasts until it expires).')) return;
-  try{ const r=await fetch('/api/staff/remove',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ username })}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not remove.'); staffMsg='✓ Removed.'; }catch(e){ staffMsg=e.message; }
-  loadStaff();
-}
-async function loadSync(){
-  if(role!=='admin'&&role!=='mod') return;
-  try{ syncData=await syncCall('GET','/api/sync'); syncErr=''; }catch(e){ syncErr=e.message; }
-  renderSync();
-}
-// Staff opening TTT or ZRL: what is switched on runs, at most every ten minutes, and the page reloads if the sheet changed anything.
-async function syncAuto(series){
-  if(role!=='admin'&&role!=='mod') return;
-  try{
-    const d=await syncCall('POST','/api/sync/auto',{ series });
-    if(d.ran&&d.ran.includes('pull')){ if(series==='ttt') loadTtt(); else loadZrl(); }
-  }catch(e){ /* the Admin card shows problems */ }
-}
-function renderSync(){
-  const el=document.getElementById('sync-card'); if(!el) return;
-  const d=syncData, btn='padding:6px 12px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.3)';
-  const when=iso=>new Date(iso).toLocaleString('en-GB',{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  let body;
-  if(syncErr) body=`<div style="font-size:12px;color:#f87171">${esc(syncErr)}</div>`;
-  else if(!d) body='<div style="font-size:12px;color:#9ca3af">Loading…</div>';
-  else{
-    const g=d.google, admin=d.canChange;
-    const google=g.configured?`<div style="font-size:12px;color:#10B981;margin-bottom:8px">✅ Google service account: <b>${esc(g.email)}</b>. Share each sheet with this address as an <b>Editor</b>.</div>`
-      :`<div style="font-size:12px;color:#FBBF24;margin-bottom:8px">Publishing to the sheets needs a Google service account${g.error?' ('+esc(g.error)+')':''}. In Google Cloud create one, enable the Google Sheets API, make a JSON key, and add it in Vercel as GOOGLE_SERVICE_ACCOUNT_JSON. Reading the sheets into the app works without it.</div>`;
-    const row=(id,s)=>{
-      const st=s.state||{}, pu=st.push, pl=st.pull;
-      const line=(label,x,ok)=>x?`<div style="font-size:11px;color:${x.ok?'#9ca3af':'#f87171'}">${label}: ${x.ok?esc(ok(x)):'failed, '+esc(x.error)} · ${esc(when(x.at))}</div>`:`<div style="font-size:11px;color:#8b95a5">${label}: not run yet</div>`;
-      const tog=(key,label)=>`<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center;margin-right:12px;${admin?'cursor:pointer':'opacity:.6'}"><input type="checkbox" ${s.settings[key]?'checked':''} ${admin?'':'disabled'} onchange="syncToggle('${id}','${key}',this.checked)"/> ${label}</label>`;
-      return `<div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:800;font-size:13px;margin-bottom:2px">${esc(s.label)} <span style="font-weight:400;font-size:11px;color:#8b95a5">· ${s.canPull?esc(s.pullTab)+' tab in':'sheet'} <a href="https://docs.google.com/spreadsheets/d/${esc(s.sheetId)}/edit" target="_blank" rel="noopener" style="color:#8b95a5">${esc(s.sheetId.slice(0,8))}…</a> · writes “${esc(s.mirrorTab)}”</span></div>
-        ${s.canPull?line('Sheet → app',pl,x=>Object.entries(x.summary||{}).filter(([,v])=>typeof v==='number').map(([k,v])=>v+' '+k).join(', ')||'done'):''}${line('App → sheet',pu,x=>x.rows+' rows written')}
-        <div style="margin:6px 0">${s.canPull?tog('pull','Keep the app in step with the sheet (sheet wins)'):''}${tog('push','Keep the mirror tab up to date')}${s.settings.push&&!d.google.configured?'<span style="font-size:11px;color:#FBBF24">waiting for the Google key: nothing is written yet</span>':''}${s.canPull?'':'<span style="font-size:11px;color:#8b95a5">published to the sheet only</span>'}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${s.canPull?`<button ${syncBusy?'disabled':''} onclick="syncRun('${id}','pull')" style="${btn}">${syncBusy===id+'pull'?'Reading…':'Pull from the sheet now'}</button>`:''}<button ${syncBusy?'disabled':''} onclick="syncRun('${id}','push')" style="${btn}">${syncBusy===id+'push'?'Writing…':'Publish to the sheet now'}</button>${admin?`<button onclick="syncSheet('${id}',${s.customSheet})" style="${btn};background:none;color:#9ca3af;border-color:rgba(255,255,255,0.15)">Change sheet</button>`:''}</div></div>`;
-    };
-    body=google+Object.entries(d.series).map(([id,s])=>row(id,s)).join('')+`<div style="font-size:11px;color:#8b95a5;margin-top:8px">The sheet wins: with “keep in step” on, a change made only in the app is replaced at the next sync. The app never writes to your own tabs, only its mirror tab, which is replaced each time. Runs happen every 15 minutes, and when staff open the TTT or ZRL page.</div>`;
-  }
-  el.innerHTML=`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔄 Google Sheet sync</div>${body}${syncMsg?`<div style="font-size:12px;margin-top:8px;color:${syncMsg.startsWith('✓')?'#10B981':'#f87171'}">${esc(syncMsg)}</div>`:''}</div>`;
-}
-async function syncToggle(series,key,on){
-  syncMsg='';
-  try{ syncData=await syncCall('POST','/api/sync/settings',{ series, [key]:on }); }catch(e){ syncMsg=e.message; try{ syncData=await syncCall('GET','/api/sync'); }catch(x){} }
-  renderSync();
-}
-async function syncSheet(series,custom){
-  const v=prompt('Paste the Google Sheet link (or its ID) to use for '+series.toUpperCase()+'. Leave empty to go back to the club sheet.','');
-  if(v===null) return; syncMsg='';
-  try{ syncData=await syncCall('POST','/api/sync/settings',{ series, sheetId:v.trim() }); syncMsg='✓ Sheet changed.'; }catch(e){ syncMsg=e.message; }
-  renderSync();
-}
-async function syncRun(series,direction){
-  if(direction==='pull'&&!confirm('Read the sheet into the app now? The sheet wins: riders are placed as the sheet has them, and a rider the sheet no longer lists is taken off that team.')) return;
-  syncBusy=series+direction; syncMsg=''; renderSync();
-  try{
-    const d=await syncCall('POST','/api/sync/run',{ series, direction }); syncData=d;
-    const r=d.result||{}, bad=Object.entries(r).filter(([,v])=>v&&v.error);
-    syncMsg=bad.length?bad.map(([k,v])=>(k==='pull'?'Sheet → app: ':'App → sheet: ')+v.error).join(' · '):'✓ Done.';
-    if(!bad.length&&direction==='pull'){ if(series==='ttt') loadTtt(); else loadZrl(); }
-  }catch(e){ syncMsg=e.message; }
-  syncBusy=''; renderSync();
 }
 
 // ── API Bridge to WordPress ──────────────────────────────
@@ -458,7 +289,7 @@ let healthDotTimer=null;
 function healthDotSet(checks){
   const el=document.getElementById('health-dot'); if(!el) return;
   const fail=checks.filter(c=>c.status==='fail').length, warn=checks.filter(c=>c.status==='warn').length;
-  el.style.display='inline-block'; el.style.background=fail?'#ef4444':warn?'#FBBF24':'#10B981';
+  el.style.display='inline-block'; el.style.background=fail?'#f87171':warn?'#FBBF24':'#10B981';
   el.title=fail?fail+' failing'+(warn?', '+warn+' to look at':''):warn?warn+' to look at':'All checks are fine';
 }
 async function healthDotRefresh(){
@@ -467,35 +298,6 @@ async function healthDotRefresh(){
 function healthDotStart(){
   healthDotRefresh();
   if(!healthDotTimer) healthDotTimer=setInterval(()=>{ if(document.visibilityState==='visible'&&role==='admin') healthDotRefresh(); },900000);
-}
-// ── Backups (admin) ────────────────────────────────────────
-async function backupCall(path,body){
-  const res=await fetch(path,body===undefined?{headers:tttHeaders()}:{method:'POST',headers:tttHeaders(),body:JSON.stringify(body)});
-  const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status)); return d;
-}
-async function loadBackups(){
-  const el=document.getElementById('backup-panel'); if(!el||role!=='admin') { if(el&&role!=='admin') document.getElementById('backup-box').style.display='none'; return; }
-  try{
-    const d=await backupCall('/api/admin/backups'), when=iso=>new Date(iso).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    const btn='padding:2px 8px;font-size:11px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:5px;cursor:pointer';
-    el.innerHTML=d.backups.length?d.backups.map(b=>`<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1">${esc(when(b.at))} <span style="color:#8b95a5">· ${esc(b.kind)} · ${b.kb} KB</span></div>
-      <button data-id="${esc(b.id)}" onclick="backupDownload(this.dataset.id)" style="${btn}">Download</button><button data-id="${esc(b.id)}" onclick="backupRestore(this.dataset.id)" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Restore</button></div>`).join(''):'No copies yet. One is taken each day by the scheduled run.';
-  }catch(e){ el.innerHTML=`<span style="color:#f87171">${esc(e.message)}</span>`; }
-}
-async function backupVerify(){ try{ const r=await backupCall('/api/admin/backup-verify',{}); alert(r.ok?'Restore test passed: the newest copy unpacks and holds '+r.backupItems+' items ('+r.liveItems+' live). Nothing was changed.':'Restore test FAILED:\n'+r.problems.join('\n')); }catch(e){ alert(e.message); } loadBackups(); }
-async function backupNow(){ try{ await backupCall('/api/admin/backup-now',{}); }catch(e){ alert(e.message); } loadBackups(); }
-async function backupDownload(id){
-  try{
-    const d=await backupCall('/api/admin/backup-download'+(id?'?id='+encodeURIComponent(id):''));
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'}));
-    a.download='cryogen-backup-'+String(d.at||'').slice(0,16).replace(/[:T]/g,'-')+'.json'; document.body.appendChild(a); a.click(); a.remove();
-  }catch(e){ alert(e.message); }
-}
-async function backupRestore(id){
-  const t=prompt('This REPLACES the current ZRL and TTT data with this copy. A safety copy of what is there now is kept first.\n\nType RESTORE to continue:');
-  if(t===null) return;
-  try{ await backupCall('/api/admin/restore',{ id, confirm:t.trim() }); alert('Restored. Reload the page to see it.'); }catch(e){ alert(e.message); }
-  loadBackups();
 }
 
 // ── Theme and accessibility helpers ────────────────────────
@@ -531,136 +333,6 @@ function a11yPass(root){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 })();
 
-// ── Fair play (staff) ──────────────────────────────────────
-let fairData=null;
-async function loadFair(){
-  const el=document.getElementById('fair-content'); if(!el) return;
-  if(!fairData) el.innerHTML='<div style="color:#8b95a5;padding:20px">Loading…</div>';
-  try{ const r=await fetch('/api/fairplay',{headers:tttHeaders()}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); fairData=d; renderFair(); }
-  catch(e){ el.innerHTML=`<div class="card" style="padding:20px;color:#f87171">${esc(e.message)}</div>`; }
-}
-function renderFair(){
-  const el=document.getElementById('fair-content'), d=fairData; if(!el||!d) return;
-  const sev={1:['Low','#FBBF24'],2:['Medium','#FB923C'],3:['High','#f87171']};
-  const st={open:'To review',ok:'Looked at: fine',confirmed:'Confirmed',dismissed:'Dismissed'};
-  const btn='padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:#e5e7eb;cursor:pointer';
-  const rows=d.flags.map(f=>`<tr style="opacity:${f.status==='open'?1:.6}">
-    <td>${rn(f.name,f.zwid,'')}</td><td>${esc(f.typeLabel)}</td>
-    <td><span class="badge" style="background:${sev[f.severity][1]}22;color:${sev[f.severity][1]};border:1px solid ${sev[f.severity][1]}55">${sev[f.severity][0]}</span></td>
-    <td style="white-space:nowrap">${esc(f.at)}</td><td style="font-size:12px;color:#d1d5db">${esc(f.metric)}${f.note?`<div style="color:#8b95a5;margin-top:2px">Note: ${esc(f.note)}</div>`:''}</td>
-    <td style="white-space:nowrap"><span style="font-size:11px;color:#8b95a5">${esc(st[f.status])}${f.reviewedBy?' · '+esc(f.reviewedBy):''}</span><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
-      <a href="${esc(f.profile)}" target="_blank" rel="noopener" style="${btn};text-decoration:none">Review ↗</a>
-      <button type="button" style="${btn}" data-z="${esc(f.zwid)}" data-t="${esc(f.typeLabel+' · '+f.at)}" data-n="${esc('From Fair play ('+f.at+'): '+f.typeLabel+'. '+f.metric)}" data-f="${esc(f.id)}" onclick="invFromFlag(this.dataset.z,this.dataset.t,this.dataset.n,this.dataset.f)">🕵️ Investigate</button>
-      ${f.status==='open'?`<button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','ok')">Fine</button><button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','confirmed')">Confirm</button><button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','dismissed')">Dismiss</button>`:`<button type="button" style="${btn}" onclick="fairReview('${esc(f.id)}','open')">Reopen</button>`}</div></td></tr>`).join('');
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div><h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🔎 Fair play</h2><p style="font-size:13px;color:#8b95a5">${d.open} to review · last checked ${esc(d.lastRun||'never')}</p></div>
-      ${role==='admin'?`<button type="button" style="${btn}" onclick="fairRun(this)">Check now</button>`:''}</div>
-    <div class="card" style="padding:12px 16px;margin-bottom:14px;font-size:13px;color:#d1d5db">These are <b>prompts for a person to look</b>, not findings. A heavy block of training, a real weight change or a new trainer can look the same as something worse. Nothing is sent to the rider and members cannot see this page. Look at the rider's profile, talk to them if needed, then mark the item.<div style="margin-top:6px;color:#8b95a5;font-size:12px">Checked daily from the club roster: registered weight (a drop of more than 2 kg in 7 days), 5 and 20 minute W/kg (more than 5% above their best of the last 90 days) and vELO (a rise of 150 or more in 14 days). Not checked, because the club does not receive the data: ${d.cannotSee.map(esc).join('; ')}. A reading needs about three weeks of daily history before the W/kg check can speak.</div></div>
-    ${d.flags.length?`<div class="card" style="overflow-x:auto"><table><thead><tr><th>Rider</th><th>What</th><th>Severity</th><th>Date</th><th>The numbers</th><th>Review</th></tr></thead><tbody>${rows}</tbody></table></div>`
-      :(window.uiEmpty?uiEmpty('✅','Nothing to look at','No rider has stood out in the daily check. It keeps watching.','',''):'Nothing to look at.')}`;
-}
-async function fairReview(id,status){
-  let note=null;
-  if(status!=='open'){ note=prompt('A short note for the record (optional):',''); if(note===null) return; }
-  try{ const r=await fetch('/api/fairplay/review',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({id,status,note})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); }
-  catch(e){ alert(e.message); }
-  loadFair();
-}
-async function fairRun(btn){
-  btn.disabled=true; btn.textContent='Checking…';
-  try{ const r=await fetch('/api/fairplay/run',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:'{}'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); }catch(e){ alert(e.message); }
-  loadFair();
-}
-
-// ── System health (admin) ──────────────────────────────────
-let healthTimer=null;
-function openAdmin(){
-  document.getElementById('adminModal').style.display='flex';
-  loadHealth(); loadGoLive(); if(window.supLoad) supLoad(); loadBackups(); loadSync(); loadStaff();
-  if(healthTimer) clearInterval(healthTimer);
-  healthTimer=setInterval(()=>{   // keep the checks fresh while the panel is open
-    const m=document.getElementById('adminModal');
-    if(!m||m.style.display==='none'){ clearInterval(healthTimer); healthTimer=null; return; }
-    if(document.visibilityState==='visible') loadHealth(true);
-  },30000);
-}
-function closeAdmin(){
-  document.getElementById('adminModal').style.display='none';
-  if(healthTimer){ clearInterval(healthTimer); healthTimer=null; }
-}
-async function historyDownload(btn){
-  btn.disabled=true;
-  try{
-    const res=await fetch('/api/history/export',{headers:tttHeaders()}); const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    const bin=atob(d.base64), bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  }catch(e){ alert(e.message); }
-  btn.disabled=false;
-}
-async function selfCheck(btn){
-  const out=document.getElementById('selfcheck-out'); btn.disabled=true; out.textContent='Checking… (about 10 seconds)';
-  try{
-    const res=await fetch('/api/selfcheck',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:'{}'});
-    const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    const ico={ok:'✅',fail:'❌',skip:'➖'};
-    out.innerHTML=`<div style="font-weight:700;color:${d.ok?'#10B981':'#f87171'};margin-bottom:4px">${d.ok?'Everything that is switched on works.':d.failing+' thing'+(d.failing===1?'':'s')+' not working'}</div>`
-      +d.steps.map(x=>`<div style="padding:3px 0">${ico[x.status]||'•'} <b>${esc(x.label)}</b> <span style="color:#8b95a5">${esc(x.detail)}</span></div>`).join('');
-  }catch(e){ out.innerHTML=`<span style="color:#f87171">${esc(e.message)}</span>`; }
-  btn.disabled=false;
-}
-async function stagingSeed(){
-  try{
-    const res=await fetch('/api/staging/seed',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:'{}'});
-    const d=await res.json(); if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    alert(d.message);
-  }catch(e){ alert(e.message); }
-}
-// A coloured bar on a staging copy so nobody mistakes it for the real thing.
-(async function stagingBanner(){
-  try{
-    const d=await (await fetch('/api/auth/status')).json();
-    if(!d.staging) return;
-    const b=document.createElement('div');
-    b.textContent='🧪 STAGING — practice copy with made-up data. Nothing here is real.';
-    b.style.cssText='position:sticky;top:0;z-index:9999;background:#FBBF24;color:#111;font:700 12px sans-serif;text-align:center;padding:5px';
-    document.body.prepend(b);
-  }catch(e){ /* no banner is not a problem */ }
-})();
-// What is switched on and what still needs doing before race week.
-async function loadGoLive(){
-  const el=document.getElementById('golive-card'); if(!el) return;
-  try{
-    const res=await fetch('/api/golive',{headers:tttHeaders()});
-    const d=await res.json();
-    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    const icon={ok:'✅',todo:'⬜',off:'💤'};
-    const row=i=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[i.state]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(i.title)}</div><div style="color:#9ca3af">${esc(i.detail||'')}</div>${i.state!=='ok'&&i.how?`<div style="color:#FBBF24;margin-top:2px">${esc(i.how)}</div>`:''}</div></div>`;
-    const todo=d.items.filter(i=>i.state!=='ok'), done=d.items.filter(i=>i.state==='ok');
-    el.innerHTML=(d.staging?`<div style="margin-bottom:8px"><button onclick="stagingSeed()" style="padding:6px 10px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;font-size:11px;font-weight:700">🧪 Fill with test data</button></div>`:'')+`<div style="margin-bottom:6px;color:#9ca3af">${d.ready?'<b style="color:#10B981">Ready for race week</b>':`<b style="color:#FBBF24">${d.todo} to do</b>`} · ${done.length} of ${d.items.length} done</div>`
-      +todo.map(row).join('')
-      +(done.length?`<details style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.05)"><summary style="cursor:pointer;padding:6px 0;color:#9ca3af">${done.length} done</summary>${done.map(row).join('')}</details>`:'');
-  }catch(e){ el.innerHTML=`<span style="color:#f87171">Could not load: ${esc(e.message)}</span>`; }
-}
-// Problems first and open; the checks that are fine are folded away so the panel stays short.
-async function loadHealth(quiet){
-  const el=document.getElementById('health-panel'); if(!el) return;
-  if(!quiet||!el.dataset.loaded) el.innerHTML='Checking…';
-  try{
-    const res=await fetch('/api/health',{headers:tttHeaders()});
-    const d=await res.json();
-    if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    const icon={ok:'✅',warn:'⚠️',fail:'❌',info:'ℹ️'};
-    healthDotSet(d.checks);
-    const count=k=>d.checks.filter(c=>c.status===k).length;
-    const row=c=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[c.status]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(c.label)}</div><div style="color:${c.status==='fail'?'#f87171':c.status==='warn'?'#FBBF24':'#9ca3af'}">${esc(c.detail)}</div></div></div>`;
-    const bad=d.checks.filter(c=>c.status==='fail'||c.status==='warn').sort((a,b)=>(a.status==='fail'?0:1)-(b.status==='fail'?0:1)), fine=d.checks.filter(c=>c.status!=='fail'&&c.status!=='warn');
-    const wasOpen=!!(el.querySelector('details')&&el.querySelector('details').open);
-    el.dataset.loaded='1';
-    el.innerHTML=`<div style="margin-bottom:8px;color:#9ca3af">${count('fail')?`<b style="color:#f87171">${count('fail')} failing</b> · `:''}${count('warn')?`<b style="color:#FBBF24">${count('warn')} to look at</b> · `:''}${count('ok')} OK · checked ${esc(new Date(d.checked).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</div>`
-      +bad.map(row).join('')
-      +(fine.length?`<details ${wasOpen||!bad.length?'open':''} style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.05)"><summary style="cursor:pointer;padding:6px 0;color:#9ca3af">${fine.length} check${fine.length===1?'':'s'} fine</summary>${fine.map(row).join('')}</details>`:'');
-  }catch(e){ el.innerHTML=`<span style="color:#f87171">Could not run the checks: ${esc(e.message)}</span>`; }
-}
-
 // ── Sign in with cryogen.team ──────────────────────────────
 function showSsoError(msg){const el=document.getElementById('sso-err');el.textContent=msg;el.style.display='block';}
 async function loginScreenSetup(err){
@@ -693,7 +365,6 @@ async function ssoLogin(token){
   launchApp('member');
   if(me.associate) showTab('upgrade',document.getElementById('nav-upgrade'));
 }
-
 
 // ── Associate members: the upgrade page and the staff pipeline ──────────────────────────
 let assocData=null, assocMsg='';
@@ -759,8 +430,6 @@ async function assocDecline(zwid){
   try{ await assocCall('POST','/api/assoc/decline',{zwid,note}); }catch(e){ alert(e.message); }
   loadAssocPanel();
 }
-
-
 
 // ── My week (riders): your own next seven days ──────────────────────────────────────────
 let myWeek=null; const myWeekPen=new Set();
@@ -983,8 +652,6 @@ async function weekUndo(id){
   zrlReady=null; try{ zrlData=null; }catch(e){} loadWeek();
 }
 
-
-
 // ── My Discord (riders): save your Discord ID, confirm it with a code, switch club messages on or off ──
 let myDiscord=null, myDiscordMsg='';
 async function dcCall(method,path,body){
@@ -1118,7 +785,6 @@ function renderComms(){
   const lst=document.getElementById('comms-list'); if(lst) lst.scrollTop=listScroll;
   commsRefreshBits();
 }
-
 
 // ── Import Discord IDs in bulk: from the server's member list (through the bot) or from a CSV file ──
 let commsImp=null;
@@ -1395,7 +1061,7 @@ function setupRole(){
     }
     document.getElementById('nav-upgrade').style.display='flex';
   }
-  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; }
+  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
@@ -1409,7 +1075,7 @@ function showTab(id,btn){
   btn.classList.add('active');
   if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
-  if(id==='profile')renderProfile();
+  if(id==='profile')renderProfile(); if(id==='profile'&&role==='member'&&window.MemberCards) MemberCards.loadMyData();
   if(id==='rides'){ renderRidesTabs(); if(!isAssoc()) loadCover(); }
   if(id==='ttt'){ loadTtt(); syncAuto('ttt'); }
   if(id==='season')loadSeason();
@@ -1483,12 +1149,11 @@ async function loadLive() {
   } catch (e) {
     rosterError=e.message;
     setRosterLoginStatus(`Live roster unavailable: ${e.message}. Member search is disabled until the roster loads.`,'#F87171');
-    setZRA('#EF4444', 'Live roster unavailable: ' + e.message);
+    setZRA('#F87171', 'Live roster unavailable: ' + e.message);
   } finally {
     rosterLoading=false;
   }
 }
-
 
 // ── Members: change many at once (staff) ───────────────────────────────────────────────
 let mSel=new Set(), mFilteredIds=[], mBulkBusy=false;
@@ -1549,7 +1214,7 @@ function renderOffboarding() {
     <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
       <div style="padding:12px 16px; background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.2); border-radius:12px 12px 0 0; display:flex; align-items:center; gap:8px;">
         <span style="font-size:16px;">⚠️</span>
-        <span style="font-size:12px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
+        <span style="font-size:12px; font-weight:700; color:#f87171; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
       </div>
       <div style="padding:16px;">
         <table style="width:100%; text-align:left; font-size:13px;">
@@ -1568,13 +1233,13 @@ function renderOffboarding() {
               <tr style="border-top:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:10px 0; font-weight:600;">${esc(r.name)}</td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="Discord removed for ${esc(r.name)}" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="Facebook removed for ${esc(r.name)}" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="ZwiftPower removed for ${esc(r.name)}" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
               </tr>`;
             }).join('')}
@@ -1655,12 +1320,12 @@ function renderRider(){
   let teams='<div style="font-size:12px;color:#8b95a5">Loading…</div>';
   if(rpData&&rpData.error) teams=`<div style="font-size:12px;color:#f87171">${esc(rpData.error)}</div>`;
   else if(d){
-    const t=d.teams||{}, line=(label,arr)=>`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">${label}</span>${arr&&arr.length?arr.map(x=>`<span style="display:inline-block;padding:1px 8px;margin:0 4px 2px 0;border-radius:99px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);font-size:12px">${esc(x)}</span>`).join(''):'<span style="color:#7b8494">—</span>'}</div>`;
+    const t=d.teams||{}, line=(label,arr)=>`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">${label}</span>${arr&&arr.length?arr.map(x=>`<span style="display:inline-block;padding:1px 8px;margin:0 4px 2px 0;border-radius:99px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);font-size:12px">${esc(x)}</span>`).join(''):'<span style="color:#9aa3b2">—</span>'}</div>`;
     const z=t.zrl||{};
-    teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#8b95a5;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#7b8494">Not linked</span>'}</div>`;
+    teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#8b95a5;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#9aa3b2">Not linked</span>'}</div>`;
   }
   if(d&&d.career){ const c=d.career, bits=[c.zrl.rounds?`${c.zrl.rounds} ZRL round${c.zrl.rounds===1?'':'s'}`:'', c.ttt.weeks?`${c.ttt.weeks} TTT week${c.ttt.weeks===1?'':'s'}`:'', c.ladder.races?`Ladder: ${c.ladder.races} race${c.ladder.races===1?'':'s'}, ${c.ladder.wins} won, ${c.ladder.points} pts, best ${ordinal(c.ladder.best)}`:'', c.drs.stages?`DIRT: ${c.drs.stages} stage${c.drs.stages===1?'':'s'}, scored in ${c.drs.scored}, ${c.drs.points} pts${c.drs.best?', best P'+c.drs.best:''}`:''].filter(Boolean);
-    teams+=`<div style="font-size:13px;margin:8px 0 2px"><span style="color:#9ca3af;display:inline-block;width:92px">Career</span>${bits.length?esc(bits.join(' · ')):'<span style="color:#7b8494">nothing on record yet</span>'}</div>`; }
+    teams+=`<div style="font-size:13px;margin:8px 0 2px"><span style="color:#9ca3af;display:inline-block;width:92px">Career</span>${bits.length?esc(bits.join(' · ')):'<span style="color:#9aa3b2">nothing on record yet</span>'}</div>`; }
   const detForm=d&&rpId?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div><label class="lbl">Time zone / when they ride</label><input id="pf-tz" style="${inp}" maxlength="40" value="${esc(det.tz||'')}" placeholder="e.g. UK evenings"/></div>
       <div><label class="lbl">Preferred team</label><input id="pf-pref" style="${inp}" maxlength="80" value="${esc(det.prefTeam||'')}"/></div>
@@ -1804,7 +1469,7 @@ function renderAll(){
   document.getElementById('top10').innerHTML=top.map((m,i)=>`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px">
-        <span style="font-size:10px;color:#7b8494;width:16px;text-align:right">${i+1}</span>
+        <span style="font-size:10px;color:#9aa3b2;width:16px;text-align:right">${i+1}</span>
         ${window.uiAvatar?uiAvatar(m.name,m.cat,m.id):''}<span style="font-size:13px">${esc(m.name.split(' ')[0])}</span>
         ${catB(m.cat)}
         ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
@@ -1848,7 +1513,7 @@ function renderRacing(){
   document.getElementById('racing-body').innerHTML=sorted.map((m,i)=>{
     const barW=Math.min(m.velo/3500*100,100);
     return`<tr>
-      <td style="color:#7b8494;font-family:monospace;font-size:11px">${i+1}</td>
+      <td style="color:#9aa3b2;font-family:monospace;font-size:11px">${i+1}</td>
       <td style="white-space:nowrap">${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:var(--accent)">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td>${catB(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700;margin-left:4px">${m.zraCat}</span>`:''}</td>
       <td style="font-family:monospace;font-size:12px;color:#8b95a5">${m.ftp}w</td>
@@ -1912,11 +1577,11 @@ function renderMembers(){
     const isMe=role==='member'&&memberRider&&m.id===memberRider.id;
     const zraC=ZRA_COLOR[m.zraCat]||'#9ca3af';
     let statusBadgeColor = m.active ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)';
-    let statusTextColor = m.active ? '#10B981' : '#7b8494';
+    let statusTextColor = m.active ? '#10B981' : '#9aa3b2';
     let statusText = m.status.charAt(0).toUpperCase() + m.status.slice(1);
     
     if(m.status === 'suspended') { statusBadgeColor = 'rgba(245,158,11,0.12)'; statusTextColor = '#F59E0B'; }
-    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#EF4444'; }
+    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#F87171'; }
     
     return`<tr style="${isMe?'background:rgba(var(--accent-rgb),0.05)':''}">
       ${staffM?`<td style="width:28px"><input type="checkbox" ${mSel.has(String(m.id))?'checked':''} onchange="mSelect('${esc(String(m.id))}',this.checked)"/></td>`:''}
@@ -1928,15 +1593,15 @@ function renderMembers(){
       <td style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:700">${m.noZwift?'—':m.wkg}</td>
       <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.noZwift?'—':m.velo}</td>
       <td style="font-size:12px;color:#8b95a5">${m.noZwift?'—':(PH_EMOJI[m.ph]||'⭐')+' '+m.ph}</td>
-      <td style="font-size:11px;max-width:160px">${m.noZwift?'<div style="color:#FBBF24;font-weight:600">Not in the Zwift club</div><div style="color:#7b8494;font-size:10px;margin-top:2px">Member record in WordPress</div>':(()=>{
+      <td style="font-size:11px;max-width:160px">${m.noZwift?'<div style="color:#FBBF24;font-weight:600">Not in the Zwift club</div><div style="color:#9aa3b2;font-size:10px;margin-top:2px">Member record in WordPress</div>':(()=>{
         const log = affiliationLog['r'+m.id];
         const club = m.raw?.club?.name || log?.club || 'CRYO-GEN';
         const firstSeen = log?.firstSeen ? new Date(log.firstSeen).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
         const changed = log?.changed ? new Date(log.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : null;
         const isCryo = club.toLowerCase().includes('cryo');
         return `<div style="color:${isCryo?'#10B981':'#FBBF24'};font-weight:600">${club}</div>
-          <div style="color:#7b8494;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
-          ${changed?`<div style="font-size:9px;color:#EF4444">⚠️ Recently changed</div>`:''}`;
+          <div style="color:#9aa3b2;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
+          ${changed?`<div style="font-size:9px;color:#F87171">⚠️ Recently changed</div>`:''}`;
       })()}</td>
       <td><span class="badge" style="background:${statusBadgeColor};color:${statusTextColor}">${statusText}</span></td>
       
@@ -1949,7 +1614,7 @@ function renderMembers(){
             </select>
             ${m.status === 'active' ? `<button onclick="updateStatus(${m.id}, 'suspended', 7)" style="padding:4px 8px;font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:4px">Suspend</button>` : ''}
             ${m.status === 'suspended' ? `<button onclick="updateStatus(${m.id}, 'active', 0)" style="padding:4px 8px;font-size:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:4px">Unsuspend</button>` : ''}
-            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
+            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
           </div>
         </td>` : ''}
     </tr>`;
@@ -2016,7 +1681,7 @@ function renderEvents(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="sup-zwid" class="inp" placeholder="Zwift ID (number)" style="width:140px" oninput="lookupZwid()" onkeydown="if(event.key==='Enter')doSignup()"/>
         <input id="sup-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')doSignup()"/>
-        <select id="sup-cat" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
+        <select id="sup-cat" aria-label="Category" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
         <button onclick="doSignup()" style="padding:9px 20px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Sign Up</button>
       </div>
       <div id="zwid-hint" style="font-size:11px;color:#10B981;margin-top:6px"></div>
@@ -2027,7 +1692,7 @@ function renderEvents(){
 
   const byCat=["A+","A","B","C","D"].reduce((a,cat)=>{const r=sups.filter(s=>s.cat===cat);if(r.length)a.push({cat,r});return a;},[]);
   if(sups.length===0){
-    html+=`<div class="card" style="padding:40px;text-align:center;color:#7b8494;font-size:14px">No sign-ups yet — be the first! 🚴</div>`;
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#9aa3b2;font-size:14px">No sign-ups yet — be the first! 🚴</div>`;
   } else {
     html+=byCat.map(({cat,r})=>`
       <div class="card" style="margin-bottom:12px">
@@ -2036,11 +1701,11 @@ function renderEvents(){
           <div style="display:flex;align-items:center;gap:10px">
             <span style="color:#10B981">✓</span>
             <span>${esc(s.name)}</span>
-            ${s.zwid?`<span style="font-size:10px;color:#7b8494;font-family:monospace">ID:${esc(s.zwid)}</span>`:''}
+            ${s.zwid?`<span style="font-size:10px;color:#9aa3b2;font-family:monospace">ID:${esc(s.zwid)}</span>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:12px">
-            <span style="font-size:11px;color:#7b8494">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
-            ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#7b8494;font-size:16px;padding:0">×</button>`:''}
+            <span style="font-size:11px;color:#9aa3b2">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+            ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#9aa3b2;font-size:16px;padding:0">×</button>`:''}
           </div>
         </div>`).join('')}
       </div>`).join('');
@@ -2173,7 +1838,7 @@ function tttLineups(d,opts){
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px"><span style="font-weight:800">${esc(t.name)}</span><span style="font-size:11px;color:${full?'#f87171':'#8b95a5'}">${list.length}/${t.max}</span></div>
       <div style="font-size:11px;color:#8b95a5;margin-bottom:8px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
       ${(d.week.results||{})[t.id]?`<div style="font-size:12px;font-weight:700;color:#FBBF24;margin:-4px 0 8px">🏁 ${esc(tttResultText(d.week.results[t.id]))}</div>`:''}
-      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';const cap=(d.captains||{})[t.id]===tttKey(s.name);return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:var(--accent);font-weight:700':''}"><span>${cap?'<span title="Captain">⭐</span> ':''}${cat?catB(esc(cat))+' ':''}${esc(s.name)}${cap?' <span style="font-size:10px;color:#FBBF24">captain</span>':''}</span><span style="font-size:11px;color:#8b95a5">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#7b8494">No riders yet</div>`}
+      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';const cap=(d.captains||{})[t.id]===tttKey(s.name);return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:var(--accent);font-weight:700':''}"><span>${cap?'<span title="Captain">⭐</span> ':''}${cat?catB(esc(cat))+' ':''}${esc(s.name)}${cap?' <span style="font-size:10px;color:#FBBF24">captain</span>':''}</span><span style="font-size:11px;color:#8b95a5">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#9aa3b2">No riders yet</div>`}
       ${tttStaff()&&!tttArchiveView&&list.length?`<select class="inp" style="margin-top:8px;padding:4px 6px;font-size:12px" data-team="${esc(t.id)}" onchange="tttWrite('/api/ttt/captain',{team:this.dataset.team,name:this.value})"><option value="">⭐ Captain: none</option>${list.map(s=>`<option value="${esc(s.name)}" ${(d.captains||{})[t.id]===tttKey(s.name)?'selected':''}>⭐ ${esc(s.name)}${s.captain?' (volunteer)':''}</option>`).join('')}</select>`:''}
     </div>`;}).join('')}</div>`;
 }
@@ -2254,7 +1919,7 @@ function tttSignupForm(d){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <input id="ttt-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:180px" value="${esc(me.name||'')}"/>
       <input id="ttt-zwid" class="inp" placeholder="Zwift ID" style="width:120px" value="${esc(me.id||'')}"/>
-      <select id="ttt-cat" class="inp" style="width:70px">${['','A+','A','B','C','D'].map(c=>`<option ${c===(existing?existing.cat:me.cat||'')?'selected':''}>${c}</option>`).join('')}</select>
+      <select id="ttt-cat" aria-label="Category" class="inp" style="width:70px">${['','A+','A','B','C','D'].map(c=>`<option ${c===(existing?existing.cat:me.cat||'')?'selected':''}>${c}</option>`).join('')}</select>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-bottom:10px">
       <label><input type="radio" name="ttt-avail" value="yes" ${!existing||existing.available?'checked':''}/> Available this week</label>
@@ -2312,7 +1977,7 @@ function tttBoard(d){
     return zone(`data-team="${esc(t.id)}"`,`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px"><b style="font-size:14px">${esc(t.name)}</b><span style="font-size:12px;font-weight:700;color:${col}">${list.length}/${t.max}</span></div>
       <div style="font-size:11px;color:#8b95a5;margin-bottom:4px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
       <div style="height:4px;border-radius:99px;background:rgba(255,255,255,0.08);margin-bottom:8px"><div style="height:4px;border-radius:99px;width:${Math.min(100,Math.round(list.length/t.max*100))}%;background:${col}"></div></div>
-      ${list.length?`<div style="display:flex;flex-direction:column;gap:5px">${list.map(s=>tttChip(d,s,t.id)).join('')}</div>`:'<div style="font-size:12px;color:#7b8494;padding:10px 0;text-align:center">Drop riders here</div>'}
+      ${list.length?`<div style="display:flex;flex-direction:column;gap:5px">${list.map(s=>tttChip(d,s,t.id)).join('')}</div>`:'<div style="font-size:12px;color:#9aa3b2;padding:10px 0;text-align:center">Drop riders here</div>'}
       ${list.length?`<div style="font-size:11px;margin-top:8px;color:${capName?'#FBBF24':'#8b95a5'}">${capName?'★ Captain: '+rnName(capName):thin?'⚠️ Needs 4 or more riders':'☆ No captain yet'}</div>`:''}`,`border-color:${over?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.1)'}`);
   }).join('');
   return `<style>.ttt-zone{border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.025);min-height:90px}.ttt-over{outline:2px dashed var(--accent);background:rgba(var(--accent-rgb),0.06)}
@@ -2380,7 +2045,7 @@ function tttBoardCard(){
     const place=n.unplaced+n.new;
     body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Read from <b style="color:#e5e7eb">${esc(p.tab)}</b>: ${p.blocks.map(b=>`<span style="white-space:nowrap">${esc(b.cols)} ${b.label?'<b style="color:'+(b.team?'#10B981':'#FBBF24')+'">'+esc(b.label)+'</b>':'(no label)'} (${b.riders}${b.withId<b.riders?', '+(b.riders-b.withId)+' matched by name':''})</span>`).join(' · ')||'no blocks of names with Zwift IDs beside them were found'}.</div>
       <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${n.same} already agree${n.unplaced?`, <b style="color:var(--accent)">${n.unplaced} can be placed</b>`:''}${n.new?`, <b style="color:var(--accent)">${n.new} are not signed up here yet</b>`:''}${n.elsewhere?`, <b style="color:#FBBF24">${n.elsewhere} are on a different team here</b>`:''}${n['no-team']?`, ${n['no-team']} are in a block with no matching team here`:''}.</div>
-      <div style="max-height:240px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse">${p.plan.filter(x=>x.status!=='same').map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px">${rnName(x.name)}</td><td style="padding:4px 6px;color:#9ca3af">${esc(x.label)} <span style="color:#7b8494">${esc(x.block)}</span></td><td style="padding:4px 6px;color:${st[x.status][0]}">${st[x.status][1]}${x.appTeams.length?': '+esc(x.appTeams.join(', ')):''}</td></tr>`).join('')||'<tr><td style="padding:6px;color:#10B981">The app and the sheet agree.</td></tr>'}</table></div>
+      <div style="max-height:240px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse">${p.plan.filter(x=>x.status!=='same').map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px">${rnName(x.name)}</td><td style="padding:4px 6px;color:#9ca3af">${esc(x.label)} <span style="color:#9aa3b2">${esc(x.block)}</span></td><td style="padding:4px 6px;color:${st[x.status][0]}">${st[x.status][1]}${x.appTeams.length?': '+esc(x.appTeams.join(', ')):''}</td></tr>`).join('')||'<tr><td style="padding:6px;color:#10B981">The app and the sheet agree.</td></tr>'}</table></div>
       ${place?`<button onclick="tttBoardRun(true,false)" style="${btn};background:rgba(var(--accent-rgb),0.12);color:var(--accent);border-color:rgba(var(--accent-rgb),0.4)">Place ${place} rider${place===1?'':'s'} as the sheet has them</button> `:''}${n.elsewhere?`<button onclick="if(confirm('Move ${n.elsewhere} rider${n.elsewhere===1?'':'s'} to the team the sheet names? Their team here is replaced.'))tttBoardRun(true,true)" style="${btn};color:#FBBF24;border-color:rgba(251,191,36,0.4)">Also move ${n.elsewhere} to the sheet's team</button> `:''}`;
   }
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(167,139,250,0.4)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">📋 Published teams on the TEAM LIST tab</div>${body}<button onclick="tttBoardImp=null;renderTtt()" style="${btn}">Close</button></div>`;
@@ -3077,9 +2742,9 @@ function renderRides(){
         <span>📍 ${esc(ride.route)}</span><span>📏 ${esc(ride.dist)}</span><span>⚡ ${esc(ride.pace)}</span><span>👥 ${att.length}/${max}</span>
       </div>
       <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
-        <div style="width:${pct}%;height:100%;background:${pct>85?'#EF4444':'var(--accent)'};border-radius:2px"></div>
+        <div style="width:${pct}%;height:100%;background:${pct>85?'#F87171':'var(--accent)'};border-radius:2px"></div>
       </div>
-      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#7b8494;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
+      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#9aa3b2;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
       ${String(rsvpId)===String(ride.id)?
         `<div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="rsvp-${rid}" data-ride="${rid}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(var(--accent-rgb),0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(this.dataset.ride)"/>
@@ -3140,10 +2805,10 @@ function renderProfile(){
   const ph=raw?.phenotype?.scores||{};
   const pow=raw?.power||{};
   const hcp=raw?.handicaps?.profile||{};
-  const phItems=[['Climber',ph.climber||0,'#10B981'],['Pursuiter',ph.pursuiter||0,'#3B82F6'],['Time Trialist',ph.tt||0,'#8B5CF6'],['Puncheur',ph.puncheur||0,'#F59E0B'],['Sprinter',ph.sprinter||0,'#EF4444']];
+  const phItems=[['Climber',ph.climber||0,'#10B981'],['Pursuiter',ph.pursuiter||0,'#3B82F6'],['Time Trialist',ph.tt||0,'#A78BFA'],['Puncheur',ph.puncheur||0,'#F59E0B'],['Sprinter',ph.sprinter||0,'#F87171']];
   const powItems=[['5s',pow.wkg5||0],['15s',pow.wkg15||0],['30s',pow.wkg30||0],['1min',pow.wkg60||0],['5min',pow.wkg300||0],['20min',pow.wkg1200||0]];
   const maxPow=Math.max(...powItems.map(x=>x[1]),1);
-  const hcpItems=[['Flat',hcp.flat||0,'#3B82F6'],['Rolling',hcp.rolling||0,'#10B981'],['Hilly',hcp.hilly||0,'#F59E0B'],['Mountainous',hcp.mountainous||0,'#EF4444']];
+  const hcpItems=[['Flat',hcp.flat||0,'#3B82F6'],['Rolling',hcp.rolling||0,'#10B981'],['Hilly',hcp.hilly||0,'#F59E0B'],['Mountainous',hcp.mountainous||0,'#F87171']];
   const zraC=ZRA_COLOR[r.zraCat]||'#9ca3af';
 
   document.getElementById('profile-content').innerHTML=`
@@ -3184,7 +2849,7 @@ function renderProfile(){
             <div class="pbar-label"><span>${lbl}</span><span style="color:${col};font-weight:700">${val.toFixed(1)}</span></div>
             <div class="pbar"><div class="pbar-fill" style="width:${Math.min(100,Math.round(val/Math.max(...phItems.map(x=>x[1]),1)*100))}%;background:${col}"></div></div>
           </div>`).join('')}
-        <div style="margin-top:12px;font-size:11px;color:#7b8494">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
+        <div style="margin-top:12px;font-size:11px;color:#9aa3b2">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:16px">Power Profile (W/kg)</div>
@@ -3201,11 +2866,11 @@ function renderProfile(){
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         ${hcpItems.map(([lbl,val,col])=>`<div style="flex:1;min-width:100px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;text-align:center">
           <div style="font-size:10px;color:#8b95a5;text-transform:uppercase;margin-bottom:6px">${lbl}</div>
-          <div style="font-size:18px;font-weight:900;color:${val>=0?'#10B981':'#EF4444'}">${val>=0?'+':''}${Math.round(val)}</div>
-          <div style="font-size:10px;color:#7b8494;margin-top:2px">w handicap</div>
+          <div style="font-size:18px;font-weight:900;color:${val>=0?'#10B981':'#F87171'}">${val>=0?'+':''}${Math.round(val)}</div>
+          <div style="font-size:10px;color:#9aa3b2;margin-top:2px">w handicap</div>
         </div>`).join('')}
       </div>
-      <div style="font-size:11px;color:#7b8494;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
+      <div style="font-size:11px;color:#9aa3b2;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}
     <div class="discord-slot" style="margin-top:16px"></div>
     <div class="push-slot" style="margin-top:16px"></div>
@@ -3307,7 +2972,7 @@ function zrlStaffPanel(d){
         <div><label class="lbl">Sign-ups close</label><input id="zrl-new-closes" type="date" class="inp" style="width:auto"/></div>
         <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlStartRound()">Start round</button></div>
       ${round?`<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="zrl-new-carry" checked style="margin-top:3px"/><span><b>Carry over the riders</b> who are in and on a team (${(d.signups||[]).filter(x=>x.in&&(d.assign||{})[x.key]).length} of them), each staying on their team, and captains who are still on their team. Riders can still change their sign-up.</span></label>`:''}
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
   if(!round) return start;
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
       <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' '+tzLabel()+' (automatic)':''}
@@ -3319,14 +2984,14 @@ function zrlStaffPanel(d){
           <div><label class="lbl">Sign-ups close</label><input id="zrl-ed-closes" type="date" class="inp" value="${round.closesAt?esc(new Date(round.closesAt).toLocaleDateString('en-CA',{timeZone:'Europe/London'})):''}" style="width:auto"/></div>
           <div><label class="lbl">Races</label><input id="zrl-ed-weeks" type="number" min="1" max="12" class="inp" value="${esc(round.weeks)}" style="width:70px"/></div>
           <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlEditRound()">Save</button></div>
-        <div style="font-size:11px;color:#7b8494;margin-top:6px">Changes the name and dates only. Sign-ups and teams stay, and nothing is posted to Discord.</div></details>
+        <div style="font-size:11px;color:#9aa3b2;margin-top:6px">Changes the name and dates only. Sign-ups and teams stay, and nothing is posted to Discord.</div></details>
       <div style="font-size:13px;margin-bottom:10px">Rosters are <b>${round.published?'published':'not published'}</b> <span style="color:#8b95a5">${round.published?'(riders can see their team)':'(only staff and captains see teams)'}</span>
         <button onclick="zrlPublish(${!round.published})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:${round.published?'rgba(255,255,255,0.05)':'rgba(16,185,129,0.12)'};color:${round.published?'#e5e7eb':'#10B981'};border:1px solid ${round.published?'rgba(255,255,255,0.15)':'rgba(16,185,129,0.3)'};border-radius:6px">${round.published?'🙈 Unpublish':'📣 Publish rosters'}</button></div>
       <details><summary style="font-size:12px;color:#9ca3af;cursor:pointer;margin-bottom:8px">Edit teams one by one (${round.teams.length}): names, time zones, race times, captains</summary>
       <datalist id="zrl-slots">${[...new Set(round.teams.map(t=>t.slot).filter(Boolean))].map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>
       <div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:6px"><button onclick="zrlAddTeam()" style="padding:6px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">+ Add team</button><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSaveTeams()">Save teams</button></div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">Captains are chosen from each team's own riders (⭐ = happy to captain; a starred rider is picked automatically). Race times are easier to set for a whole league in the Race times card.</div></details></div>${start}`;
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Captains are chosen from each team's own riders (⭐ = happy to captain; a starred rider is picked automatically). Race times are easier to set for a whole league in the Race times card.</div></details></div>${start}`;
 }
 let zrlPreview=null;
 function zrlImportCard(d){
@@ -3345,7 +3010,7 @@ function zrlImportCard(d){
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlImportApply()">Import (replaces teams and rosters)</button>
         <button onclick="zrlImportRefresh()" style="${btn}">Only update league, division and grade</button></div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Reads the team board tab of the club Google Sheet. Nothing changes until you press Import.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Reads the team board tab of the club Google Sheet. Nothing changes until you press Import.</div></div>`;
 }
 function zrlLeagueRows(p,regs,btn){
   const groups=[...new Set(p.teams.map(t=>t.hint||''))];
@@ -3372,7 +3037,7 @@ function zrlSignupImportCard(d){
       ${p.warnings.length?`<details style="margin-bottom:8px;font-size:12px;color:#fbbf24"><summary>${p.warnings.length} things to check</summary><ul style="margin:6px 0 0 18px">${p.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:''}
       <button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSignupApply()">Import ${s.riders} sign-ups</button>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Riders who signed up on this page themselves are never overwritten. Nothing changes until you press Import.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Riders who signed up on this page themselves are never overwritten. Nothing changes until you press Import.</div></div>`;
 }
 async function zrlSignupPreview(){
   const tab=document.getElementById('zrl-su-tab').value.trim(), sheet=document.getElementById('zrl-su-sheet').value.trim();
@@ -3400,7 +3065,7 @@ function zrlAutoCard(d){
       ${p.unplaced.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24">Not placed:<ul style="margin:4px 0 0 18px">${p.unplaced.map(u=>`<li>${rn(u.name,'',u.key)}${u.cat?' ('+esc(u.cat)+')':''}: ${esc(u.reason)}</li>`).join('')}</ul></div>`:''}
       <div style="margin-top:10px"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlAutoApply()">Apply ${p.moves.length} placements</button></div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
 }
 async function zrlAutoPreview(){
   let res,d; try{ res=await fetch('/api/zrl/auto-assign',{method:'POST',headers:tttHeaders(),body:JSON.stringify({})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -3447,7 +3112,7 @@ function zrlExportCard(d){
         <pre style="white-space:pre-wrap;font-size:12px;color:#d1d5db;margin:6px 0">${esc(t.text)}</pre>
         <button onclick="zrlCopy('${a}',this)" style="${btn}">Copy text</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></details>`; }).join('')}</div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">WTRL has no public sign-up for us to fill in, so each captain registers their team there. This gives them the names, Zwift IDs and categories to paste, and the CSV has everything in one file.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">WTRL has no public sign-up for us to fill in, so each captain registers their team there. This gives them the names, Zwift IDs and categories to paste, and the CSV has everything in one file.</div></div>`;
 }
 async function zrlExportBuild(){
   let res,d; try{ res=await fetch('/api/zrl/export',{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -3482,7 +3147,7 @@ function zrlEditorCard(d){
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlEditSave()">Save</button>
       <button onclick="zrlEditing=null;renderZrl2()" style="padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">Cancel</button>
       ${isNew?'':`<button onclick="zrlEditRemove()" style="margin-left:auto;padding:6px 14px;font-size:12px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px">Remove from this round</button>`}</div>
-    <div style="font-size:11px;color:#7b8494;margin-top:8px">Staff changes are kept: a later sheet import will not overwrite them. Changing the Zwift ID or name keeps the rider's team place.</div></div>`;
+    <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Staff changes are kept: a later sheet import will not overwrite them. Changing the Zwift ID or name keeps the rider's team place.</div></div>`;
 }
 function zrlEditStart(key){ zrlEditing=key; renderZrl2(); const el=document.getElementById('zed-name'); if(el) el.scrollIntoView({block:'center'}); }
 async function zrlEditSave(){
@@ -3514,7 +3179,7 @@ function zrlSlotsCard(d){
     ${zrlSlotGroups.map((g,i)=>{ const vals=[...new Set(g.teams.map(t=>t.slot||''))], cur=vals.length===1?vals[0]:'';
       return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:150px;font-size:13px"><b>${esc(g.label)}</b> <span style="color:#8b95a5">· ${g.teams.length} team${g.teams.length===1?'':'s'}${vals.length>1?' · different times':''}</span>${g.teams[0].wtrlSlot?`<div style="font-size:11px;color:${vals.length===1&&cur===g.teams[0].wtrlSlot?'#10B981':'#FBBF24'}">WTRL: ${esc(g.teams[0].wtrlSlot)}${vals.length===1&&cur===g.teams[0].wtrlSlot?' ✓':''}</div>`:''}</div>
         <input id="zrl-slot-${i}" class="inp" list="zrl-slots" maxlength="40" placeholder="e.g. Tue 19:00 UTC" value="${esc(cur)}" style="width:190px"/><button onclick="zrlSetSlots(${i})" style="${btn}">Apply to ${g.teams.length}</button></div>`; }).join('')}
-    <div style="font-size:11px;color:#7b8494;margin-top:8px">Use the time shown on the WTRL league table, and say which time zone it is in. Riders and captains see this text as it is.</div></div>`;
+    <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Use the time shown on the WTRL league table, and say which time zone it is in. Riders and captains see this text as it is.</div></div>`;
 }
 function zrlLeagueTimes(n){
   const list=zrlData.round.teams.filter(t=>t.wtrlSlot&&t.wtrlSlot!==t.slot).slice(0,8).map(t=>t.name.replace(/^CRYO-GEN\s+/,'')+': '+(t.slot||'none')+' → '+t.wtrlSlot).join('\n');
@@ -3649,7 +3314,7 @@ function zrlGrowthCard(d,st){
     return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:200px;font-size:13px">${z.id==='ap'?'🌏 ':''}<b>${esc(z.name)}</b> <span style="color:#9ca3af">· ${note}${loose?' · '+loose+' interested with no team':''}</span></div>
       <button onclick="zrlRecruit('${z.id}','${esc(z.name)}')" style="padding:4px 10px;font-size:12px;background:${z.id==='ap'?'rgba(var(--accent-rgb),0.12)':'rgba(255,255,255,0.05)'};color:${z.id==='ap'?'var(--accent)':'#e5e7eb'};border:1px solid ${z.id==='ap'?'rgba(var(--accent-rgb),0.4)':'rgba(255,255,255,0.15)'};border-radius:6px;cursor:pointer">📣 Ask for riders</button></div>`;
   }).join('');
-  return `<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:4px">Growth: where riders are wanted</div>${rows}<div style="font-size:11px;color:#7b8494;margin-top:6px">One message per time zone a day. It says how many places are open and the race times.</div></div>`;
+  return `<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:4px">Growth: where riders are wanted</div>${rows}<div style="font-size:11px;color:#9aa3b2;margin-top:6px">One message per time zone a day. It says how many places are open and the race times.</div></div>`;
 }
 function zrlTeamsTab(d,st){
   const r=d.round, size=r.rosterSize;
@@ -3668,7 +3333,7 @@ function zrlTeamsTab(d,st){
       <div style="font-size:11px;color:#8b95a5;margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'—')}${t.dev?zrlBadge('DEV','#a78bfa'):''}</div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#9ca3af">${esc(zone)}</span><span style="font-weight:700;color:${n>size?'#FBBF24':'#e5e7eb'}">${n}/${size}</span></div>
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:8px"><div style="height:5px;width:${pct}%;background:${barColor};border-radius:3px"></div></div>
-      <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#7b8494')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
+      <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#9aa3b2')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
       <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(slotLocal(t.slot)):(n?'no race time':'')}</div>
       ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}
       ${overN?`<div style="font-size:12px;color:#f87171;font-weight:700">⚠ ${overN} over category</div>`:''}</div>`;
@@ -4227,7 +3892,7 @@ function zrlPastCard(d){
       ${s.groups.length?`<div style="margin-top:10px;font-size:12px;color:#9ca3af">Standings: ${s.groups.map(g=>esc(g.name)+': '+g.teams.map(t=>t.rank+'. '+esc(t.name.replace(/^CRYO-GEN\s+/,''))+' '+t.total).join(', ')).join(' · ')}</div>`:''}</div>`;
   }
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Past rounds (staff)')}${rows||'<div style="font-size:13px;color:#8b95a5">No past rounds yet. A round is archived when the next one starts.</div>'}${detail}
-    ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#7b8494;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
+    ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#9aa3b2;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
 }
 function zrlWeeksTab(){
   const w=zrlWeekly;
@@ -4319,7 +3984,7 @@ function zrlMyCard(){
       ${t.issues.length?`<div style="font-size:12px;color:#fbbf24;margin-top:8px">To sort out: ${esc(t.issues.join(', '))}. Tell the staff in Discord.</div>`:''}
       <div style="margin-top:10px"><button onclick="zrlCopy('${a}',this)" style="${btn}">Copy team details</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></div>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button onclick="zrlWtrlMark('${esc(t.id)}',${!t.registered})" style="${btn};${t.registered?'border-color:rgba(16,185,129,0.5);color:#10B981':''}">${t.registered?'✅ Registered on WTRL (tap to undo)':'☐ I have registered on WTRL'}</button>${m.round.wtrlDeadline&&!t.registered?`<span style="font-size:12px;color:#FBBF24">Deadline ${esc(zrlDeadlineText(m.round.wtrlDeadline))}</span>`:''}</div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
   });
   if((m.teams||[]).length){
     (m.teams).forEach(t=>{
@@ -4453,7 +4118,7 @@ function renderSeason(d){
         <input id="season-start" type="date" class="inp" value="${esc(weekDate)}" style="width:auto"/>
         <button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="addSeasonUi()">Start new season</button>
       </div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">A season runs until the next one starts. Weeks before the first season show as "Earlier weeks". Nothing is deleted when you add or remove a season.</div>
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">A season runs until the next one starts. Weeks before the first season show as "Earlier weeks". Nothing is deleted when you add or remove a season.</div>
     </div>`:'';
   return head+renderSeasonBody(d)+manage;
 }
@@ -4637,7 +4302,7 @@ function renderAutoResults(results){
       const col=catColor(c.cat);
       return '<span style="display:inline-flex;align-items:center;gap:4px;margin:1px 2px;padding:2px 7px;border-radius:4px;background:'+col+'18;border:1px solid '+col+'44;font-size:11px"><span style="color:'+col+';font-weight:700">'+c.cat+'</span><span style="color:#9ca3af">'+(c.pos<=3?'🏆 ':'')+c.pos+'/'+c.total+'</span><span style="font-family:monospace;color:#8b95a5">'+c.time+'</span><span style="color:var(--accent)">'+c.wkg+' w/kg</span></span>';
     }).join('');
-    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#8b95a5;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#8b95a5">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#7b8494">'+ev.riders+' riders</td></tr>';
+    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#8b95a5;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#8b95a5">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#9aa3b2">'+ev.riders+' riders</td></tr>';
   }).join('');
 }
 
@@ -4663,7 +4328,7 @@ function renderHybridResults(sheet,derived){
       return '<tr><td><a href="https://zwiftpower.com/profile.php?z='+r.id+'" target="_blank" style="color:white;text-decoration:none">'+r.name+'</a></td><td style="color:#8b95a5;font-size:11px">'+dt+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.category||'?')+'</span></td><td style="color:#9ca3af">vELO '+r.rating+'</td><td style="color:#10B981;font-size:11px">🏆 '+r.wins+'W / '+r.podiums+'P</td><td style="color:var(--accent);font-family:monospace">'+r.finishes+' races</td></tr>';
     }).join('');
   }
-  el.innerHTML=rows||'<tr><td colspan="6" style="color:#7b8494;text-align:center;padding:20px">No results yet</td></tr>';
+  el.innerHTML=rows||'<tr><td colspan="6" style="color:#9aa3b2;text-align:center;padding:20px">No results yet</td></tr>';
 }
 
 let ridesTab='cover'; try{ ridesTab=sessionStorage.getItem('ridesTab')||'cover'; }catch(e){}
@@ -4832,7 +4497,7 @@ async function coverIcal(apply){
 }
 
 function catColor(c){
-  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#8b95a5',F:'#ec4899'}[c]||'#8b95a5';
+  return {A:'#f87171',B:'#f97316',C:'#eab308',D:'#a78bfa',E:'#8b95a5',F:'#ec4899'}[c]||'#8b95a5';
 }
 
 // ── Init ───────────────────────────────────────────────────

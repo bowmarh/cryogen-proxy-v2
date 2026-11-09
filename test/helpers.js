@@ -122,6 +122,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
+    case 'TYPE': { const v = db[key]; return v === undefined || v === null ? 'none' : Array.isArray(v) ? 'list' : typeof v === 'object' ? 'hash' : 'string'; }
     case 'HKEYS': return Object.keys(db[key] || {});
     case 'HLEN': return Object.keys(db[key] || {}).length;
     case 'HSET': { let n = 0; for (let i = 0; i < a.length; i += 2) { hash(key)[a[i]] = a[i + 1]; n++; } return n; }   // like Redis, several field/value pairs in one command

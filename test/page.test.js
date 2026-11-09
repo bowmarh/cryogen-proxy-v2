@@ -11,7 +11,7 @@ h.setEnv();
 const publicDir = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
 // The dashboard's own code lives in js/app.js (it used to be inline); it is checked like the page itself.
-const externalScripts = [path.join(publicDir, 'js', 'app.js'), path.join(publicDir, 'js', 'calendar-settings.js')].map(file => fs.readFileSync(file, 'utf8'));
+const externalScripts = [path.join(publicDir, 'js', 'app.js'), path.join(publicDir, 'js', 'staff.js'), path.join(publicDir, 'js', 'calendar-settings.js')].map(file => fs.readFileSync(file, 'utf8'));
 let app;
 before(async () => { app = await h.startApp(h.createWorld()); });
 after(() => app.close());

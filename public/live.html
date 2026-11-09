@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CRYO-GEN: race day board</title>
+<meta name="description" content="Race-day board for Team CRYO-GEN: what is racing next, how many riders are in the pen, and where the teams stand."/>
+<meta name="robots" content="noindex"/>
+<style>
+:root{--accent:#00D4FF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060a14;color:#e5e7eb;font-family:system-ui,sans-serif;min-height:100vh;padding:20px 24px 40px}
+.wrap{max-width:1100px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:28px;font-weight:900;color:var(--accent);letter-spacing:.5px}
+.sub{font-size:14px;color:#9ca3af}
+.hero{text-align:center;padding:26px 16px;border-radius:16px;background:linear-gradient(135deg,rgba(0,212,255,.2),rgba(0,212,255,.04));border:1px solid rgba(0,212,255,.3);margin-bottom:18px}
+.hero .what{font-size:22px;font-weight:800;margin:6px 0}
+.count{font-size:clamp(44px,10vw,96px);font-weight:900;font-family:ui-monospace,monospace;letter-spacing:.04em}
+.muted{color:#9ca3af;font-size:14px}
+h2{font-size:18px;font-weight:800;margin:22px 0 10px}
+.card{background:#0f1623;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 18px;margin-bottom:10px}
+.ev{display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:center}
+.ev b{font-size:18px}
+.tag{font-size:11px;font-weight:700;text-transform:uppercase;padding:2px 9px;border-radius:99px;background:rgba(0,212,255,.14);color:var(--accent);margin-right:8px}
+.bar{grid-column:1/-1;height:12px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar>div{height:12px;border-radius:6px;background:#34d399;transition:width .6s}
+.phase{font-weight:800;font-size:14px}
+.pen{color:#FBBF24}.racing{color:#34d399}.later{color:#9ca3af}
+.pod{display:flex;gap:16px;flex-wrap:wrap}
+.pod>div{min-width:220px;flex:1}
+.pod ol{margin:6px 0 0 20px;font-size:15px;line-height:1.6}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+footer{margin-top:28px;font-size:12px;color:#8b95a5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>CRYO-GEN race day</h1><div class="sub" id="updated" role="status">Loading…</div></header>
+  <div id="board" aria-live="polite"></div>
+  <footer>Totals only: no rider names. Updates every 30 seconds.</footer>
+</div>
+<script>
+(function () {
+  const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let data = null, failed = false;
+  const clock = ms => { const a = Math.abs(ms), h = Math.floor(a / 3600000), m = Math.floor(a % 3600000 / 60000), s = Math.floor(a % 60000 / 1000); return `${h ? h + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
+  const phaseText = { later: 'Later', pen: 'Pen open', racing: 'Racing' };
+  function draw() {
+    const el = document.getElementById('board'); if (!data) return;
+    const now = Date.now(), next = data.events.find(e => e.at > now);
+    const hero = next ? `<div class="hero"><div class="muted">Next up · ${E(next.series)}</div><div class="what">${E(next.title)}</div><div class="count" id="count" aria-hidden="true">${clock(next.at - now)}</div><div class="muted">${next.need ? `${next.ready} of ${next.need} riders in the pen` : ''}</div></div>`
+      : `<div class="hero"><div class="what">No race in the next day</div><div class="muted">This board fills in on race days.</div></div>`;
+    const rows = data.events.map(e => { const pct = e.need ? Math.min(100, Math.round(e.ready / e.need * 100)) : 0, ph = e.at > now ? (e.at - now > 3600000 ? 'later' : 'pen') : 'racing';
+      return `<div class="card ev"><div><span class="tag">${E(e.series)}</span><b>${E(e.title)}</b></div><div class="phase ${ph}">${phaseText[ph]} · ${e.at > now ? 'in ' + clock(e.at - now) : 'started ' + clock(now - e.at) + ' ago'}</div>${e.need ? `<div class="bar" role="progressbar" aria-label="Riders in the pen" aria-valuemin="0" aria-valuemax="${e.need}" aria-valuenow="${e.ready}"><div style="width:${pct}%"></div></div><div class="muted">${e.ready} of ${e.need} in the pen</div>` : ''}</div>`; }).join('');
+    const lead = (data.leaders || []).filter(g => g.top && g.top.length).map(g => `<div class="card"><b>${E(g.division)}</b><ol>${g.top.slice(0, 3).map(t => `<li>${E(t.team)} <span class="muted">${E(t.points)} pts</span></li>`).join('')}</ol></div>`).join('');
+    el.innerHTML = hero + (rows ? `<h2>Today and tomorrow</h2>${rows}` : '') + (lead ? `<h2>ZRL standings</h2><div class="pod">${lead}</div>` : '');
+    document.getElementById('updated').textContent = failed ? 'Could not refresh: showing the last update' : `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  async function load() {
+    try { const r = await fetch('/api/public/live'); if (!r.ok) throw new Error(r.status === 404 ? 'The public pages are switched off.' : 'HTTP ' + r.status); data = await r.json(); failed = false; }
+    catch (e) { failed = true; if (!data) { document.getElementById('board').innerHTML = `<div class="card">${E(e.message)}</div>`; document.getElementById('updated').textContent = ''; return; } }
+    draw();
+  }
+  load(); setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
+  setInterval(() => { const c = document.getElementById('count'); if (c && data) { const next = data.events.find(e => e.at > Date.now()); if (next) c.textContent = clock(next.at - Date.now()); } }, 1000);
+})();
+</script>
+</body>
+</html>

@@ -2214,6 +2214,7 @@ const ukWhen = ms => `${new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe
 const wpAuth = () => (process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null);
 
 let healthCache = { at: 0, body: null };
+let liveBoardCache = null;
 async function healthChecks(){
   const run = (id, label, fn) => withTimeout(Promise.resolve().then(fn))
     .then(([status, detail]) => ({ id, label, status, detail }))
@@ -2775,6 +2776,8 @@ const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFro
     try { const z = await zrl.load(); if (z.round) { const racing = z.signups.filter(x => x.in), ids = new Set(z.round.teams.map(t => t.id)); out.racing = racing.length; out.unplaced = racing.filter(x => !teamsOfAssign(z.assign[x.key]).some(i => ids.has(i))).length; out.teams = z.round.teams.length; } } catch (e) { /* ditto */ }
     return out;
   } });
+const privacy = require('../lib/privacy')({ redis, HttpError, requireRole, memberFromRequest, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), discord, siteUrl: SITE_URL });
+const clientErrors = require('../lib/clienterrors')({ redis, HttpError, requireRole, discord, counter, clientIp });
 const clubstats = require('../lib/clubstats')({ redis, HttpError, requireRole, tidy, trend });
 const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const support = require('../lib/support')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
@@ -2929,7 +2932,7 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
@@ -2983,6 +2986,16 @@ async function route(req, res){
     // Anyone can ask for this page, so the answer is made at most once a minute per server instance.
     if (!publicCache || Date.now() - publicCache.at > 60000) publicCache = { at: Date.now(), data: await publicClub() };
     return sendJSON(res, 200, publicCache.data);
+  }
+  // The race-day board: the same on/off switch as the public club page, answered at most every 20 seconds per server instance (it is open on screens).
+  if (pathname === '/api/public/live' && req.method === 'GET'){
+    if (!await publicOn()) return sendJSON(res, 404, { error: 'Not found' });
+    if (!liveBoardCache || Date.now() - liveBoardCache.at > 20000){
+      const board = require('../lib/liveboard').publicLive(await live.events(syncReq()).catch(() => []), Date.now());
+      let leaders = []; try { leaders = (publicCache && Date.now() - publicCache.at < 60000 ? publicCache.data : await publicClub()).podium || []; } catch (e) { /* the board still shows the races */ }
+      liveBoardCache = { at: Date.now(), data: { ...board, leaders } };
+    }
+    return sendJSON(res, 200, liveBoardCache.data);
   }
   if (pathname === '/api/public/settings'){
     const role = requireRole(req, ['admin', 'mod']);
@@ -3040,7 +3053,7 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
   const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
