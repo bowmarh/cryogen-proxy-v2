@@ -10,7 +10,8 @@ const h = require('./helpers');
 h.setEnv();
 const publicDir = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
-const externalScripts = [path.join(publicDir, 'js', 'calendar-settings.js')].map(file => fs.readFileSync(file, 'utf8'));
+// The dashboard's own code lives in js/app.js (it used to be inline); it is checked like the page itself.
+const externalScripts = [path.join(publicDir, 'js', 'app.js'), path.join(publicDir, 'js', 'calendar-settings.js')].map(file => fs.readFileSync(file, 'utf8'));
 let app;
 before(async () => { app = await h.startApp(h.createWorld()); });
 after(() => app.close());
@@ -23,7 +24,7 @@ test('every inline script parses (a typo there would blank the whole dashboard)'
 
 test('no placeholder credentials or WordPress login details are in the page', () => {
   for (const bad of ['application_password', 'admin_username', 'wp-json/cryogen/v1/members']) {
-    assert.ok(!html.includes(bad), `the page must not contain "${bad}"`);
+    assert.ok(![html, ...externalScripts].some(src => src.includes(bad)), `the page must not contain "${bad}"`);
   }
 });
 
@@ -42,6 +43,7 @@ test('every server route the page calls exists', async () => {
 
 test('the dashboard uses real roster data only and loads the extracted calendar module', () => {
   assert.match(html, /\/js\/calendar-settings\.js/);
-  assert.doesNotMatch(html, /\bMOCK\b|mock data|riders \(mock\)/i);
-  assert.match(html, /Cached roster may be out of date/);
+  const everything = [html, ...externalScripts].join('\n');
+  assert.doesNotMatch(everything, /\bMOCK\b|mock data|riders \(mock\)/i);
+  assert.match(everything, /Cached roster may be out of date/);
 });

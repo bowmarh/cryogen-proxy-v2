@@ -2,6 +2,9 @@
 
 const { defineConfig } = require('@playwright/test');
 
+// The browser always runs on the real clock, so the server and the specs must too (the unit tests pin theirs, see test/helpers.js).
+process.env.TEST_CLOCK = 'real';
+
 module.exports = defineConfig({
   testDir: './test/e2e',
   fullyParallel: false,
