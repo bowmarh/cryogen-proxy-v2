@@ -223,6 +223,8 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 
   <div id="page-dashboard" class="page active">
     <div id="club-welcome" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:10px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.25);font-size:14px;font-weight:600"></div>
+    <div id="onboard-card"></div>
+    <div id="recap-card"></div>
     <div id="myweek-card"></div>
     <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Team Overview</h2>
     <p style="font-size:13px;color:#8b95a5;margin-bottom:20px">ZwiftPower · ZwiftRacing.app</p>
@@ -891,7 +893,7 @@ function launchApp(r){
   loadTttSummary();
   installBarMaybe();
   if(r==='admin'||r==='mod') showTab('week',document.getElementById('nav-week'));   // staff start on This week
-  if(r==='member'){ loadMyWeek(); tzLoadMine(); }
+  if(r==='member'){ loadMyWeek(); tzLoadMine(); if(window.MemberCards) MemberCards.load(); }
   if(window.uiLogin) uiLogin();
   if(r!=='admin'&&r!=='mod'&&window.uiStartPage) uiStartPage();
   tzRefresh();
@@ -2556,8 +2558,8 @@ function tttRider(s){
 }
 // When the club database is over its limit the server answers with the last saved copy (header X-Stale); say so, and clear the note once it is live again.
 (function(){ const f=window.fetch; window.fetch=async function(...a){ const r=await f.apply(this,a); try{ if(String(a[0]).startsWith('/api/')){ let b=document.getElementById('stale-banner');
-  if(r.headers.get('X-Stale')==='1'){ if(!b){ b=document.createElement('div'); b.id='stale-banner'; b.setAttribute('role','status'); b.style.cssText='position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#78350f;color:#fde68a;padding:8px 14px;border-radius:8px;font-size:13px;max-width:90vw;text-align:center'; document.body.appendChild(b); } b.textContent='Showing saved data: the club database is busy, so this may be a few minutes old.'; }
-  else if(b) b.remove(); } }catch(e){} return r; }; })();
+  if(r.headers.get('X-Stale')==='1'){ window._staleAt=Date.now(); if(!b){ b=document.createElement('div'); b.id='stale-banner'; b.setAttribute('role','status'); b.style.cssText='position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#78350f;color:#fde68a;padding:8px 14px;border-radius:8px;font-size:13px;max-width:90vw;text-align:center'; document.body.appendChild(b); } b.textContent='Showing saved data: the club database is busy, so this may be a few minutes old.'; }
+  else if(b && Date.now()-(window._staleAt||0)>60000) b.remove(); } }catch(e){} return r; }; })();   // cleared only after a minute with no saved copy, so one live reply does not hide it while others are still saved
 function tttHeaders(){
   const h={'Content-Type':'application/json'};
   const t=sessionStorage.getItem('token'); if(t)h['Authorization']='Bearer '+t;
@@ -5318,6 +5320,7 @@ if(role && !ssoToken){
 <script src="/js/pairfit.js"></script>
 <script src="/js/pairui.js"></script>
 <script src="/js/caselogui.js"></script>
+<script src="/js/membercards.js"></script>
 <script src="/js/investigate.js"></script>
 <script src="/js/coach.js"></script>
 <script src="/js/support.js"></script>

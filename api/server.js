@@ -2709,7 +2709,7 @@ const projection = require('../lib/projection')({ requireRole, adminReq: () => s
 
 // New-member onboarding (lib/onboarding.js): what each recent joiner still has to do, and two friendly messages for those who can be messaged.
 const onboarding = require('../lib/onboarding')({
-  redis, HttpError, requireRole, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
+  redis, HttpError, requireRole, memberFromRequest, activeMembers, fetchRoster, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), verifiedLinks: () => comms.verifiedLinks(),
   // Everyone who is on a team or has signed up somewhere right now: ZRL sign-ups, the Ladder rosters, DIRT squads and this week's TTT.
   teamSets: async () => {
     const [zs, lr, ds, ts] = await redis([['HGETALL', zrl.KEYS.signups], ['HGETALL', ladder.KEYS.roster], ['HGETALL', drs.KEYS.squad], ['HGETALL', TTT_KEYS.signups]]);
@@ -2759,6 +2759,7 @@ const fairplay = require('../lib/fairplay')({ redis, HttpError, requireRole, sta
 const caselog = require('../lib/caselog')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
 const fitAnalysis = require('../lib/fitanalysis');
 const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh, profile: { routes: { 'GET /api/profile': (...a) => profile.routes['GET /api/profile'](...a) } }, zrl, ai });
+const recap = require('../lib/recap')({ redis, HttpError, memberFromRequest, fetchRoster, zrl, discord, discordEscape });
 const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse,
   clubData: () => publicClub(Date.now()), seasonOf: m => seasonOf(m) });
 // The AI messages that go to riders on their own (Monday plans, race-day briefings) and the AI drafts for the staff.
@@ -3001,7 +3002,7 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
   const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
