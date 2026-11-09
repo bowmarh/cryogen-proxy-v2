@@ -209,12 +209,15 @@ const usage = { redis: 0, discord: 0 };
 async function redisRaw(commands){
   const cfg = redisConfig();
   usage.redis += commands.length;
-  // REDIS_URL (redis:// or rediss://) runs the app on an ordinary Redis over TCP instead of Upstash's REST service; it wins when both are set.
-  if (process.env.REDIS_URL){
+  // The Upstash REST settings are the normal way in. REDIS_URL (redis:// or rediss://) is used over TCP only when there are no REST settings, or when
+  // REDIS_PREFER_TCP=1 says to prefer it: the Vercel Upstash integration adds a REDIS_URL of its own, which must never take over by accident.
+  if (process.env.REDIS_URL && (!cfg || process.env.REDIS_PREFER_TCP === '1')){
     try { return await require('../lib/redisclient').pipeline(process.env.REDIS_URL, commands); }
     catch (e){
       if (e && e.name === 'TimeoutError') throw new HttpError(504, 'Shared storage did not answer in time.');
-      throw new HttpError(502, e && e.fromServer ? `storage error: ${e.message}` : 'Shared storage could not be reached.');
+      if (e && e.fromServer) throw new HttpError(502, `storage error: ${e.message}`);
+      console.error('Storage (TCP):', e && (e.code || e.message));
+      throw new HttpError(502, `Shared storage could not be reached${e && e.code ? ` (${e.code})` : ''}.`);
     }
   }
   if (!cfg) throw new HttpError(503, 'Shared storage is not set up yet.');
@@ -227,7 +230,9 @@ async function redisRaw(commands){
       signal: AbortSignal.timeout(8000),   // a stuck connection must fail fast, not hold the request until the platform kills it
     });
   } catch (e) {
-    throw new HttpError(e && e.name === 'TimeoutError' ? 504 : 502, e && e.name === 'TimeoutError' ? 'Shared storage did not answer in time.' : 'Shared storage could not be reached.');
+    const timedOut = e && e.name === 'TimeoutError', code = e && ((e.cause && (e.cause.code || e.cause.message)) || e.code);
+    if (!timedOut) console.error('Storage (REST):', code || (e && e.message));   // the reason shows in the Vercel logs and in the health panel
+    throw new HttpError(timedOut ? 504 : 502, timedOut ? 'Shared storage did not answer in time.' : `Shared storage could not be reached${code ? ` (${String(code).slice(0, 60)})` : ''}.`);
   }
   if (!r.ok) throw new HttpError(502, `storage error (${r.status})`);
   const out = await r.json();
