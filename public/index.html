@@ -1678,9 +1678,18 @@ async function commsImpSave(){
   }catch(e){ commsImp.saving=false; commsImp.saveError=(total.saved?total.saved+' saved before it stopped. ':'')+e.message; commsImpShow(); }
 }
 function commsAutoHtml(d){
-  if(!d.auto) return '';
+  if(!d.auto) return commsSlashHtml();
   const on=d.auto.nudge;
-  return `<div class="card" style="padding:12px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:240px"><div style="font-weight:800;font-size:13px">⏰ Automatic reminder ${on?'<span style="color:#10B981;font-size:12px">on</span>':'<span style="color:#9ca3af;font-size:12px">off</span>'}</div><div style="font-size:12px;color:#9ca3af;margin-top:2px">The day before a ZRL race or Ladder match, riders who have not answered get one direct message. It skips anyone not linked, opted out, or who turned race reminders off.${d.dm?'':' <b style="color:#FBBF24">Needs the Discord bot first.</b>'}</div></div>${d.auto.canChange?`<button onclick="commsAuto(${!on})" style="padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:${on?'rgba(255,255,255,0.05)':'rgba(var(--accent-rgb),0.14)'};color:${on?'#e5e7eb':'var(--accent)'}">${on?'Turn off':'Turn on'}</button>`:'<span style="font-size:11px;color:#8b95a5">Administrators can change this</span>'}</div>`;
+  return `<div class="card" style="padding:12px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:240px"><div style="font-weight:800;font-size:13px">⏰ Automatic reminder ${on?'<span style="color:#10B981;font-size:12px">on</span>':'<span style="color:#9ca3af;font-size:12px">off</span>'}</div><div style="font-size:12px;color:#9ca3af;margin-top:2px">The day before a ZRL race or Ladder match, riders who have not answered get one direct message. It skips anyone not linked, opted out, or who turned race reminders off.${d.dm?'':' <b style="color:#FBBF24">Needs the Discord bot first.</b>'}</div></div>${d.auto.canChange?`<button onclick="commsAuto(${!on})" style="padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:${on?'rgba(255,255,255,0.05)':'rgba(var(--accent-rgb),0.14)'};color:${on?'#e5e7eb':'var(--accent)'}">${on?'Turn off':'Turn on'}</button>`:'<span style="font-size:11px;color:#8b95a5">Administrators can change this</span>'}</div>`+commsSlashHtml();
+}
+function commsSlashHtml(){
+  if(role!=='admin') return '';
+  return `<div class="card" style="padding:12px 16px;margin-bottom:12px"><div style="font-weight:800;font-size:13px">⌨️ Discord slash commands</div><div style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Riders with a linked Discord can type /week, /recap, /badges and /answer. Needs the bot token, the application's client ID and the Interactions Endpoint URL saved in the Discord developer portal. Press the button once, and again whenever the commands change.</div><button type="button" class="btn-cyan" style="width:auto;padding:6px 14px;font-size:12px" onclick="commsSlashRegister(this)">Register the commands</button> <span id="slash-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div>`;
+}
+async function commsSlashRegister(btn){
+  const m=document.getElementById('slash-msg'); btn.disabled=true; m.textContent='Registering…';
+  try{ const d=await commsCall('POST','/api/discord/register-commands',{}); m.textContent=`Done: ${d.registered} commands are live (they can take a minute to appear).`; }catch(e){ m.textContent=e.message; }
+  btn.disabled=false;
 }
 async function commsAuto(on){ try{ await commsCall('POST','/api/comms/auto',{ nudge:on }); commsData=await commsCall('GET','/api/comms'); renderComms(); }catch(e){ alert(e.message); } }
 function commsTemplatesHtml(d){

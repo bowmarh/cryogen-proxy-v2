@@ -2731,14 +2731,30 @@ const onboarding = require('../lib/onboarding')({
 });
 
 // Yes / Maybe / No buttons under Discord reminders (lib/discord-interactions.js): Discord posts each tap, signed, to /api/discord/interactions.
+// The answer is saved by the same route a rider's own tap in the dashboard uses, as that rider (a member token made here, inside this process only).
+const answerAvailability = async (zwid, series, id, status) => {
+  const req = { headers: { authorization: `Bearer ${signToken('member', { zwid, name: zwid })}` } };
+  if (series === 'zrl') { const [week, team] = id.split(':'); await zrl.routes['POST /api/zrl/availability'](req, { week: Number(week), team, status }); }
+  else if (series === 'ladder') await ladder.routes['POST /api/ladder/availability'](req, { match: id, status });
+  else await drs.routes['POST /api/drs/availability'](req, { stage: id, status });
+};
+// Who a Discord slash command is from, as the rider the rest of the app knows (their name matters: TTT sign-ups are matched by name).
+const memberByZwid = async zwid => { const { riders } = await fetchRoster(); const r = riders.find(x => String(x.riderId) === String(zwid)); return { zwid: String(zwid), name: (r && r.name) || String(zwid) }; };
 const discordInteractions = require('../lib/discord-interactions')({
   zwidOfDiscord: id => comms.zwidOfDiscord(id),
-  // The answer is saved by the same route a rider's own tap in the dashboard uses, as that rider (a member token made here, inside this process only).
-  answer: async (zwid, series, id, status) => {
-    const req = { headers: { authorization: `Bearer ${signToken('member', { zwid, name: zwid })}` } };
-    if (series === 'zrl') { const [week, team] = id.split(':'); await zrl.routes['POST /api/zrl/availability'](req, { week: Number(week), team, status }); }
-    else if (series === 'ladder') await ladder.routes['POST /api/ladder/availability'](req, { match: id, status });
-    else await drs.routes['POST /api/drs/availability'](req, { stage: id, status });
+  answer: answerAvailability,
+  commands: {
+    week: async zwid => (await myweek.build(asMember(zwid, (await memberByZwid(zwid)).name))).items,
+    recap: async zwid => recap.build(await memberByZwid(zwid)),
+    badges: async zwid => { const m = await memberByZwid(zwid), [s, roster] = await Promise.all([seasonOf(m).catch(() => null), fetchRoster().catch(() => ({ riders: [] }))]); return badges.badgesFrom(s, (roster.riders || []).find(x => String(x.riderId) === m.zwid)); },
+    // The soonest request that is still waiting for an answer, saved as if the rider had tapped the button in the dashboard.
+    answer: async (zwid, status) => {
+      const m = await memberByZwid(zwid), item = (await myweek.build(asMember(zwid, m.name))).items.find(u => u.state === 'todo' && u.avail);
+      if (!item) return null;
+      const a = item.avail;
+      await answerAvailability(zwid, a.series || 'zrl', a.series ? a.id : `${a.week}:${a.team}`, status);
+      return { title: item.title, date: item.date };
+    },
   },
 });
 function readRawBody(req, limit = 20000){
@@ -2999,6 +3015,16 @@ async function route(req, res){
   if (pathname === '/api/ping' && req.method === 'GET'){   // for an uptime check: is the app up and is its database answering
     try { await redis([['GET', 'cg:ping']]); } catch (e) { return sendJSON(res, 503, { ok: false, redis: false }); }
     return sendJSON(res, 200, { ok: true, redis: true, at: new Date().toISOString() });
+  }
+  // An administrator registers the slash commands with Discord (a bulk overwrite of this application's global commands).
+  if (pathname === '/api/discord/register-commands' && req.method === 'POST'){
+    requireRole(req, ['admin']);
+    const appId = process.env.DISCORD_CLIENT_ID, token = process.env.DISCORD_BOT_TOKEN;
+    if (!appId || !token) throw new HttpError(409, 'Set DISCORD_CLIENT_ID and DISCORD_BOT_TOKEN first.');
+    const r = await fetch(`https://discord.com/api/v10/applications/${encodeURIComponent(appId)}/commands`, { method: 'PUT', headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'cryogen-club (club.cryo-gen.team, 1.0)' }, body: JSON.stringify(discordInteractions.COMMANDS), signal: AbortSignal.timeout(8000) }).catch(() => null);
+    if (!r) throw new HttpError(502, 'Discord could not be reached.');
+    if (!r.ok) throw new HttpError(502, `Discord refused the commands (${r.status}). Check the client ID and the bot token.`);
+    return sendJSON(res, 200, { registered: discordInteractions.COMMANDS.length });
   }
   if (pathname === '/api/discord/interactions' && req.method === 'POST'){
     const out = await discordInteractions.handle(await readRawBody(req), req.headers);
