@@ -404,7 +404,7 @@
     g.fillStyle = '#fff'; g.font = '800 68px system-ui,sans-serif'; g.fillText(String(team || '').slice(0, 26), 540, 200);
     g.fillStyle = '#9ca3af'; g.font = '500 34px system-ui,sans-serif'; g.fillText(String(sub || '').slice(0, 60), 540, 255);
     list.forEach((n, i) => { const y = 330 + i * 96; g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(140, y - 56, 800, 78); g.fillStyle = a; g.font = '800 40px system-ui,sans-serif'; g.textAlign = 'left'; g.fillText(String(i + 1), 170, y); g.fillStyle = '#fff'; g.font = '700 42px system-ui,sans-serif'; g.fillText(String(n).slice(0, 28), 240, y); g.textAlign = 'center'; });
-    g.fillStyle = '#7b8494'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
+    g.fillStyle = '#9aa3b2'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
     return shareCanvas(c, 'cryogen-lineup.png', 'Line-up');
   }
   function resultsCard(title, rows) {
@@ -413,7 +413,7 @@
     g.fillStyle = '#fff'; g.font = '800 64px system-ui,sans-serif'; g.fillText(String(title || '').slice(0, 28), 540, 200);
     const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
     list.forEach((r, i) => { const y = 300 + i * 90; g.fillStyle = i < 3 ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)'; g.fillRect(100, y - 54, 880, 74); g.textAlign = 'left'; g.font = '40px system-ui,sans-serif'; g.fillStyle = '#fff'; g.fillText(medal[r.rank] || String(r.rank), 130, y); g.font = '700 40px system-ui,sans-serif'; g.fillText(String(r.name).slice(0, 24), 230, y); g.textAlign = 'right'; g.fillStyle = a; g.font = '800 42px system-ui,sans-serif'; g.fillText(r.total + ' pts', 950, y); g.textAlign = 'center'; });
-    g.fillStyle = '#7b8494'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
+    g.fillStyle = '#9aa3b2'; g.font = '500 26px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 540, H - 40);
     return shareCanvas(c, 'cryogen-results.png', 'Results');
   }
 
@@ -456,7 +456,7 @@
     let y = 240; for (const l of wrap(title, 920, '800 78px system-ui,sans-serif').slice(0, 3)) { g.fillText(l, 80, y); y += 92; }
     y += 20; g.font = '500 44px system-ui,sans-serif'; g.fillStyle = '#d1d5db';
     for (const line of (lines || []).slice(0, 6)) for (const l of wrap(line, 920, '500 44px system-ui,sans-serif').slice(0, 2)) { if (y > 940) break; g.fillText(l, 80, y); y += 60; }
-    g.fillStyle = '#7b8494'; g.font = '500 30px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 80, 1020);
+    g.fillStyle = '#9aa3b2'; g.font = '500 30px system-ui,sans-serif'; g.fillText('club.cryo-gen.team', 80, 1020);
     const blob = await new Promise(res => c.toBlob(res, 'image/png')); if (!blob) throw new Error('Could not draw the picture.');
     const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
     return btoa(bin);

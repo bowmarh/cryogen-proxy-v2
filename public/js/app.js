@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────
-const CAT_COLOR = {"A+":"#FFD700",A:"#EF4444",B:"#3B82F6",C:"#10B981",D:"#8B5CF6"};
-const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#EF4444",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#8B5CF6",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
+const CAT_COLOR = {"A+":"#FFD700",A:"#F87171",B:"#3B82F6",C:"#10B981",D:"#A78BFA"};
+const ZRA_COLOR = {Diamond:"#00D4FF",Ruby:"#F87171",Emerald:"#10B981",Sapphire:"#3B82F6",Amethyst:"#A78BFA",Platinum:"#E2E8F0",Gold:"#FBBF24",Silver:"#9CA3AF",Bronze:"#B45309",Copper:"#92400E"};
 const PH_EMOJI  = {climber:"🏔️",sprinter:"⚡",puncheur:"🥊","all-rounder":"⭐","time-trialist":"⏱️",pursuiter:"🎯"};
 const ZRA_RANK  = {Diamond:1,Ruby:2,Emerald:3,Sapphire:4,Amethyst:5,Platinum:6,Gold:7,Silver:8,Bronze:9,Copper:10};
 const CAT_RANK  = {"A+":1,A:2,B:3,C:4,D:5};
@@ -90,7 +90,7 @@ function renderTidy(){
   const m=document.getElementById('tidyModal'); if(!m) return;
   const d=tidyData, btn='padding:5px 11px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15)';
   const tab=(id,l,n)=>`<button onclick="tidyTab='${id}';tidyMsg='';renderTidy()" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid ${tidyTab===id?'rgba(var(--accent-rgb),0.5)':'rgba(255,255,255,0.12)'};background:${tidyTab===id?'rgba(var(--accent-rgb),0.12)':'transparent'};color:${tidyTab===id?'var(--accent)':'#9ca3af'}">${l}${n!==undefined?` <span style="font-size:11px;opacity:.8">${n}</span>`:''}</button>`;
-  const stCol=s=>s==='active'?'#10B981':s==='suspended'?'#F59E0B':s==='left'?'#EF4444':'#8b95a5';
+  const stCol=s=>s==='active'?'#10B981':s==='suspended'?'#F59E0B':s==='left'?'#F87171':'#8b95a5';
   let body='<div style="font-size:13px;color:#9ca3af">Looking through the members…</div>';
   if(tidyErr) body=`<div style="font-size:13px;color:#f87171">${esc(tidyErr)}</div>`;
   else if(d&&!d.hasMembers) body='<div style="font-size:13px;color:#FBBF24">The WordPress member records could not be read, so there is nothing to compare yet. '+esc(d.membersError||'')+'</div>';
@@ -458,7 +458,7 @@ let healthDotTimer=null;
 function healthDotSet(checks){
   const el=document.getElementById('health-dot'); if(!el) return;
   const fail=checks.filter(c=>c.status==='fail').length, warn=checks.filter(c=>c.status==='warn').length;
-  el.style.display='inline-block'; el.style.background=fail?'#ef4444':warn?'#FBBF24':'#10B981';
+  el.style.display='inline-block'; el.style.background=fail?'#f87171':warn?'#FBBF24':'#10B981';
   el.title=fail?fail+' failing'+(warn?', '+warn+' to look at':''):warn?warn+' to look at':'All checks are fine';
 }
 async function healthDotRefresh(){
@@ -1483,7 +1483,7 @@ async function loadLive() {
   } catch (e) {
     rosterError=e.message;
     setRosterLoginStatus(`Live roster unavailable: ${e.message}. Member search is disabled until the roster loads.`,'#F87171');
-    setZRA('#EF4444', 'Live roster unavailable: ' + e.message);
+    setZRA('#F87171', 'Live roster unavailable: ' + e.message);
   } finally {
     rosterLoading=false;
   }
@@ -1549,7 +1549,7 @@ function renderOffboarding() {
     <div class="card" style="margin-bottom:20px; border-color:rgba(239,68,68,0.3);">
       <div style="padding:12px 16px; background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.2); border-radius:12px 12px 0 0; display:flex; align-items:center; gap:8px;">
         <span style="font-size:16px;">⚠️</span>
-        <span style="font-size:12px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
+        <span style="font-size:12px; font-weight:700; color:#f87171; text-transform:uppercase; letter-spacing:0.05em;">Pending Manual Off-boarding (${incomplete.length})</span>
       </div>
       <div style="padding:16px;">
         <table style="width:100%; text-align:left; font-size:13px;">
@@ -1568,13 +1568,13 @@ function renderOffboarding() {
               <tr style="border-top:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:10px 0; font-weight:600;">${esc(r.name)}</td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="Discord removed for ${esc(r.name)}" ${state.ob_discord ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_discord', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="Facebook removed for ${esc(r.name)}" ${state.ob_fb ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_fb', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
                 <td style="padding:10px 0; text-align:center;">
-                  <input type="checkbox" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <input type="checkbox" aria-label="ZwiftPower removed for ${esc(r.name)}" ${state.ob_zp ? 'checked' : ''} onchange="toggleOffboard(${r.id}, 'ob_zp', this.checked)" style="width:16px;height:16px;cursor:pointer;">
                 </td>
               </tr>`;
             }).join('')}
@@ -1655,12 +1655,12 @@ function renderRider(){
   let teams='<div style="font-size:12px;color:#8b95a5">Loading…</div>';
   if(rpData&&rpData.error) teams=`<div style="font-size:12px;color:#f87171">${esc(rpData.error)}</div>`;
   else if(d){
-    const t=d.teams||{}, line=(label,arr)=>`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">${label}</span>${arr&&arr.length?arr.map(x=>`<span style="display:inline-block;padding:1px 8px;margin:0 4px 2px 0;border-radius:99px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);font-size:12px">${esc(x)}</span>`).join(''):'<span style="color:#7b8494">—</span>'}</div>`;
+    const t=d.teams||{}, line=(label,arr)=>`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">${label}</span>${arr&&arr.length?arr.map(x=>`<span style="display:inline-block;padding:1px 8px;margin:0 4px 2px 0;border-radius:99px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);font-size:12px">${esc(x)}</span>`).join(''):'<span style="color:#9aa3b2">—</span>'}</div>`;
     const z=t.zrl||{};
-    teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#8b95a5;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#7b8494">Not linked</span>'}</div>`;
+    teams=line('ZRL',z.teams)+`<div style="font-size:12px;color:#8b95a5;margin:0 0 4px 92px">${z.signedUp?(z.racing?'Signed up':'Signed up, not racing')+(z.cat?' · said '+esc(z.cat):'')+(z.commit==='reserve'?' · reserve':'')+(z.devOk?' · dev eligible':''):'Not signed up this round'}</div>`+line('Ladder',t.ladder)+line('DIRT Series',t.drs)+`<div style="font-size:13px;margin:2px 0"><span style="color:#9ca3af;display:inline-block;width:92px">Discord</span>${d.discord&&d.discord.linked?'<span style="color:#10B981">Linked</span>':'<span style="color:#9aa3b2">Not linked</span>'}</div>`;
   }
   if(d&&d.career){ const c=d.career, bits=[c.zrl.rounds?`${c.zrl.rounds} ZRL round${c.zrl.rounds===1?'':'s'}`:'', c.ttt.weeks?`${c.ttt.weeks} TTT week${c.ttt.weeks===1?'':'s'}`:'', c.ladder.races?`Ladder: ${c.ladder.races} race${c.ladder.races===1?'':'s'}, ${c.ladder.wins} won, ${c.ladder.points} pts, best ${ordinal(c.ladder.best)}`:'', c.drs.stages?`DIRT: ${c.drs.stages} stage${c.drs.stages===1?'':'s'}, scored in ${c.drs.scored}, ${c.drs.points} pts${c.drs.best?', best P'+c.drs.best:''}`:''].filter(Boolean);
-    teams+=`<div style="font-size:13px;margin:8px 0 2px"><span style="color:#9ca3af;display:inline-block;width:92px">Career</span>${bits.length?esc(bits.join(' · ')):'<span style="color:#7b8494">nothing on record yet</span>'}</div>`; }
+    teams+=`<div style="font-size:13px;margin:8px 0 2px"><span style="color:#9ca3af;display:inline-block;width:92px">Career</span>${bits.length?esc(bits.join(' · ')):'<span style="color:#9aa3b2">nothing on record yet</span>'}</div>`; }
   const detForm=d&&rpId?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div><label class="lbl">Time zone / when they ride</label><input id="pf-tz" style="${inp}" maxlength="40" value="${esc(det.tz||'')}" placeholder="e.g. UK evenings"/></div>
       <div><label class="lbl">Preferred team</label><input id="pf-pref" style="${inp}" maxlength="80" value="${esc(det.prefTeam||'')}"/></div>
@@ -1804,7 +1804,7 @@ function renderAll(){
   document.getElementById('top10').innerHTML=top.map((m,i)=>`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px">
-        <span style="font-size:10px;color:#7b8494;width:16px;text-align:right">${i+1}</span>
+        <span style="font-size:10px;color:#9aa3b2;width:16px;text-align:right">${i+1}</span>
         ${window.uiAvatar?uiAvatar(m.name,m.cat,m.id):''}<span style="font-size:13px">${esc(m.name.split(' ')[0])}</span>
         ${catB(m.cat)}
         ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700">${m.zraCat}</span>`:''}
@@ -1848,7 +1848,7 @@ function renderRacing(){
   document.getElementById('racing-body').innerHTML=sorted.map((m,i)=>{
     const barW=Math.min(m.velo/3500*100,100);
     return`<tr>
-      <td style="color:#7b8494;font-family:monospace;font-size:11px">${i+1}</td>
+      <td style="color:#9aa3b2;font-family:monospace;font-size:11px">${i+1}</td>
       <td style="white-space:nowrap">${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:var(--accent)">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td>${catB(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700;margin-left:4px">${m.zraCat}</span>`:''}</td>
       <td style="font-family:monospace;font-size:12px;color:#8b95a5">${m.ftp}w</td>
@@ -1912,11 +1912,11 @@ function renderMembers(){
     const isMe=role==='member'&&memberRider&&m.id===memberRider.id;
     const zraC=ZRA_COLOR[m.zraCat]||'#9ca3af';
     let statusBadgeColor = m.active ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)';
-    let statusTextColor = m.active ? '#10B981' : '#7b8494';
+    let statusTextColor = m.active ? '#10B981' : '#9aa3b2';
     let statusText = m.status.charAt(0).toUpperCase() + m.status.slice(1);
     
     if(m.status === 'suspended') { statusBadgeColor = 'rgba(245,158,11,0.12)'; statusTextColor = '#F59E0B'; }
-    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#EF4444'; }
+    if(m.status === 'left') { statusBadgeColor = 'rgba(239,68,68,0.12)'; statusTextColor = '#F87171'; }
     
     return`<tr style="${isMe?'background:rgba(var(--accent-rgb),0.05)':''}">
       ${staffM?`<td style="width:28px"><input type="checkbox" ${mSel.has(String(m.id))?'checked':''} onchange="mSelect('${esc(String(m.id))}',this.checked)"/></td>`:''}
@@ -1928,15 +1928,15 @@ function renderMembers(){
       <td style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:700">${m.noZwift?'—':m.wkg}</td>
       <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.noZwift?'—':m.velo}</td>
       <td style="font-size:12px;color:#8b95a5">${m.noZwift?'—':(PH_EMOJI[m.ph]||'⭐')+' '+m.ph}</td>
-      <td style="font-size:11px;max-width:160px">${m.noZwift?'<div style="color:#FBBF24;font-weight:600">Not in the Zwift club</div><div style="color:#7b8494;font-size:10px;margin-top:2px">Member record in WordPress</div>':(()=>{
+      <td style="font-size:11px;max-width:160px">${m.noZwift?'<div style="color:#FBBF24;font-weight:600">Not in the Zwift club</div><div style="color:#9aa3b2;font-size:10px;margin-top:2px">Member record in WordPress</div>':(()=>{
         const log = affiliationLog['r'+m.id];
         const club = m.raw?.club?.name || log?.club || 'CRYO-GEN';
         const firstSeen = log?.firstSeen ? new Date(log.firstSeen).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
         const changed = log?.changed ? new Date(log.changed).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : null;
         const isCryo = club.toLowerCase().includes('cryo');
         return `<div style="color:${isCryo?'#10B981':'#FBBF24'};font-weight:600">${club}</div>
-          <div style="color:#7b8494;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
-          ${changed?`<div style="font-size:9px;color:#EF4444">⚠️ Recently changed</div>`:''}`;
+          <div style="color:#9aa3b2;font-size:10px;margin-top:2px">${changed?'Changed: '+changed:'Since: '+firstSeen}</div>
+          ${changed?`<div style="font-size:9px;color:#F87171">⚠️ Recently changed</div>`:''}`;
       })()}</td>
       <td><span class="badge" style="background:${statusBadgeColor};color:${statusTextColor}">${statusText}</span></td>
       
@@ -1949,7 +1949,7 @@ function renderMembers(){
             </select>
             ${m.status === 'active' ? `<button onclick="updateStatus(${m.id}, 'suspended', 7)" style="padding:4px 8px;font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);border-radius:4px">Suspend</button>` : ''}
             ${m.status === 'suspended' ? `<button onclick="updateStatus(${m.id}, 'active', 0)" style="padding:4px 8px;font-size:10px;background:rgba(16,185,129,0.1);color:#10B981;border:1px solid rgba(16,185,129,0.2);border-radius:4px">Unsuspend</button>` : ''}
-            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
+            ${m.status !== 'left' ? `<button onclick="updateStatus(${m.id}, 'left', 0)" style="padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2);border-radius:4px">Offboard</button>` : ''}
           </div>
         </td>` : ''}
     </tr>`;
@@ -2016,7 +2016,7 @@ function renderEvents(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="sup-zwid" class="inp" placeholder="Zwift ID (number)" style="width:140px" oninput="lookupZwid()" onkeydown="if(event.key==='Enter')doSignup()"/>
         <input id="sup-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')doSignup()"/>
-        <select id="sup-cat" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
+        <select id="sup-cat" aria-label="Category" class="inp" style="width:65px"><option>A+</option><option>A</option><option selected>B</option><option>C</option><option>D</option></select>
         <button onclick="doSignup()" style="padding:9px 20px;background:#06b6d4;color:#000;font-weight:700;border-radius:8px;border:none;font-size:13px">Sign Up</button>
       </div>
       <div id="zwid-hint" style="font-size:11px;color:#10B981;margin-top:6px"></div>
@@ -2027,7 +2027,7 @@ function renderEvents(){
 
   const byCat=["A+","A","B","C","D"].reduce((a,cat)=>{const r=sups.filter(s=>s.cat===cat);if(r.length)a.push({cat,r});return a;},[]);
   if(sups.length===0){
-    html+=`<div class="card" style="padding:40px;text-align:center;color:#7b8494;font-size:14px">No sign-ups yet — be the first! 🚴</div>`;
+    html+=`<div class="card" style="padding:40px;text-align:center;color:#9aa3b2;font-size:14px">No sign-ups yet — be the first! 🚴</div>`;
   } else {
     html+=byCat.map(({cat,r})=>`
       <div class="card" style="margin-bottom:12px">
@@ -2036,11 +2036,11 @@ function renderEvents(){
           <div style="display:flex;align-items:center;gap:10px">
             <span style="color:#10B981">✓</span>
             <span>${esc(s.name)}</span>
-            ${s.zwid?`<span style="font-size:10px;color:#7b8494;font-family:monospace">ID:${esc(s.zwid)}</span>`:''}
+            ${s.zwid?`<span style="font-size:10px;color:#9aa3b2;font-family:monospace">ID:${esc(s.zwid)}</span>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:12px">
-            <span style="font-size:11px;color:#7b8494">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
-            ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#7b8494;font-size:16px;padding:0">×</button>`:''}
+            <span style="font-size:11px;color:#9aa3b2">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+            ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#9aa3b2;font-size:16px;padding:0">×</button>`:''}
           </div>
         </div>`).join('')}
       </div>`).join('');
@@ -2173,7 +2173,7 @@ function tttLineups(d,opts){
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px"><span style="font-weight:800">${esc(t.name)}</span><span style="font-size:11px;color:${full?'#f87171':'#8b95a5'}">${list.length}/${t.max}</span></div>
       <div style="font-size:11px;color:#8b95a5;margin-bottom:8px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
       ${(d.week.results||{})[t.id]?`<div style="font-size:12px;font-weight:700;color:#FBBF24;margin:-4px 0 8px">🏁 ${esc(tttResultText(d.week.results[t.id]))}</div>`:''}
-      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';const cap=(d.captains||{})[t.id]===tttKey(s.name);return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:var(--accent);font-weight:700':''}"><span>${cap?'<span title="Captain">⭐</span> ':''}${cat?catB(esc(cat))+' ':''}${esc(s.name)}${cap?' <span style="font-size:10px;color:#FBBF24">captain</span>':''}</span><span style="font-size:11px;color:#8b95a5">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#7b8494">No riders yet</div>`}
+      ${list.length?list.map(s=>{const r=tttRider(s);const cat=s.cat||(r&&r.cat)||'';const cap=(d.captains||{})[t.id]===tttKey(s.name);return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;${tttKey(s.name)===mine?'color:var(--accent);font-weight:700':''}"><span>${cap?'<span title="Captain">⭐</span> ':''}${cat?catB(esc(cat))+' ':''}${esc(s.name)}${cap?' <span style="font-size:10px;color:#FBBF24">captain</span>':''}</span><span style="font-size:11px;color:#8b95a5">${r&&r.velo?r.velo:''}</span></div>`;}).join(''):`<div style="font-size:12px;color:#9aa3b2">No riders yet</div>`}
       ${tttStaff()&&!tttArchiveView&&list.length?`<select class="inp" style="margin-top:8px;padding:4px 6px;font-size:12px" data-team="${esc(t.id)}" onchange="tttWrite('/api/ttt/captain',{team:this.dataset.team,name:this.value})"><option value="">⭐ Captain: none</option>${list.map(s=>`<option value="${esc(s.name)}" ${(d.captains||{})[t.id]===tttKey(s.name)?'selected':''}>⭐ ${esc(s.name)}${s.captain?' (volunteer)':''}</option>`).join('')}</select>`:''}
     </div>`;}).join('')}</div>`;
 }
@@ -2254,7 +2254,7 @@ function tttSignupForm(d){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <input id="ttt-name" class="inp" placeholder="Your Zwift display name" style="flex:1;min-width:180px" value="${esc(me.name||'')}"/>
       <input id="ttt-zwid" class="inp" placeholder="Zwift ID" style="width:120px" value="${esc(me.id||'')}"/>
-      <select id="ttt-cat" class="inp" style="width:70px">${['','A+','A','B','C','D'].map(c=>`<option ${c===(existing?existing.cat:me.cat||'')?'selected':''}>${c}</option>`).join('')}</select>
+      <select id="ttt-cat" aria-label="Category" class="inp" style="width:70px">${['','A+','A','B','C','D'].map(c=>`<option ${c===(existing?existing.cat:me.cat||'')?'selected':''}>${c}</option>`).join('')}</select>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-bottom:10px">
       <label><input type="radio" name="ttt-avail" value="yes" ${!existing||existing.available?'checked':''}/> Available this week</label>
@@ -2312,7 +2312,7 @@ function tttBoard(d){
     return zone(`data-team="${esc(t.id)}"`,`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px"><b style="font-size:14px">${esc(t.name)}</b><span style="font-size:12px;font-weight:700;color:${col}">${list.length}/${t.max}</span></div>
       <div style="font-size:11px;color:#8b95a5;margin-bottom:4px">${esc([t.level,t.zone].filter(Boolean).join(' · '))}${avg?` · avg vELO ${avg}`:''}</div>
       <div style="height:4px;border-radius:99px;background:rgba(255,255,255,0.08);margin-bottom:8px"><div style="height:4px;border-radius:99px;width:${Math.min(100,Math.round(list.length/t.max*100))}%;background:${col}"></div></div>
-      ${list.length?`<div style="display:flex;flex-direction:column;gap:5px">${list.map(s=>tttChip(d,s,t.id)).join('')}</div>`:'<div style="font-size:12px;color:#7b8494;padding:10px 0;text-align:center">Drop riders here</div>'}
+      ${list.length?`<div style="display:flex;flex-direction:column;gap:5px">${list.map(s=>tttChip(d,s,t.id)).join('')}</div>`:'<div style="font-size:12px;color:#9aa3b2;padding:10px 0;text-align:center">Drop riders here</div>'}
       ${list.length?`<div style="font-size:11px;margin-top:8px;color:${capName?'#FBBF24':'#8b95a5'}">${capName?'★ Captain: '+rnName(capName):thin?'⚠️ Needs 4 or more riders':'☆ No captain yet'}</div>`:''}`,`border-color:${over?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.1)'}`);
   }).join('');
   return `<style>.ttt-zone{border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.025);min-height:90px}.ttt-over{outline:2px dashed var(--accent);background:rgba(var(--accent-rgb),0.06)}
@@ -2380,7 +2380,7 @@ function tttBoardCard(){
     const place=n.unplaced+n.new;
     body=`<div style="font-size:12px;color:#9ca3af;margin-bottom:8px">Read from <b style="color:#e5e7eb">${esc(p.tab)}</b>: ${p.blocks.map(b=>`<span style="white-space:nowrap">${esc(b.cols)} ${b.label?'<b style="color:'+(b.team?'#10B981':'#FBBF24')+'">'+esc(b.label)+'</b>':'(no label)'} (${b.riders}${b.withId<b.riders?', '+(b.riders-b.withId)+' matched by name':''})</span>`).join(' · ')||'no blocks of names with Zwift IDs beside them were found'}.</div>
       <div style="font-size:12px;color:#9ca3af;margin-bottom:8px">${n.same} already agree${n.unplaced?`, <b style="color:var(--accent)">${n.unplaced} can be placed</b>`:''}${n.new?`, <b style="color:var(--accent)">${n.new} are not signed up here yet</b>`:''}${n.elsewhere?`, <b style="color:#FBBF24">${n.elsewhere} are on a different team here</b>`:''}${n['no-team']?`, ${n['no-team']} are in a block with no matching team here`:''}.</div>
-      <div style="max-height:240px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse">${p.plan.filter(x=>x.status!=='same').map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px">${rnName(x.name)}</td><td style="padding:4px 6px;color:#9ca3af">${esc(x.label)} <span style="color:#7b8494">${esc(x.block)}</span></td><td style="padding:4px 6px;color:${st[x.status][0]}">${st[x.status][1]}${x.appTeams.length?': '+esc(x.appTeams.join(', ')):''}</td></tr>`).join('')||'<tr><td style="padding:6px;color:#10B981">The app and the sheet agree.</td></tr>'}</table></div>
+      <div style="max-height:240px;overflow:auto;margin-bottom:8px"><table style="width:100%;font-size:12px;border-collapse:collapse">${p.plan.filter(x=>x.status!=='same').map(x=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)"><td style="padding:4px 6px">${rnName(x.name)}</td><td style="padding:4px 6px;color:#9ca3af">${esc(x.label)} <span style="color:#9aa3b2">${esc(x.block)}</span></td><td style="padding:4px 6px;color:${st[x.status][0]}">${st[x.status][1]}${x.appTeams.length?': '+esc(x.appTeams.join(', ')):''}</td></tr>`).join('')||'<tr><td style="padding:6px;color:#10B981">The app and the sheet agree.</td></tr>'}</table></div>
       ${place?`<button onclick="tttBoardRun(true,false)" style="${btn};background:rgba(var(--accent-rgb),0.12);color:var(--accent);border-color:rgba(var(--accent-rgb),0.4)">Place ${place} rider${place===1?'':'s'} as the sheet has them</button> `:''}${n.elsewhere?`<button onclick="if(confirm('Move ${n.elsewhere} rider${n.elsewhere===1?'':'s'} to the team the sheet names? Their team here is replaced.'))tttBoardRun(true,true)" style="${btn};color:#FBBF24;border-color:rgba(251,191,36,0.4)">Also move ${n.elsewhere} to the sheet's team</button> `:''}`;
   }
   return `<div class="card" style="padding:14px 16px;margin-bottom:14px;border-color:rgba(167,139,250,0.4)"><div style="font-size:14px;font-weight:800;margin-bottom:6px">📋 Published teams on the TEAM LIST tab</div>${body}<button onclick="tttBoardImp=null;renderTtt()" style="${btn}">Close</button></div>`;
@@ -3077,9 +3077,9 @@ function renderRides(){
         <span>📍 ${esc(ride.route)}</span><span>📏 ${esc(ride.dist)}</span><span>⚡ ${esc(ride.pace)}</span><span>👥 ${att.length}/${max}</span>
       </div>
       <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
-        <div style="width:${pct}%;height:100%;background:${pct>85?'#EF4444':'var(--accent)'};border-radius:2px"></div>
+        <div style="width:${pct}%;height:100%;background:${pct>85?'#F87171':'var(--accent)'};border-radius:2px"></div>
       </div>
-      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#7b8494;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
+      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#9aa3b2;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
       ${String(rsvpId)===String(ride.id)?
         `<div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="rsvp-${rid}" data-ride="${rid}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(var(--accent-rgb),0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(this.dataset.ride)"/>
@@ -3140,10 +3140,10 @@ function renderProfile(){
   const ph=raw?.phenotype?.scores||{};
   const pow=raw?.power||{};
   const hcp=raw?.handicaps?.profile||{};
-  const phItems=[['Climber',ph.climber||0,'#10B981'],['Pursuiter',ph.pursuiter||0,'#3B82F6'],['Time Trialist',ph.tt||0,'#8B5CF6'],['Puncheur',ph.puncheur||0,'#F59E0B'],['Sprinter',ph.sprinter||0,'#EF4444']];
+  const phItems=[['Climber',ph.climber||0,'#10B981'],['Pursuiter',ph.pursuiter||0,'#3B82F6'],['Time Trialist',ph.tt||0,'#A78BFA'],['Puncheur',ph.puncheur||0,'#F59E0B'],['Sprinter',ph.sprinter||0,'#F87171']];
   const powItems=[['5s',pow.wkg5||0],['15s',pow.wkg15||0],['30s',pow.wkg30||0],['1min',pow.wkg60||0],['5min',pow.wkg300||0],['20min',pow.wkg1200||0]];
   const maxPow=Math.max(...powItems.map(x=>x[1]),1);
-  const hcpItems=[['Flat',hcp.flat||0,'#3B82F6'],['Rolling',hcp.rolling||0,'#10B981'],['Hilly',hcp.hilly||0,'#F59E0B'],['Mountainous',hcp.mountainous||0,'#EF4444']];
+  const hcpItems=[['Flat',hcp.flat||0,'#3B82F6'],['Rolling',hcp.rolling||0,'#10B981'],['Hilly',hcp.hilly||0,'#F59E0B'],['Mountainous',hcp.mountainous||0,'#F87171']];
   const zraC=ZRA_COLOR[r.zraCat]||'#9ca3af';
 
   document.getElementById('profile-content').innerHTML=`
@@ -3184,7 +3184,7 @@ function renderProfile(){
             <div class="pbar-label"><span>${lbl}</span><span style="color:${col};font-weight:700">${val.toFixed(1)}</span></div>
             <div class="pbar"><div class="pbar-fill" style="width:${Math.min(100,Math.round(val/Math.max(...phItems.map(x=>x[1]),1)*100))}%;background:${col}"></div></div>
           </div>`).join('')}
-        <div style="margin-top:12px;font-size:11px;color:#7b8494">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
+        <div style="margin-top:12px;font-size:11px;color:#9aa3b2">Dominant type: <strong style="color:white">${PH_EMOJI[r.ph]||''} ${r.ph}</strong></div>
       </div>
       <div class="card" style="padding:20px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:16px">Power Profile (W/kg)</div>
@@ -3201,11 +3201,11 @@ function renderProfile(){
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         ${hcpItems.map(([lbl,val,col])=>`<div style="flex:1;min-width:100px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;text-align:center">
           <div style="font-size:10px;color:#8b95a5;text-transform:uppercase;margin-bottom:6px">${lbl}</div>
-          <div style="font-size:18px;font-weight:900;color:${val>=0?'#10B981':'#EF4444'}">${val>=0?'+':''}${Math.round(val)}</div>
-          <div style="font-size:10px;color:#7b8494;margin-top:2px">w handicap</div>
+          <div style="font-size:18px;font-weight:900;color:${val>=0?'#10B981':'#F87171'}">${val>=0?'+':''}${Math.round(val)}</div>
+          <div style="font-size:10px;color:#9aa3b2;margin-top:2px">w handicap</div>
         </div>`).join('')}
       </div>
-      <div style="font-size:11px;color:#7b8494;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
+      <div style="font-size:11px;color:#9aa3b2;margin-top:12px">Positive = watts added to your effort on that terrain. Negative = watts removed. Used in handicap races.</div>
     </div>`:''}
     <div class="discord-slot" style="margin-top:16px"></div>
     <div class="push-slot" style="margin-top:16px"></div>
@@ -3307,7 +3307,7 @@ function zrlStaffPanel(d){
         <div><label class="lbl">Sign-ups close</label><input id="zrl-new-closes" type="date" class="inp" style="width:auto"/></div>
         <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlStartRound()">Start round</button></div>
       ${round?`<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="zrl-new-carry" checked style="margin-top:3px"/><span><b>Carry over the riders</b> who are in and on a team (${(d.signups||[]).filter(x=>x.in&&(d.assign||{})[x.key]).length} of them), each staying on their team, and captains who are still on their team. Riders can still change their sign-up.</span></label>`:''}
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">The current round is archived and the club channel is told sign-ups are open. Teams always carry over; race times are recalculated from each league colour for the new dates, and captains are cleared unless the riders carry over.</div></div>`;
   if(!round) return start;
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Round (staff)')}
       <div style="font-size:13px;margin-bottom:10px">Sign-ups are <b>${round.open?'open':'closed'}</b>${round.closesAt?' · close '+esc(new Date(round.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' '+tzLabel()+' (automatic)':''}
@@ -3319,14 +3319,14 @@ function zrlStaffPanel(d){
           <div><label class="lbl">Sign-ups close</label><input id="zrl-ed-closes" type="date" class="inp" value="${round.closesAt?esc(new Date(round.closesAt).toLocaleDateString('en-CA',{timeZone:'Europe/London'})):''}" style="width:auto"/></div>
           <div><label class="lbl">Races</label><input id="zrl-ed-weeks" type="number" min="1" max="12" class="inp" value="${esc(round.weeks)}" style="width:70px"/></div>
           <button class="btn-cyan" style="width:auto;padding:8px 16px;align-self:flex-end" onclick="zrlEditRound()">Save</button></div>
-        <div style="font-size:11px;color:#7b8494;margin-top:6px">Changes the name and dates only. Sign-ups and teams stay, and nothing is posted to Discord.</div></details>
+        <div style="font-size:11px;color:#9aa3b2;margin-top:6px">Changes the name and dates only. Sign-ups and teams stay, and nothing is posted to Discord.</div></details>
       <div style="font-size:13px;margin-bottom:10px">Rosters are <b>${round.published?'published':'not published'}</b> <span style="color:#8b95a5">${round.published?'(riders can see their team)':'(only staff and captains see teams)'}</span>
         <button onclick="zrlPublish(${!round.published})" style="margin-left:8px;padding:4px 12px;font-size:12px;background:${round.published?'rgba(255,255,255,0.05)':'rgba(16,185,129,0.12)'};color:${round.published?'#e5e7eb':'#10B981'};border:1px solid ${round.published?'rgba(255,255,255,0.15)':'rgba(16,185,129,0.3)'};border-radius:6px">${round.published?'🙈 Unpublish':'📣 Publish rosters'}</button></div>
       <details><summary style="font-size:12px;color:#9ca3af;cursor:pointer;margin-bottom:8px">Edit teams one by one (${round.teams.length}): names, time zones, race times, captains</summary>
       <datalist id="zrl-slots">${[...new Set(round.teams.map(t=>t.slot).filter(Boolean))].map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>
       <div id="zrl-teams">${round.teams.map(teamRow).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:6px"><button onclick="zrlAddTeam()" style="padding:6px 12px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">+ Add team</button><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSaveTeams()">Save teams</button></div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">Captains are chosen from each team's own riders (⭐ = happy to captain; a starred rider is picked automatically). Race times are easier to set for a whole league in the Race times card.</div></details></div>${start}`;
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Captains are chosen from each team's own riders (⭐ = happy to captain; a starred rider is picked automatically). Race times are easier to set for a whole league in the Race times card.</div></details></div>${start}`;
 }
 let zrlPreview=null;
 function zrlImportCard(d){
@@ -3345,7 +3345,7 @@ function zrlImportCard(d){
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlImportApply()">Import (replaces teams and rosters)</button>
         <button onclick="zrlImportRefresh()" style="${btn}">Only update league, division and grade</button></div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Reads the team board tab of the club Google Sheet. Nothing changes until you press Import.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Reads the team board tab of the club Google Sheet. Nothing changes until you press Import.</div></div>`;
 }
 function zrlLeagueRows(p,regs,btn){
   const groups=[...new Set(p.teams.map(t=>t.hint||''))];
@@ -3372,7 +3372,7 @@ function zrlSignupImportCard(d){
       ${p.warnings.length?`<details style="margin-bottom:8px;font-size:12px;color:#fbbf24"><summary>${p.warnings.length} things to check</summary><ul style="margin:6px 0 0 18px">${p.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:''}
       <button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlSignupApply()">Import ${s.riders} sign-ups</button>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Riders who signed up on this page themselves are never overwritten. Nothing changes until you press Import.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Riders who signed up on this page themselves are never overwritten. Nothing changes until you press Import.</div></div>`;
 }
 async function zrlSignupPreview(){
   const tab=document.getElementById('zrl-su-tab').value.trim(), sheet=document.getElementById('zrl-su-sheet').value.trim();
@@ -3400,7 +3400,7 @@ function zrlAutoCard(d){
       ${p.unplaced.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24">Not placed:<ul style="margin:4px 0 0 18px">${p.unplaced.map(u=>`<li>${rn(u.name,'',u.key)}${u.cat?' ('+esc(u.cat)+')':''}: ${esc(u.reason)}</li>`).join('')}</ul></div>`:''}
       <div style="margin-top:10px"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlAutoApply()">Apply ${p.moves.length} placements</button></div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
 }
 async function zrlAutoPreview(){
   let res,d; try{ res=await fetch('/api/zrl/auto-assign',{method:'POST',headers:tttHeaders(),body:JSON.stringify({})}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -3447,7 +3447,7 @@ function zrlExportCard(d){
         <pre style="white-space:pre-wrap;font-size:12px;color:#d1d5db;margin:6px 0">${esc(t.text)}</pre>
         <button onclick="zrlCopy('${a}',this)" style="${btn}">Copy text</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></details>`; }).join('')}</div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#7b8494;margin-top:8px">WTRL has no public sign-up for us to fill in, so each captain registers their team there. This gives them the names, Zwift IDs and categories to paste, and the CSV has everything in one file.</div></div>`;
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">WTRL has no public sign-up for us to fill in, so each captain registers their team there. This gives them the names, Zwift IDs and categories to paste, and the CSV has everything in one file.</div></div>`;
 }
 async function zrlExportBuild(){
   let res,d; try{ res=await fetch('/api/zrl/export',{headers:tttHeaders()}); d=await res.json(); }catch(e){ alert('Could not reach the server. Please try again.'); return; }
@@ -3482,7 +3482,7 @@ function zrlEditorCard(d){
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlEditSave()">Save</button>
       <button onclick="zrlEditing=null;renderZrl2()" style="padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px">Cancel</button>
       ${isNew?'':`<button onclick="zrlEditRemove()" style="margin-left:auto;padding:6px 14px;font-size:12px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:6px">Remove from this round</button>`}</div>
-    <div style="font-size:11px;color:#7b8494;margin-top:8px">Staff changes are kept: a later sheet import will not overwrite them. Changing the Zwift ID or name keeps the rider's team place.</div></div>`;
+    <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Staff changes are kept: a later sheet import will not overwrite them. Changing the Zwift ID or name keeps the rider's team place.</div></div>`;
 }
 function zrlEditStart(key){ zrlEditing=key; renderZrl2(); const el=document.getElementById('zed-name'); if(el) el.scrollIntoView({block:'center'}); }
 async function zrlEditSave(){
@@ -3514,7 +3514,7 @@ function zrlSlotsCard(d){
     ${zrlSlotGroups.map((g,i)=>{ const vals=[...new Set(g.teams.map(t=>t.slot||''))], cur=vals.length===1?vals[0]:'';
       return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:150px;font-size:13px"><b>${esc(g.label)}</b> <span style="color:#8b95a5">· ${g.teams.length} team${g.teams.length===1?'':'s'}${vals.length>1?' · different times':''}</span>${g.teams[0].wtrlSlot?`<div style="font-size:11px;color:${vals.length===1&&cur===g.teams[0].wtrlSlot?'#10B981':'#FBBF24'}">WTRL: ${esc(g.teams[0].wtrlSlot)}${vals.length===1&&cur===g.teams[0].wtrlSlot?' ✓':''}</div>`:''}</div>
         <input id="zrl-slot-${i}" class="inp" list="zrl-slots" maxlength="40" placeholder="e.g. Tue 19:00 UTC" value="${esc(cur)}" style="width:190px"/><button onclick="zrlSetSlots(${i})" style="${btn}">Apply to ${g.teams.length}</button></div>`; }).join('')}
-    <div style="font-size:11px;color:#7b8494;margin-top:8px">Use the time shown on the WTRL league table, and say which time zone it is in. Riders and captains see this text as it is.</div></div>`;
+    <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Use the time shown on the WTRL league table, and say which time zone it is in. Riders and captains see this text as it is.</div></div>`;
 }
 function zrlLeagueTimes(n){
   const list=zrlData.round.teams.filter(t=>t.wtrlSlot&&t.wtrlSlot!==t.slot).slice(0,8).map(t=>t.name.replace(/^CRYO-GEN\s+/,'')+': '+(t.slot||'none')+' → '+t.wtrlSlot).join('\n');
@@ -3649,7 +3649,7 @@ function zrlGrowthCard(d,st){
     return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1;min-width:200px;font-size:13px">${z.id==='ap'?'🌏 ':''}<b>${esc(z.name)}</b> <span style="color:#9ca3af">· ${note}${loose?' · '+loose+' interested with no team':''}</span></div>
       <button onclick="zrlRecruit('${z.id}','${esc(z.name)}')" style="padding:4px 10px;font-size:12px;background:${z.id==='ap'?'rgba(var(--accent-rgb),0.12)':'rgba(255,255,255,0.05)'};color:${z.id==='ap'?'var(--accent)':'#e5e7eb'};border:1px solid ${z.id==='ap'?'rgba(var(--accent-rgb),0.4)':'rgba(255,255,255,0.15)'};border-radius:6px;cursor:pointer">📣 Ask for riders</button></div>`;
   }).join('');
-  return `<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:4px">Growth: where riders are wanted</div>${rows}<div style="font-size:11px;color:#7b8494;margin-top:6px">One message per time zone a day. It says how many places are open and the race times.</div></div>`;
+  return `<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:4px">Growth: where riders are wanted</div>${rows}<div style="font-size:11px;color:#9aa3b2;margin-top:6px">One message per time zone a day. It says how many places are open and the race times.</div></div>`;
 }
 function zrlTeamsTab(d,st){
   const r=d.round, size=r.rosterSize;
@@ -3668,7 +3668,7 @@ function zrlTeamsTab(d,st){
       <div style="font-size:11px;color:#8b95a5;margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([t.division,t.grade,t.league].filter(Boolean).join(' · ')||'—')}${t.dev?zrlBadge('DEV','#a78bfa'):''}</div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#9ca3af">${esc(zone)}</span><span style="font-weight:700;color:${n>size?'#FBBF24':'#e5e7eb'}">${n}/${size}</span></div>
       <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:8px"><div style="height:5px;width:${pct}%;background:${barColor};border-radius:3px"></div></div>
-      <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#7b8494')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
+      <div style="font-size:12px;color:${t.captain?'#d1d5db':(n?'#FBBF24':'#9aa3b2')};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.captain?'⭐ '+esc(t.captainName||t.captain):(n?'no captain':'empty')}</div>
       <div style="font-size:12px;color:${t.slot?'#9ca3af':'#FBBF24'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.slot?'🕒 '+esc(slotLocal(t.slot)):(n?'no race time':'')}</div>
       ${t.wtrlRegistered?'<div style="font-size:12px;color:#10B981">✅ on WTRL</div>':(n&&r.wtrlDeadline?'<div style="font-size:12px;color:#FBBF24">not on WTRL yet</div>':'')}
       ${overN?`<div style="font-size:12px;color:#f87171;font-weight:700">⚠ ${overN} over category</div>`:''}</div>`;
@@ -4227,7 +4227,7 @@ function zrlPastCard(d){
       ${s.groups.length?`<div style="margin-top:10px;font-size:12px;color:#9ca3af">Standings: ${s.groups.map(g=>esc(g.name)+': '+g.teams.map(t=>t.rank+'. '+esc(t.name.replace(/^CRYO-GEN\s+/,''))+' '+t.total).join(', ')).join(' · ')}</div>`:''}</div>`;
   }
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Past rounds (staff)')}${rows||'<div style="font-size:13px;color:#8b95a5">No past rounds yet. A round is archived when the next one starts.</div>'}${detail}
-    ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#7b8494;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
+    ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#9aa3b2;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
 }
 function zrlWeeksTab(){
   const w=zrlWeekly;
@@ -4319,7 +4319,7 @@ function zrlMyCard(){
       ${t.issues.length?`<div style="font-size:12px;color:#fbbf24;margin-top:8px">To sort out: ${esc(t.issues.join(', '))}. Tell the staff in Discord.</div>`:''}
       <div style="margin-top:10px"><button onclick="zrlCopy('${a}',this)" style="${btn}">Copy team details</button> <button onclick="zrlCopy('${b}',this)" style="${btn}" ${t.ids?'':'disabled'}>Copy Zwift IDs</button></div>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button onclick="zrlWtrlMark('${esc(t.id)}',${!t.registered})" style="${btn};${t.registered?'border-color:rgba(16,185,129,0.5);color:#10B981':''}">${t.registered?'✅ Registered on WTRL (tap to undo)':'☐ I have registered on WTRL'}</button>${m.round.wtrlDeadline&&!t.registered?`<span style="font-size:12px;color:#FBBF24">Deadline ${esc(zrlDeadlineText(m.round.wtrlDeadline))}</span>`:''}</div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">Register this team on WTRL (wtrl.racing/zrl) before the deadline: paste the details above. Only you and the staff see Zwift IDs.</div></div>`);
   });
   if((m.teams||[]).length){
     (m.teams).forEach(t=>{
@@ -4453,7 +4453,7 @@ function renderSeason(d){
         <input id="season-start" type="date" class="inp" value="${esc(weekDate)}" style="width:auto"/>
         <button class="btn-cyan" style="width:auto;padding:8px 16px" onclick="addSeasonUi()">Start new season</button>
       </div>
-      <div style="font-size:11px;color:#7b8494;margin-top:8px">A season runs until the next one starts. Weeks before the first season show as "Earlier weeks". Nothing is deleted when you add or remove a season.</div>
+      <div style="font-size:11px;color:#9aa3b2;margin-top:8px">A season runs until the next one starts. Weeks before the first season show as "Earlier weeks". Nothing is deleted when you add or remove a season.</div>
     </div>`:'';
   return head+renderSeasonBody(d)+manage;
 }
@@ -4637,7 +4637,7 @@ function renderAutoResults(results){
       const col=catColor(c.cat);
       return '<span style="display:inline-flex;align-items:center;gap:4px;margin:1px 2px;padding:2px 7px;border-radius:4px;background:'+col+'18;border:1px solid '+col+'44;font-size:11px"><span style="color:'+col+';font-weight:700">'+c.cat+'</span><span style="color:#9ca3af">'+(c.pos<=3?'🏆 ':'')+c.pos+'/'+c.total+'</span><span style="font-family:monospace;color:#8b95a5">'+c.time+'</span><span style="color:var(--accent)">'+c.wkg+' w/kg</span></span>';
     }).join('');
-    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#8b95a5;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#8b95a5">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#7b8494">'+ev.riders+' riders</td></tr>';
+    return '<tr><td><a href="'+ev.zpUrl+'" target="_blank" style="color:white;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(255,255,255,0.2)">'+ev.title+'</a></td><td style="color:#8b95a5;font-size:11px;white-space:nowrap">'+ev.date+'</td><td style="font-size:11px;color:#8b95a5">'+icon+'</td><td>'+cats+'</td><td style="font-size:11px;color:#9aa3b2">'+ev.riders+' riders</td></tr>';
   }).join('');
 }
 
@@ -4663,7 +4663,7 @@ function renderHybridResults(sheet,derived){
       return '<tr><td><a href="https://zwiftpower.com/profile.php?z='+r.id+'" target="_blank" style="color:white;text-decoration:none">'+r.name+'</a></td><td style="color:#8b95a5;font-size:11px">'+dt+'</td><td><span style="padding:1px 6px;border-radius:3px;background:'+col+'18;color:'+col+';border:1px solid '+col+'44;font-size:11px;font-weight:700">'+(r.category||'?')+'</span></td><td style="color:#9ca3af">vELO '+r.rating+'</td><td style="color:#10B981;font-size:11px">🏆 '+r.wins+'W / '+r.podiums+'P</td><td style="color:var(--accent);font-family:monospace">'+r.finishes+' races</td></tr>';
     }).join('');
   }
-  el.innerHTML=rows||'<tr><td colspan="6" style="color:#7b8494;text-align:center;padding:20px">No results yet</td></tr>';
+  el.innerHTML=rows||'<tr><td colspan="6" style="color:#9aa3b2;text-align:center;padding:20px">No results yet</td></tr>';
 }
 
 let ridesTab='cover'; try{ ridesTab=sessionStorage.getItem('ridesTab')||'cover'; }catch(e){}
@@ -4832,7 +4832,7 @@ async function coverIcal(apply){
 }
 
 function catColor(c){
-  return {A:'#ef4444',B:'#f97316',C:'#eab308',D:'#8b5cf6',E:'#8b95a5',F:'#ec4899'}[c]||'#8b95a5';
+  return {A:'#f87171',B:'#f97316',C:'#eab308',D:'#a78bfa',E:'#8b95a5',F:'#ec4899'}[c]||'#8b95a5';
 }
 
 // ── Init ───────────────────────────────────────────────────
