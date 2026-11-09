@@ -42,4 +42,4 @@ jobs:
           fi
           curl -fsS --max-time 30 -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
-            https://club.cryo-gen.team/api/cron/tick
+            "https://club.cryo-gen.team/api/cron/tick?speed=auto"

@@ -4,7 +4,7 @@
 (function () {
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let sdk = null, state = { zwift: null, second: null, result: null, error: '', busy: false };
-  const fmt = v => (v == null || v === '' ? '<span style="color:#6b7280">not in file</span>' : E(v));
+  const fmt = v => (v == null || v === '' ? '<span style="color:#8b95a5">not in file</span>' : E(v));
   const when = v => (v == null ? null : new Date(v * 1000).toISOString().replace('.000Z', 'Z'));
 
   async function decode(file) {
@@ -23,10 +23,10 @@
       + row('Created', when(zi.timeCreated), when(si.timeCreated)) + row('Software version (creator)', z.creator.softwareVersion, s.creator.softwareVersion) + row('Hardware version (creator)', z.creator.hardwareVersion, s.creator.hardwareVersion);
     const n = Math.max(z.powerSensors.length, s.powerSensors.length);
     for (let i = 0; i < n; i++) {
-      const a = z.powerSensors[i], b = s.powerSensors[i], line = x => (x ? `${E(x.manufacturer == null ? '?' : x.manufacturer)} / product ${E(x.product == null ? '?' : x.product)} / serial ${E(x.serial == null ? 'none' : x.serial)} / device no. ${E(x.antNumber == null ? 'none' : x.antNumber)} / software ${E(x.softwareVersion == null ? 'none' : x.softwareVersion)}` : '<span style="color:#6b7280">none listed</span>');
+      const a = z.powerSensors[i], b = s.powerSensors[i], line = x => (x ? `${E(x.manufacturer == null ? '?' : x.manufacturer)} / product ${E(x.product == null ? '?' : x.product)} / serial ${E(x.serial == null ? 'none' : x.serial)} / device no. ${E(x.antNumber == null ? 'none' : x.antNumber)} / software ${E(x.softwareVersion == null ? 'none' : x.softwareVersion)}` : '<span style="color:#8b95a5">none listed</span>');
       h += `<tr><td style="color:#8b95a5">Power sensor ${i + 1}</td><td>${line(a)}</td><td>${line(b)}</td></tr>`;
     }
-    if (!n) h += '<tr><td style="color:#8b95a5">Power sensor</td><td><span style="color:#6b7280">none listed</span></td><td><span style="color:#6b7280">none listed</span></td></tr>';
+    if (!n) h += '<tr><td style="color:#8b95a5">Power sensor</td><td><span style="color:#8b95a5">none listed</span></td><td><span style="color:#8b95a5">none listed</span></td></tr>';
     return h;
   };
 
@@ -41,6 +41,21 @@
       <p style="font-size:12px;color:#8b95a5;margin-top:8px">${E(r.note)} The thresholds behind these indicators are untuned starting points.</p>`;
   }
 
+  // A friendly, routine-sounding request for a second recording, to paste into a Discord DM.
+  const askText = (name, event) => `Hi ${name || 'there'}, a bit of routine housekeeping from CRYO-GEN: could you send me the .fit file from your second recording (your bike computer or second device)${event ? ' for ' + event : ''}? We ask riders for these from time to time, so it's nothing personal. Just reply here with the file when you get a moment. Thanks, and good racing!`;
+  const askHtml = () => `<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:#8b95a5">Ask a rider for their file (Discord DM template)</summary>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><input id="ask-name" class="inp" placeholder="First name" style="width:150px"/><input id="ask-event" class="inp" placeholder="Event (optional)" style="flex:1;min-width:180px"/></div>
+    <textarea id="ask-text" class="inp" rows="4" readonly>${E(askText('', ''))}</textarea>
+    <button type="button" id="ask-copy" class="btn-cyan" style="width:auto;padding:6px 14px;font-size:12px;margin-top:6px">Copy message</button> <span id="ask-msg" role="status" style="font-size:12px;color:#8b95a5"></span></details>`;
+  function wireAsk(el) {
+    const n = el.querySelector('#ask-name'), v = el.querySelector('#ask-event'), t = el.querySelector('#ask-text'); if (!n) return;
+    const up = () => { t.value = askText(n.value.trim(), v.value.trim()); };
+    n.oninput = up; v.oninput = up;
+    el.querySelector('#ask-copy').onclick = async () => { try { await navigator.clipboard.writeText(t.value); el.querySelector('#ask-msg').textContent = 'Copied.'; } catch (e) { t.select(); el.querySelector('#ask-msg').textContent = 'Press Ctrl+C to copy.'; } };
+  }
+  // Numbers only (no names, no file content) that can be pasted somewhere to help tune the thresholds on real pairs.
+  const tuningText = r => JSON.stringify({ stats: r.stats, indicators: r.indicators.map(i => i.code), thresholds: r.thresholds });
+
   function mount(el) {
     if (!el) return;
     el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">FIT pair comparator</div>
@@ -49,14 +64,15 @@
         <label style="font-size:12px;flex:1;min-width:200px">Zwift file<input id="pair-z" type="file" accept=".fit" class="inp" style="margin-top:4px"/></label>
         <label style="font-size:12px;flex:1;min-width:200px">Second-source file<input id="pair-s" type="file" accept=".fit" class="inp" style="margin-top:4px"/></label>
         <button type="button" class="btn-cyan" id="pair-go" style="width:auto;padding:8px 18px;font-size:13px">Compare</button></div>
-      <div id="pair-out" role="status" style="margin-top:8px;font-size:13px"></div></div>`;
+      <div id="pair-out" role="status" style="margin-top:8px;font-size:13px"></div>${askHtml()}</div>`;
+    wireAsk(el);
     const out = el.querySelector('#pair-out');
     if (state.result) out.innerHTML = resultHtml(state.result);
     el.querySelector('#pair-go').onclick = async () => {
       const z = el.querySelector('#pair-z').files[0], s = el.querySelector('#pair-s').files[0];
       if (!z || !s) { out.innerHTML = '<span style="color:#FBBF24">Choose both files first.</span>'; return; }
       out.textContent = 'Reading both files…';
-      try { state.result = PairFit.compare(await decode(z), await decode(s)); out.innerHTML = resultHtml(state.result); }
+      try { state.result = PairFit.compare(await decode(z), await decode(s)); out.innerHTML = resultHtml(state.result) + '<button type="button" id="pair-tune" style="margin-top:6px;padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#8b95a5;cursor:pointer">Copy numbers for tuning</button>'; out.querySelector('#pair-tune').onclick = async () => { try { await navigator.clipboard.writeText(tuningText(state.result)); out.querySelector('#pair-tune').textContent = 'Copied (numbers only)'; } catch (e) { /* no clipboard */ } }; }
       catch (e) { state.result = null; out.innerHTML = `<span style="color:#f87171">${E(e.message)}</span>`; }
     };
   }
