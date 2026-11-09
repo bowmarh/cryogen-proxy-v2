@@ -2759,7 +2759,6 @@ const fairplay = require('../lib/fairplay')({ redis, HttpError, requireRole, sta
 const caselog = require('../lib/caselog')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
 const fitAnalysis = require('../lib/fitanalysis');
 const investigations = require('../lib/investigations')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster, analyse: fitAnalysis.analyse, reweigh: fitAnalysis.reweigh, profile: { routes: { 'GET /api/profile': (...a) => profile.routes['GET /api/profile'](...a) } }, zrl, ai });
-const cockpit = require('../lib/cockpit')({ redis, HttpError, memberFromRequest, zrl, live, adminReq: () => syncReq(), fetchRoster, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });
 const badges = require('../lib/badges')({ HttpError, memberFromRequest, season: m => seasonOf(m), fetchRoster });
 const recap = require('../lib/recap')({ redis, HttpError, memberFromRequest, fetchRoster, zrl, discord, discordEscape });
 const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse,
@@ -2841,6 +2840,7 @@ async function runDigest(now = Date.now()){
 
 // Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
 const live = require('../lib/live')({ discord, discordEscape, siteUrl: SITE_URL, adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
+const cockpit = require('../lib/cockpit')({ redis, HttpError, memberFromRequest, zrl, live, adminReq: () => syncReq(), fetchRoster, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });
 
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
