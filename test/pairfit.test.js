@@ -87,7 +87,7 @@ test('member Fair play page is static, names no third-party tool, and the staff 
   const page = html.slice(html.indexOf('id="page-standard"'), html.indexOf('id="page-standard"') + 2500);
   assert.match(page, /second recording running as a backup/);
   assert.match(page, /Discord DM/);
-  assert.match(page, /support\.zwift\.com/);
-  assert.doesNotMatch(page, /zwiftpower|<script|fetch\(/i);
+  assert.match(page, /support\.zwift\.com\/en_us\/dual-power-recording-on-zwiftpower-B1fOnbCVyl/);
+  assert.doesNotMatch(page.replace(/href="[^"]*"/g, ''), /zwiftpower|<script|fetch\(/i, 'the words on the page never name ZwiftPower or run code; only the link address (Zwift\'s own article) may');
   assert.match(html, /id="page-fair"/);
 });
