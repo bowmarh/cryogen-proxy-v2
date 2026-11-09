@@ -47,5 +47,38 @@
     const m = document.getElementById('recap-msg'); m.textContent = 'Sharing…';
     try { await api('/api/me/recap/share', true); m.textContent = 'Shared. Nice one!'; } catch (e) { m.textContent = e.message; }
   };
-  window.MemberCards = { load: () => { loadOnboard(); loadRecap(); } };
+  // ── Badges ──
+  async function loadBadges() {
+    const el = document.getElementById('badges-card'); if (!el) return;
+    try {
+      const d = await api('/api/me/badges');
+      if (!d.earned.length && !d.next) { el.innerHTML = ''; return; }
+      const chip = b => `<span title="${E(b.label)}" style="display:inline-flex;gap:6px;align-items:center;padding:4px 10px;margin:3px 4px 3px 0;border-radius:99px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);font-size:12px"><span aria-hidden="true">${b.icon}</span>${E(b.label)}</span>`;
+      el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:6px">🏅 Your badges (${d.earned.length})</div>${d.earned.map(chip).join('') || '<div style="font-size:12px;color:#8b95a5">None yet: your first race earns one.</div>'}${d.next ? `<div style="font-size:12px;color:#8b95a5;margin-top:6px">${E(d.next.text)}</div>` : ''}</div>`;
+    } catch (e) { el.innerHTML = ''; }
+  }
+  // ── Captain's cockpit ──
+  const names = (l, c) => (l && l.length ? `<span style="color:${c}">${l.map(E).join(', ')}</span>` : '<span style="color:#8b95a5">nobody</span>');
+  function cockpitHtml(d) {
+    return d.teams.map(t => {
+      const n = t.next;
+      if (!n) return `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">🎖️ Captain's cockpit · ${E(t.name)}</div><div style="font-size:12px;color:#8b95a5;margin-top:4px">No race coming up.</div></div>`;
+      return `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">🎖️ Captain's cockpit · ${E(t.name)} · race ${n.week}, ${E(n.date)}</div>
+        <div style="font-size:13px;line-height:1.7;margin-top:6px"><div>✅ Yes (${n.yes.length} of ${n.racing} needed): ${names(n.yes, '#34d399')}</div><div>🤔 Maybe: ${names(n.maybe, '#FBBF24')}</div><div>❌ No: ${names(n.no, '#f87171')}</div><div>⏳ Not answered: ${names(n.pending, '#e5e7eb')}</div>${n.inPen.length ? `<div>🏁 In the pen: ${names(n.inPen, '#22d3ee')}</div>` : ''}</div>
+        ${n.lineupSet ? `<div style="font-size:12px;color:#8b95a5;margin-top:6px">Line-up set: ${n.lineup.map(E).join(', ')}</div>` : n.suggestion.length ? `<div style="font-size:12px;color:#d1d5db;margin-top:6px"><b>Suggested line-up</b> (yes first, then maybe, strongest vELO first): ${n.suggestion.map(E).join(', ')}${n.short ? `. Still ${n.short} short on yeses.` : ''}</div>` : ''}
+        ${n.pending.length ? `<div style="margin-top:10px"><button type="button" style="${btn}" onclick="cockpitNudge('${E(t.id)}',${n.weekIndex},this)">Ask the ${n.pending.length} who haven't answered</button> <span class="cockpit-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div>` : ''}</div>`;
+    }).join('');
+  }
+  async function loadCockpit() {
+    const el = document.getElementById('cockpit-card'); if (!el) return;
+    try { const d = await api('/api/me/cockpit'); el.innerHTML = d.captain ? cockpitHtml(d) : ''; } catch (e) { el.innerHTML = ''; }
+  }
+  window.cockpitNudge = async (team, week, b) => {
+    const m = b.parentElement.querySelector('.cockpit-msg'); m.textContent = 'Asking…'; b.disabled = true;
+    try {
+      const r = await fetch('/api/me/cockpit/nudge', { method: 'POST', headers: hdr(), body: JSON.stringify({ team, week }) }); const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); m.textContent = d.note;
+    } catch (e) { m.textContent = e.message; b.disabled = false; }
+  };
+  window.MemberCards = { load: () => { loadOnboard(); loadRecap(); loadBadges(); loadCockpit(); } };
 })();
