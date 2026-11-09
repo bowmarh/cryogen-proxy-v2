@@ -34,8 +34,22 @@ class HttpError extends Error {
   constructor(status, message){ super(message); this.status = status; }
 }
 
+// The last good answer to each signed-in GET is kept in memory, per person (the key includes who asked). If storage is over its quota or down,
+// the same person is shown that saved copy, marked stale, instead of a red error. It only helps a copy of the app that has already answered them.
+const lastGood = new Map();
+function rememberGood(key, body){ if (body.length > 400000) return; lastGood.delete(key); lastGood.set(key, { body, at: Date.now() }); if (lastGood.size > 200) lastGood.delete(lastGood.keys().next().value); }
+function sendStale(res, saved){
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(saved.body), 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': SITE_ORIGIN, 'X-Stale': '1', 'X-Stale-Age': String(Math.round((Date.now() - saved.at) / 1000)) });
+  res.end(saved.body);
+}
 function sendJSON(res, statusCode, obj){
   const s = JSON.stringify(obj);
+  if (statusCode === 200 && res._staleKey) {
+    // A page that reports its own sections as unreadable (This week) is a failed read when most of them say storage is down.
+    const broken = obj && Array.isArray(obj.problems) && obj.problems.filter(x => /storage error|Shared storage/i.test(String(x))).length >= 3;
+    if (broken && lastGood.has(res._staleKey)) return sendStale(res, lastGood.get(res._staleKey));
+    if (!broken) rememberGood(res._staleKey, s);
+  }
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(s),
@@ -469,10 +483,18 @@ const usageDay = () => new Date().toISOString().slice(0, 10);
 async function flushUsage(){
   const r = usage.redis, d = usage.discord; usage.redis = 0; usage.discord = 0;
   if (!r && !d) return [];
-  const day = usageDay();
-  await redis([['HINCRBY', USAGE_KEY, `${day}:redis`, r + 1], ['HINCRBY', USAGE_KEY, `${day}:discord`, d]]);
+  const day = usageDay(), month = day.slice(0, 7);
+  const out = await redis([['HINCRBY', USAGE_KEY, `${day}:redis`, r + 1], ['HINCRBY', USAGE_KEY, `${day}:discord`, d], ['HINCRBY', USAGE_KEY, `m:${month}`, r + 1]]);
+  // Told to the admin channel once per month at 70% and again at 90% of the storage plan's monthly limit (counts are a floor).
+  const limit = REDIS_MONTHLY_LIMIT(), used = Number(out[2]) || 0;
+  for (const pct of [90, 70]) if (used >= limit * pct / 100) {
+    const [claimed] = await redis([['HSETNX', 'cg:alerts:quota', `${month}:${pct}`, new Date().toISOString()]]);
+    if (claimed) await discord('admin', { content: `📈 **Storage quota:** about ${Math.round(used / limit * 100)}% of this month's ${limit.toLocaleString('en-GB')} storage commands are used (${used.toLocaleString('en-GB')}). If it runs out, pages show saved data and nothing new saves. Check the Upstash plan.` }).catch(() => {});
+    break;
+  }
   return [];
 }
+const REDIS_MONTHLY_LIMIT = () => Number(process.env.REDIS_MONTHLY_LIMIT) || 500000;
 const OUTBOX_KEY = 'cg:outbox', OUTBOX_MAX = 50, OUTBOX_TRIES = 5, OUTBOX_AGE_MS = 24 * 3600000;
 async function sendHook(hook, payload){
   try {
@@ -1624,6 +1646,7 @@ async function runTttSchedule(now = Date.now()){
 }
 
 const CRON_LAST_KEY = 'cg:cron:last';
+const CRON_PLAN_KEY = 'cg:cron:plan', tickPlan = require('../lib/tickplan');
 const CRON_FAILING_KEY = 'cg:cron:failing', CRON_FAILED_KEY = 'cg:cron:failed', CRON_ALERT_KEY = 'cg:cron:alerts';
 
 async function handleCron(req, res){
@@ -1638,7 +1661,13 @@ async function handleCron(req, res){
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
-  for (const [name, job] of jobs){
+  // With ?speed=auto (the workflow's 15-minute tick) only the jobs that must not wait run unless something is due; see lib/tickplan.js.
+  const speed = parseRequestUrl(req).query.speed, nowMs = Number(process.env.CRON_CLOCK_MS) || Date.now();
+  let planState = null;
+  if (speed === 'auto'){ try { const [raw] = await redis([['GET', CRON_PLAN_KEY]]); planState = raw ? JSON.parse(raw) : null; } catch (e) { /* no record: run everything */ } }
+  const tp = tickPlan.plan({ speed, now: nowMs, state: planState });
+  const due = tp.full ? jobs : jobs.filter(([n]) => tickPlan.ALWAYS.includes(n));
+  for (const [name, job] of due){
     try { ran.push(...await job()); }
     catch (e){ console.error(`Scheduled ${name}:`, e.message); retry.push([name, job, e]); }
   }
@@ -1658,9 +1687,10 @@ async function handleCron(req, res){
     const [claimed] = await redis([['HSETNX', CRON_ALERT_KEY, `${f.job}:${Math.floor(Date.now() / 21600000)}`, new Date().toISOString()]]).catch(() => [0]);
     if (claimed) await discord('zrl-admin', { content: `⚠️ **The scheduled ${f.job} job failed:** ${discordEscape(f.error)}\nIts reminders, posts or backups did not run this time. Check the health panel at ${SITE_URL}.` });
   }
+  if (speed === 'auto' && tp.full) await redis([['SET', CRON_PLAN_KEY, JSON.stringify({ fullAt: nowMs, wake: live.wake(nowMs) })]]).catch(() => {});
   // The health panel reads these to show whether the scheduled workflow is really running, and whether a job is failing.
   await redis([['SET', CRON_LAST_KEY, new Date().toISOString()], failed.length ? ['SET', CRON_FAILED_KEY, JSON.stringify({ at: new Date().toISOString(), failed })] : ['DEL', CRON_FAILED_KEY]]).catch(() => {});
-  sendJSON(res, 200, failed.length ? { ran, failed } : { ran });
+  sendJSON(res, 200, { ran, ...(failed.length ? { failed } : {}), ...(speed === 'auto' ? { mode: tp.full ? 'full' : 'light', why: tp.reason } : {}) });
 }
 
 // Earlier versions keyed sign-ups by name alone, so one rider could end up with two (a guest and a signed-in sign-up, or two
@@ -2186,7 +2216,9 @@ async function healthChecks(){
       const day = usageDay(), get = k => Number(pairs(raw).find(([f]) => f === `${day}:${k}`)?.[1]) || 0;
       const r = get('redis') + usage.redis, d = get('discord') + usage.discord, limit = REDIS_DAILY_LIMIT();
       const ai = k => Number(pairs(aiRaw).find(([f]) => f === `${day}:${k}`)?.[1]) || 0;
-      const detail = `Today so far: about ${r} storage commands (alert at ${Math.round(limit * 0.8)} of ${limit}), ${d} Discord posts. Counts are a floor.${ai('calls') ? ` AI today: ${ai('calls')} answers, ${ai('in')} tokens in, ${ai('out')} tokens out.` : ''}`;
+      const monthly = (Number(pairs(raw).find(([f]) => f === `m:${day.slice(0, 7)}`)?.[1]) || 0) + usage.redis, mLimit = REDIS_MONTHLY_LIMIT(), mPct = Math.round(monthly / mLimit * 100);
+      if (monthly >= mLimit * 0.7) return [monthly >= mLimit * 0.9 ? 'fail' : 'warn', `${mPct}% of this month's storage plan is used (about ${monthly.toLocaleString('en-GB')} of ${mLimit.toLocaleString('en-GB')} commands; counts are a floor). When it runs out, pages show saved data and nothing new saves: upgrade the Upstash plan or cut what is polling.`];
+      const detail = `Today so far: about ${r} storage commands (alert at ${Math.round(limit * 0.8)} of ${limit}), ${d} Discord posts; this month about ${mPct}% of the plan. Counts are a floor.${ai('calls') ? ` AI today: ${ai('calls')} answers, ${ai('in')} tokens in, ${ai('out')} tokens out.` : ''}`;
       return [r >= limit * 0.8 ? 'warn' : 'ok', r >= limit * 0.8 ? `${detail} Close to the daily limit: check the Upstash plan or what is polling.` : detail];
     }),
     run('outbox', 'Discord messages waiting to send', async () => {
@@ -3047,7 +3079,13 @@ async function reportError(req, err){
 }
 
 function handler(req, res){
+  const path = String(req.url || '').split('?')[0];
+  if (req.method === 'GET' && path.startsWith('/api/') && !/^\/api\/(cron|health|login)/.test(path) && req.headers.authorization) {
+    res._staleKey = require('crypto').createHash('sha256').update(req.url + '\n' + req.headers.authorization).digest('hex');
+  }
   route(req, res).catch(err => {
+    const saved = res._staleKey && [502, 503, 504].includes(err.status) && lastGood.get(res._staleKey);
+    if (saved && !res.headersSent) return sendStale(res, saved);
     if (!err.status){ console.error(err); reportError(req, err); }
     if (res.headersSent) return res.end();
     sendJSON(res, err.status || 500, { error: err.status ? err.message : 'internal error' });

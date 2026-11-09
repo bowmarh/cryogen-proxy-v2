@@ -166,6 +166,7 @@ function installFetch(world) {
     const u = new URL(typeof input === 'string' ? input : input.url);
     if (u.host === 'redis.test') {
       world.redisCalls++;
+      if (world.redisDown) return json({ error: 'ERR max requests limit exceeded' }, 500);   // lets a test simulate the storage plan running out
       if ((opts.headers || {}).Authorization !== `Bearer ${BASE_ENV.KV_REST_API_TOKEN}`) return json({ error: 'unauthorized' }, 401);
       const out = JSON.parse(opts.body).map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
       return json(out);

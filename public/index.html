@@ -2554,6 +2554,10 @@ function tttRider(s){
   const data=riders;
   return data.find(r=>s.zwid&&String(r.id)===String(s.zwid))||data.find(r=>r.name.toLowerCase()===tttKey(s.name))||null;
 }
+// When the club database is over its limit the server answers with the last saved copy (header X-Stale); say so, and clear the note once it is live again.
+(function(){ const f=window.fetch; window.fetch=async function(...a){ const r=await f.apply(this,a); try{ if(String(a[0]).startsWith('/api/')){ let b=document.getElementById('stale-banner');
+  if(r.headers.get('X-Stale')==='1'){ if(!b){ b=document.createElement('div'); b.id='stale-banner'; b.setAttribute('role','status'); b.style.cssText='position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#78350f;color:#fde68a;padding:8px 14px;border-radius:8px;font-size:13px;max-width:90vw;text-align:center'; document.body.appendChild(b); } b.textContent='Showing saved data: the club database is busy, so this may be a few minutes old.'; }
+  else if(b) b.remove(); } }catch(e){} return r; }; })();
 function tttHeaders(){
   const h={'Content-Type':'application/json'};
   const t=sessionStorage.getItem('token'); if(t)h['Authorization']='Bearer '+t;
