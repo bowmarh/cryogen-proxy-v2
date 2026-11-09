@@ -20,6 +20,7 @@ const BASE_ENV = {
   DISCORD_WEBHOOK_ADMIN: 'http://discord.test/admin',
   RATE_LIMIT_WRITES_PER_MIN: '100000',   // ordinary tests post far more than a person would; the limit has its own test
   LOGIN_MAX_FAILS: '1000',
+  WEEKLY_REPORT_AUTO: '0',   // the automatic Monday report posts to Discord, which would change counts in tests that run on a Monday; its own test turns it on
   REDIS_CACHE_MS: '0',   // tests change the fake database directly, so the read cache is off; it has its own test
 };
 
