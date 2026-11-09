@@ -20,6 +20,8 @@ const BASE_ENV = {
   DISCORD_WEBHOOK_ADMIN: 'http://discord.test/admin',
   RATE_LIMIT_WRITES_PER_MIN: '100000',   // ordinary tests post far more than a person would; the limit has its own test
   LOGIN_MAX_FAILS: '1000',
+  WEEKLY_REPORT_AUTO: '0',   // the automatic Monday report posts to Discord, which would change counts in tests that run on a Monday; its own test turns it on
+  REDIS_CACHE_MS: '0',   // tests change the fake database directly, so the read cache is off; it has its own test
 };
 
 // Must run before the server module is loaded: some settings are read at load time.
@@ -104,7 +106,7 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
     case 'HKEYS': return Object.keys(db[key] || {});
     case 'HLEN': return Object.keys(db[key] || {}).length;
-    case 'HSET': hash(key)[a[0]] = a[1]; return 1;
+    case 'HSET': { let n = 0; for (let i = 0; i < a.length; i += 2) { hash(key)[a[i]] = a[i + 1]; n++; } return n; }   // like Redis, several field/value pairs in one command
     case 'HINCRBY': { const h = hash(key); h[a[0]] = String((Number(h[a[0]]) || 0) + Number(a[1])); return Number(h[a[0]]); }
     case 'HSETNX': if (a[0] in hash(key)) return 0; hash(key)[a[0]] = a[1]; return 1;
     case 'HDEL': { let n = 0; for (const f of a) if (f in hash(key)) { delete db[key][f]; n++; } return n; }

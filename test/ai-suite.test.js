@@ -88,7 +88,7 @@ test('the weekly report: written on Monday from counts and titles only, posted o
   const k = kit({ answer: 'A good week. To do: place two riders.' }), posts = [];
   const digest = async now => ({ week: '2026-11-02', needsAttention: 2, attentionTitles: ['ZRL · Every rider is on a team', 'Associate asks'], newMembers: 1, quiet: 3, supporters: 4, zrl: { round: 'R2', teams: 5, racing: 40, unplaced: 2 } });
   const staff = createAiStaff({ redis: k.redis, HttpError: k.HttpError, requireRole() {}, memberFromRequest: () => null, roleFromRequest: () => 'admin', ai: k.ai, zrl: {}, lifecycle: { quiet: async () => [] }, digest, discord: async (c, p) => { posts.push([c, p.content]); }, publicClub: async () => ({}), fetchRoster: async () => ({ riders: [] }), siteUrl: 'https://club.test' });
-  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  process.env.ANTHROPIC_API_KEY = 'sk-test'; delete process.env.WEEKLY_REPORT_AUTO;   // the helpers turn the automatic report off; this test is about it
   assert.deepEqual(await staff.runSchedule(Date.parse(sunday)), []); assert.equal(posts.length, 0);
   await staff.runSchedule(Date.parse(monday));
   assert.equal(posts.length, 1); assert.match(posts[0][1], /Weekly report\*\*\nA good week/);

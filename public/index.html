@@ -928,11 +928,11 @@ function healthDotSet(checks){
   el.title=fail?fail+' failing'+(warn?', '+warn+' to look at':''):warn?warn+' to look at':'All checks are fine';
 }
 async function healthDotRefresh(){
-  try{ const res=await fetch('/api/health',{headers:tttHeaders()}); if(!res.ok) return; healthDotSet((await res.json()).checks||[]); }catch(e){ /* the dot just stays as it was */ }
+  try{ const res=await fetch('/api/health?cached=1',{headers:tttHeaders()}); if(!res.ok) return; healthDotSet((await res.json()).checks||[]); }catch(e){ /* the dot just stays as it was */ }
 }
 function healthDotStart(){
   healthDotRefresh();
-  if(!healthDotTimer) healthDotTimer=setInterval(()=>{ if(document.visibilityState==='visible'&&role==='admin') healthDotRefresh(); },300000);
+  if(!healthDotTimer) healthDotTimer=setInterval(()=>{ if(document.visibilityState==='visible'&&role==='admin') healthDotRefresh(); },900000);
 }
 // ── Backups (admin) ────────────────────────────────────────
 async function backupCall(path,body){
@@ -1411,7 +1411,7 @@ async function assistantRun(){
   zrlReady=null; loadWeek();
 }
 // Race day: what is on within a day, who has said they are in the pen. Refreshes every minute while the page is open.
-setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },60000);
+setInterval(()=>{ const pg=document.getElementById('page-week'); if(pg&&pg.classList.contains('active')&&!document.hidden&&(weekData&&(weekData.live||[]).length)) loadWeek(); },120000);
 async function weekSwap(kind,id,out,inn){
   if(!confirm('Swap them in? The line-up is changed straight away and the swap is not posted to Discord.')) return;
   try{ const r=await fetch('/api/live/swap',{method:'POST',headers:tttHeaders(),body:JSON.stringify({ kind, id, out, in:inn })}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not swap.'); return; } }catch(e){ alert('Could not reach the server.'); return; }
