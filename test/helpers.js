@@ -123,6 +123,12 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
+    case 'EXISTS': return key in db ? 1 : 0;
+    case 'DBSIZE': return Object.keys(db).length;
+    case 'SCAN': { const m = (a[0] === 'MATCH' ? a[1] : '*').replace(/\*$/, ''); return ['0', Object.keys(db).filter(k => k.startsWith(m))]; }   // the whole list in one go; the cursor is always 0
+    case 'PTTL': return (db.__ttl && db.__ttl[key]) || -1;
+    case 'PEXPIRE': (db.__ttl = db.__ttl || {})[key] = Number(a[0]); return 1;
+    case 'RPUSH': { const l = (db[key] = db[key] || []); for (const v of a) l.push(v); return l.length; }
     case 'TYPE': { const v = db[key]; return v === undefined || v === null ? 'none' : Array.isArray(v) ? 'list' : typeof v === 'object' ? 'hash' : 'string'; }
     case 'HKEYS': return Object.keys(db[key] || {});
     case 'HLEN': return Object.keys(db[key] || {}).length;

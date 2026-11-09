@@ -198,8 +198,10 @@ async function handleLogin(req, res){
 
 // ── Redis (Upstash REST API, as added through the Vercel Marketplace) ──
 function redisConfig(){
-  const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  // REDIS_REST_URL and REDIS_REST_TOKEN win over the Vercel integration's own KV_REST_API_* settings (which cannot be edited): setting them switches
+  // the app to another database, and removing them switches back.
+  const base = process.env.REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   return base && token ? { base: base.replace(/\/$/, ''), token } : null;
 }
 
@@ -2242,7 +2244,9 @@ async function healthChecks(){
     run('storage', 'Shared storage (Redis)', async () => {
       const started = Date.now();
       await redis([['GET', TTT_KEYS.week]]);
-      return ['ok', `Reachable (${Date.now() - started} ms)`];
+      const cfg = redisConfig(), where = process.env.REDIS_URL && (!cfg || process.env.REDIS_PREFER_TCP === '1') ? process.env.REDIS_URL : cfg && cfg.base;
+      let host = ''; try { host = new URL(where).hostname.split('.')[0]; } catch (e) { /* no name to show */ }
+      return ['ok', `Reachable (${Date.now() - started} ms)${host ? `; database: ${host}` : ''}`];
     }),
     run('members', 'WordPress member records', async () => {
       const auth = wpAuth();
