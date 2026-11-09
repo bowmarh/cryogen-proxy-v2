@@ -42,3 +42,15 @@ test('a captain sees the cockpit and every rider sees their badges', async ({ pa
   await expect(page.locator('#badges-card')).toContainText('First race');
   await expect(page.locator('#badges-card')).toContainText('5 more for 25 races');
 });
+
+test('a rider sees their Wrapped card and, on an iPhone, how to add the app to the home screen', async ({ browser, baseURL }) => {
+  const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1' }), page = await ctx.newPage();
+  await page.route('**/api/me/wrapped', r => r.fulfill({ json: { title: "Ann's season", season: 'Round 2', empty: false, stats: [{ icon: '🏁', label: 'Races finished', value: '12' }, { icon: '🥇', label: 'Wins', value: '1' }], lines: ['12 races finished'], badges: [{ icon: '🔟', label: '10 races' }] } }));
+  await signInAsRider(page, baseURL);
+  await expect(page.locator('#wrapped-card')).toContainText("Ann's season");
+  await expect(page.locator('#wrapped-card')).toContainText('Races finished');
+  await expect(page.locator('#install-card')).toContainText('Add to Home Screen');
+  await page.locator('#install-card').getByText('Not now').click();
+  await expect(page.locator('#install-card')).toBeEmpty();
+  await ctx.close();
+});

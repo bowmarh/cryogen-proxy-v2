@@ -19,7 +19,7 @@ test('an expired or forged staff token is refused with an answer the page recogn
     assert.match(r.body.error, /log in again/i);
   }
   const pageHandles = /log in again/i;
-  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const html = ['index.html', 'js/app.js'].map(f => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8')).join('\n');
   assert.ok(html.includes('/log in again/i'), 'the page looks for that wording');
   assert.ok(pageHandles.test('Please log in again.'));
 });

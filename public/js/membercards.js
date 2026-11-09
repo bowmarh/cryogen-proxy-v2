@@ -80,5 +80,50 @@
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); m.textContent = d.note;
     } catch (e) { m.textContent = e.message; b.disabled = false; }
   };
-  window.MemberCards = { load: () => { loadOnboard(); loadRecap(); loadBadges(); loadCockpit(); } };
+  // ── Wrapped: your season in a few numbers ──
+  let wrapped = null;
+  async function loadWrapped() {
+    const el = document.getElementById('wrapped-card'); if (!el) return;
+    try {
+      wrapped = await api('/api/me/wrapped');
+      if (wrapped.empty) { el.innerHTML = ''; return; }
+      el.innerHTML = `<details class="card" style="padding:14px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800">🎁 ${E(wrapped.title)}${wrapped.season ? ` <span style="font-weight:400;color:#8b95a5;font-size:12px">· ${E(wrapped.season)}</span>` : ''}</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:10px">${wrapped.stats.map(x => `<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05)"><div style="font-size:11px;color:#8b95a5">${x.icon} ${E(x.label)}</div><div style="font-size:16px;font-weight:800;margin-top:2px">${E(x.value)}</div></div>`).join('')}</div>
+        ${wrapped.badges.length ? `<div style="margin-top:8px">${wrapped.badges.map(b => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 9px;border-radius:99px;border:1px solid rgba(255,255,255,.18);font-size:12px">${b.icon} ${E(b.label)}</span>`).join('')}</div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button type="button" style="${btn}" onclick="wrappedImage()">Save as picture</button><button type="button" style="${btn}" onclick="wrappedShare()">Share to the club channel</button><span id="wrapped-msg" role="status" style="font-size:12px;color:#8b95a5;align-self:center"></span></div>
+        <div style="font-size:11px;color:#8b95a5;margin-top:6px">Only you see this unless you press share.</div></details>`;
+    } catch (e) { el.innerHTML = ''; }
+  }
+  window.wrappedImage = async () => {
+    const m = document.getElementById('wrapped-msg');
+    try {
+      const b64 = await uiPostCardPng(wrapped.title, wrapped.stats.slice(0, 6).map(x => `${x.icon} ${x.label}: ${x.value}`)), a = document.createElement('a');
+      a.href = 'data:image/png;base64,' + b64; a.download = 'cryogen-season.png'; document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { m.textContent = e.message; }
+  };
+  window.wrappedShare = async () => { const m = document.getElementById('wrapped-msg'); m.textContent = 'Sharing…'; try { await api('/api/me/wrapped/share', true); m.textContent = 'Shared. Nice season!'; } catch (e) { m.textContent = e.message; } };
+
+  // ── Install the app, and a note while the phone is offline ──
+  let installEvent = null;
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const dismissed = () => { try { return localStorage.getItem('install:dismissed') === '1'; } catch (e) { return false; } };
+  function showInstall() {
+    const el = document.getElementById('install-card'); if (!el || standalone() || dismissed()) return;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent), how = installEvent ? `<button type="button" style="${btn}" onclick="installApp()">Install</button>` : ios ? '<span style="font-size:12px;color:#d1d5db">On iPhone or iPad: tap the Share button, then <b>Add to Home Screen</b>.</span>' : '';
+    if (!how) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:800;font-size:13px">📲 Put CRYO-GEN on your home screen</div><div style="font-size:12px;color:#8b95a5">Opens like an app, quicker, and still opens when your connection drops.</div></div>${how}<button type="button" style="${btn}" onclick="installDismiss()" aria-label="Hide this">Not now</button></div>`;
+  }
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; showInstall(); });
+  window.addEventListener('appinstalled', () => { installEvent = null; const el = document.getElementById('install-card'); if (el) el.innerHTML = ''; });
+  window.installApp = async () => { if (!installEvent) return; installEvent.prompt(); try { await installEvent.userChoice; } catch (e) { /* closed */ } installEvent = null; showInstall(); };
+  window.installDismiss = () => { try { localStorage.setItem('install:dismissed', '1'); } catch (e) { /* kept for this visit only */ } const el = document.getElementById('install-card'); if (el) el.innerHTML = ''; };
+  const offlineNote = () => {
+    let b = document.getElementById('offline-banner');
+    if (navigator.onLine) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'offline-banner'; b.setAttribute('role', 'status'); b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:#1e3a5f;color:#dbeafe;padding:6px 12px;font-size:12px;text-align:center'; document.body.appendChild(b); }
+    b.textContent = "You're offline. The app has opened from this device, and answers will not save until you're back online.";
+  };
+  window.addEventListener('offline', offlineNote); window.addEventListener('online', offlineNote);
+  if (document.readyState !== 'loading') offlineNote(); else document.addEventListener('DOMContentLoaded', offlineNote);
+  window.MemberCards = { load: () => { showInstall(); loadOnboard(); loadRecap(); loadBadges(); loadWrapped(); loadCockpit(); } };
 })();
