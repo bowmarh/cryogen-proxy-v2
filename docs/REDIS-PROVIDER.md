@@ -4,7 +4,7 @@ By default the app talks to Upstash over its REST API (`KV_REST_API_URL` and `KV
 
 It can run on any ordinary Redis instead, such as Redis Cloud or a server you run yourself, over a normal TCP connection:
 
-1. Set `REDIS_URL` in Vercel, for example `rediss://default:PASSWORD@host:PORT` (`rediss` for TLS, `redis` for plain). When it is set it wins over the Upstash settings.
+1. Set `REDIS_URL` in Vercel, for example `rediss://default:PASSWORD@host:PORT` (`rediss` for TLS, `redis` for plain), and set `REDIS_PREFER_TCP=1`. Without `REDIS_PREFER_TCP`, `REDIS_URL` is only used when there are no Upstash REST settings: the Vercel Upstash integration adds a `REDIS_URL` of its own, and that must not take over by accident.
 2. Redeploy. Nothing else changes: the same commands go out, in one round trip per request, and the answers have the same shape.
 
 Things to check before you switch:

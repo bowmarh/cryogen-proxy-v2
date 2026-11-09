@@ -63,11 +63,11 @@ test('a wrong password or a refused command is an error, and so is a server that
 
 let app, mock;
 before(async () => {
-  mock = await mockRedis(); h.setEnv({ REDIS_URL: `redis://:pw@127.0.0.1:${mock.port}` });
+  mock = await mockRedis(); h.setEnv({ REDIS_URL: `redis://:pw@127.0.0.1:${mock.port}`, REDIS_PREFER_TCP: '1' });
   const world = h.createWorld(); world.db = mock.db;
   app = await h.startApp(world);
 });
-after(async () => { process.env.REDIS_URL = ''; await app.close(); await mock.close(); });
+after(async () => { process.env.REDIS_URL = ''; process.env.REDIS_PREFER_TCP = ''; await app.close(); await mock.close(); });
 
 test('the whole app runs on REDIS_URL: an admin adds and lists a case-log entry, and the data is in the TCP Redis, not the REST one', async () => {
   const admin = await app.login('admin');
@@ -78,4 +78,14 @@ test('the whole app runs on REDIS_URL: an admin adds and lists a case-log entry,
   assert.equal(list.entries.length, 1);
   assert.ok(mock.db['cg:cases:log'], 'stored in the TCP Redis');
   assert.equal(app.world.redisCalls, calls, 'no request went to the REST service');
+});
+
+test('REDIS_URL alone never takes over: with the Upstash REST settings present, the REST service is used (the Vercel integration adds a REDIS_URL of its own)', async () => {
+  const saved = [process.env.REDIS_URL, process.env.REDIS_PREFER_TCP];
+  process.env.REDIS_URL = 'redis://:pw@127.0.0.1:1'; process.env.REDIS_PREFER_TCP = '';   // a TCP address that would fail if it were used
+  try {
+    const admin = await app.login('admin'), calls = app.world.redisCalls;
+    const r = await app.get('/api/caselog', { token: admin });
+    assert.equal(r.status, 200); assert.ok(app.world.redisCalls > calls, 'the request went to the REST service');
+  } finally { [process.env.REDIS_URL, process.env.REDIS_PREFER_TCP] = saved; }
 });
