@@ -25,6 +25,7 @@
     el.innerHTML = cur ? caseView(cur) : listView();
     if (!cur && window.PairUI) PairUI.mount(document.getElementById('pair-box'));
     if (!cur && window.CaseLogUI) CaseLogUI.mount(document.getElementById('caselog-box'));
+    if (!cur && window.PrivacyUI) PrivacyUI.mount(document.getElementById('privacy-box'));
     if (cur) loadRider();
   }
 
@@ -36,6 +37,7 @@
       <div class="card" style="padding:12px 16px;margin-bottom:14px;font-size:13px;color:#d1d5db">These are <b>prompts for a person to look</b>, not findings. Only staff see this page. The FIT file is read in your browser and only the recorded numbers are kept (no map, no locations, no file). Nothing is sent to the rider. The optional AI summary gets the numbers and your notes, never the rider's name.</div>
       <div id="pair-box"></div>
       <div id="caselog-box"></div>
+      <div id="privacy-box"></div>
       <div class="card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">New investigation</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="inv-rider" list="inv-riders" class="inp" placeholder="Rider (type a name)" style="flex:1;min-width:200px"/><datalist id="inv-riders">${names}</datalist>
         <input id="inv-title" class="inp" placeholder="Title (e.g. Flat watts, round 3)" style="flex:1;min-width:200px"/></div>

@@ -1409,7 +1409,7 @@ function showTab(id,btn){
   btn.classList.add('active');
   if(id==='dashboard')loadResults();
   if(id==='events')renderEvents();
-  if(id==='profile')renderProfile();
+  if(id==='profile')renderProfile(); if(id==='profile'&&role==='member'&&window.MemberCards) MemberCards.loadMyData();
   if(id==='rides'){ renderRidesTabs(); if(!isAssoc()) loadCover(); }
   if(id==='ttt'){ loadTtt(); syncAuto('ttt'); }
   if(id==='season')loadSeason();
