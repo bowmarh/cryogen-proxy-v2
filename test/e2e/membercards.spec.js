@@ -30,3 +30,15 @@ test('a signed-in page shows a saved-data note when the server marks a reply sta
   await page.evaluate(() => { window._staleAt = Date.now() - 61000; return fetch('/api/me/recap', { headers: tttHeaders() }); });
   await expect(page.locator('#stale-banner')).toHaveCount(0);
 });
+
+test('a captain sees the cockpit and every rider sees their badges', async ({ page, baseURL }) => {
+  await page.route('**/api/me/cockpit', r => r.fulfill({ json: { captain: true, round: 'Round 2', teams: [{ id: 't1', name: 'CRYO-GEN Beta', next: { week: 2, weekIndex: 1, date: '2026-11-17', racing: 3, lineupSet: false,
+    yes: ['Ann Lee'], maybe: ['Bo Dunn'], no: [], pending: ['Di Fox'], inPen: [], lineup: [], short: 2, suggestion: ['Ann Lee', 'Bo Dunn'] } }] } }));
+  await page.route('**/api/me/badges', r => r.fulfill({ json: { earned: [{ id: 'first_race', icon: '🏁', label: 'First race' }], locked: [], next: { text: '5 more for 25 races' } } }));
+  await signInAsRider(page, baseURL);
+  await expect(page.locator('#cockpit-card')).toContainText("Captain's cockpit · CRYO-GEN Beta · race 2");
+  await expect(page.locator('#cockpit-card')).toContainText('Suggested line-up');
+  await expect(page.locator('#cockpit-card')).toContainText("Ask the 1 who haven't answered");
+  await expect(page.locator('#badges-card')).toContainText('First race');
+  await expect(page.locator('#badges-card')).toContainText('5 more for 25 races');
+});

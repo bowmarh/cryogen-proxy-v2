@@ -325,4 +325,4 @@ function ymd(offsetDays = 0) {
   return new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
 }
 
-module.exports = { setEnv, createWorld, startApp, ssoToken, signedToken, defaultSessionSecret, ymd, BASE_ENV, gviz };
+module.exports = { redisRun, setEnv, createWorld, startApp, ssoToken, signedToken, defaultSessionSecret, ymd, BASE_ENV, gviz };

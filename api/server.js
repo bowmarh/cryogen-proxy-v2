@@ -209,6 +209,14 @@ const usage = { redis: 0, discord: 0 };
 async function redisRaw(commands){
   const cfg = redisConfig();
   usage.redis += commands.length;
+  // REDIS_URL (redis:// or rediss://) runs the app on an ordinary Redis over TCP instead of Upstash's REST service; it wins when both are set.
+  if (process.env.REDIS_URL){
+    try { return await require('../lib/redisclient').pipeline(process.env.REDIS_URL, commands); }
+    catch (e){
+      if (e && e.name === 'TimeoutError') throw new HttpError(504, 'Shared storage did not answer in time.');
+      throw new HttpError(502, e && e.fromServer ? `storage error: ${e.message}` : 'Shared storage could not be reached.');
+    }
+  }
   if (!cfg) throw new HttpError(503, 'Shared storage is not set up yet.');
   let r;
   try {
@@ -2751,6 +2759,7 @@ const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFro
     try { const z = await zrl.load(); if (z.round) { const racing = z.signups.filter(x => x.in), ids = new Set(z.round.teams.map(t => t.id)); out.racing = racing.length; out.unplaced = racing.filter(x => !teamsOfAssign(z.assign[x.key]).some(i => ids.has(i))).length; out.teams = z.round.teams.length; } } catch (e) { /* ditto */ }
     return out;
   } });
+const clubstats = require('../lib/clubstats')({ redis, HttpError, requireRole, tidy, trend });
 const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const support = require('../lib/support')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
 const ai = require('../lib/ai')({ redis, HttpError, support });
@@ -3004,7 +3013,7 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
   const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
