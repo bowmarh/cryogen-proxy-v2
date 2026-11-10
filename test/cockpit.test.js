@@ -5,7 +5,7 @@ const createCockpit = require('../lib/cockpit');
 
 const NOW = Date.parse('2026-11-10T12:00:00Z');
 const riders = (st) => [['1', 'Ann Lee', st['1']], ['2', 'Bo Dunn', st['2']], ['3', 'Cy Ray', st['3']], ['4', 'Di Fox', st['4']]].map(([zwid, name, status]) => ({ zwid, name, status: status || '' }));
-function kit({ captain = true, status = { 1: 'yes', 2: 'maybe', 3: 'no' } } = {}) {
+function kit({ captain = true, status = { 1: 'yes', 2: 'maybe', 3: 'no' }, reach = null } = {}) {
   const sent = [];
   const weeks = [{ i: 0, date: '2026-11-03', lineup: [], riders: riders(status) }, { i: 1, date: '2026-11-17', lineup: [], riders: riders(status) }];
   const zrl = { load: async () => ({ round: { name: 'Round 2', racing: 3 } }), loadWeekly: async () => ({}), loadResults: async () => ({}),
@@ -13,7 +13,7 @@ function kit({ captain = true, status = { 1: 'yes', 2: 'maybe', 3: 'no' } } = {}
   const live = { events: async () => [{ kind: 'zrl', id: '1:t1', at: NOW + 3600000, riders: [{ zwid: '1', inPen: '2026-11-17T18:00:00Z' }] }] };
   const fetchRoster = async () => ({ riders: [{ riderId: 1, race: { current: { rating: 1500 } } }, { riderId: 2, race: { current: { rating: 1800 } } }, { riderId: 4, race: { current: { rating: 900 } } }] });
   const notify = async (zwid, text, o) => { if (zwid === '4') return false; sent.push({ zwid, text, key: o.key }); return true; };
-  const c = createCockpit({ redis: async () => [], HttpError: class extends Error { constructor(s, m) { super(m); this.status = s; } }, memberFromRequest: () => ({ zwid: '9', name: 'Cap Tain' }), zrl, live, adminReq: () => ({}), fetchRoster, notify, siteUrl: 'https://club.test' });
+  const c = createCockpit({ redis: async () => [], HttpError: class extends Error { constructor(s, m) { super(m); this.status = s; } }, memberFromRequest: () => ({ zwid: '9', name: 'Cap Tain' }), zrl, live, adminReq: () => ({}), fetchRoster, notify, reach, siteUrl: 'https://club.test' });
   return { c, sent };
 }
 
@@ -44,4 +44,11 @@ test('the ask is refused for a team the rider does not captain and for races alr
   const { c } = kit();
   await assert.rejects(() => c.nudge({ zwid: '9' }, { team: 'someone-elses', week: 1 }, NOW), /only ask riders on a team you captain/);
   await assert.rejects(() => c.nudge({ zwid: '9' }, { team: 't1', week: 0 }, NOW), /already happened/);
+});
+
+test('a captain is told which riders on their team cannot be messaged, so they can chase those by hand', async () => {
+  const { c } = kit({ reach: { unreachable: async ids => ids.filter(z => ['3', '4'].includes(String(z))) } });
+  const n = (await c.mine({ zwid: '9', name: 'Cap Tain' }, NOW)).teams[0].next;
+  assert.deepEqual(n.unreachable, ['Cy Ray', 'Di Fox']);
+  assert.deepEqual((await kit().c.mine({ zwid: '9', name: 'Cap Tain' }, NOW)).teams[0].next.unreachable, [], 'nothing is claimed when reach is not known');
 });

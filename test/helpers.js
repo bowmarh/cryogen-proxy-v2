@@ -20,6 +20,7 @@ const BASE_ENV = {
   DISCORD_WEBHOOK_ADMIN: 'http://discord.test/admin',
   RATE_LIMIT_WRITES_PER_MIN: '100000',   // ordinary tests post far more than a person would; the limit has its own test
   LOGIN_MAX_FAILS: '1000',
+  REACH_SUMMARY_AUTO: '0',   // the monthly reach line goes to the admin channel, which would change post counts in tests; its own test turns it on
   WEEKLY_REPORT_AUTO: '0',   // the automatic Monday report posts to Discord, which would change counts in tests that run on a Monday; its own test turns it on
   REDIS_CACHE_MS: '0',   // tests change the fake database directly, so the read cache is off; it has its own test
 };
@@ -122,6 +123,12 @@ function redisRun(db, [cmd, key, ...a]) {
     case 'EXPIRE': return key in db ? 1 : 0;
     case 'HGET': return (db[key] || {})[a[0]] ?? null;
     case 'HGETALL': return Object.entries(db[key] || {}).flat();
+    case 'EXISTS': return key in db ? 1 : 0;
+    case 'DBSIZE': return Object.keys(db).length;
+    case 'SCAN': { const m = (a[0] === 'MATCH' ? a[1] : '*').replace(/\*$/, ''); return ['0', Object.keys(db).filter(k => k.startsWith(m))]; }   // the whole list in one go; the cursor is always 0
+    case 'PTTL': return (db.__ttl && db.__ttl[key]) || -1;
+    case 'PEXPIRE': (db.__ttl = db.__ttl || {})[key] = Number(a[0]); return 1;
+    case 'RPUSH': { const l = (db[key] = db[key] || []); for (const v of a) l.push(v); return l.length; }
     case 'TYPE': { const v = db[key]; return v === undefined || v === null ? 'none' : Array.isArray(v) ? 'list' : typeof v === 'object' ? 'hash' : 'string'; }
     case 'HKEYS': return Object.keys(db[key] || {});
     case 'HLEN': return Object.keys(db[key] || {}).length;

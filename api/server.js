@@ -198,8 +198,10 @@ async function handleLogin(req, res){
 
 // ── Redis (Upstash REST API, as added through the Vercel Marketplace) ──
 function redisConfig(){
-  const base = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  // REDIS_REST_URL and REDIS_REST_TOKEN win over the Vercel integration's own KV_REST_API_* settings (which cannot be edited): setting them switches
+  // the app to another database, and removing them switches back.
+  const base = process.env.REDIS_REST_URL || process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   return base && token ? { base: base.replace(/\/$/, ''), token } : null;
 }
 
@@ -1670,7 +1672,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2242,7 +2244,9 @@ async function healthChecks(){
     run('storage', 'Shared storage (Redis)', async () => {
       const started = Date.now();
       await redis([['GET', TTT_KEYS.week]]);
-      return ['ok', `Reachable (${Date.now() - started} ms)`];
+      const cfg = redisConfig(), where = process.env.REDIS_URL && (!cfg || process.env.REDIS_PREFER_TCP === '1') ? process.env.REDIS_URL : cfg && cfg.base;
+      let host = ''; try { host = new URL(where).hostname.split('.')[0]; } catch (e) { /* no name to show */ }
+      return ['ok', `Reachable (${Date.now() - started} ms)${host ? `; database: ${host}` : ''}`];
     }),
     run('members', 'WordPress member records', async () => {
       const auth = wpAuth();
@@ -2457,6 +2461,7 @@ const zrl = require('../lib/zrl')({
 // Ride cover (lib/cover.js): leaders and sweepers for the weekly social rides.
 const cover = require('../lib/cover')({
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, discord, discordEscape, teamId, siteUrl: SITE_URL,
+  dm: (...a) => comms.notify(...a),
 });
 async function handleCover(coverRoute, req, res){
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
@@ -2749,6 +2754,13 @@ const memberByZwid = async zwid => { const { riders } = await fetchRoster(); con
 const discordInteractions = require('../lib/discord-interactions')({
   zwidOfDiscord: id => comms.zwidOfDiscord(id),
   answer: answerAvailability,
+  // "I'll lead" / "I'll sweep": saved by the same route a rider's own tap in the dashboard uses (so approval and back-up rules still apply).
+  coverClaim: async (zwid, seriesId, date, kind) => {
+    const m = await memberByZwid(zwid), role = kind === 'lead' ? 'leader' : 'sweeper';
+    await cover.routes['POST /api/cover/volunteer'](asMember(zwid, m.name), { series: seriesId, date, role });
+    const title = ((await cover.load()).series || []).find(x => x.id === seriesId);
+    return { title: (title && title.title) || 'the ride', date, role: kind === 'lead' ? 'Leader' : 'Sweeper' };
+  },
   commands: {
     week: async zwid => (await myweek.build(asMember(zwid, (await memberByZwid(zwid)).name))).items,
     recap: async zwid => recap.build(await memberByZwid(zwid)),
@@ -2783,7 +2795,9 @@ const trend = require('../lib/trend')({ redis, HttpError, requireRole, memberFro
   } });
 const privacy = require('../lib/privacy')({ redis, HttpError, requireRole, memberFromRequest, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), discord, siteUrl: SITE_URL });
 const clientErrors = require('../lib/clienterrors')({ redis, HttpError, requireRole, discord, counter, clientIp });
-const clubstats = require('../lib/clubstats')({ redis, HttpError, requireRole, tidy, trend });
+const reach = require('../lib/reach')({ redis, HttpError, memberFromRequest, activeMembers, verifiedLinks: () => comms.verifiedLinks(), pushKey: push.KEY, discord, siteUrl: SITE_URL });
+const zrlHelper = require('../lib/zrlhelper')({ HttpError, requireRole, zrl, reach, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });
+const clubstats = require('../lib/clubstats')({ redis, HttpError, requireRole, tidy, trend, reach });
 const teamsOfAssign = v => (Array.isArray(v) ? v : String(v || '').split(',')).filter(Boolean);
 const support = require('../lib/support')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), fetchRoster });
 const ai = require('../lib/ai')({ redis, HttpError, support });
@@ -2874,7 +2888,7 @@ async function runDigest(now = Date.now()){
 
 // Race day (lib/live.js): what is on now, who is in the pen, and the message twenty minutes before a start.
 const live = require('../lib/live')({ discord, discordEscape, siteUrl: SITE_URL, adminReq: () => syncReq(), redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ladder, drs, zrl, notify: (...a) => comms.notify(...a) });
-const cockpit = require('../lib/cockpit')({ redis, HttpError, memberFromRequest, zrl, live, adminReq: () => syncReq(), fetchRoster, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });
+const cockpit = require('../lib/cockpit')({ redis, HttpError, memberFromRequest, zrl, live, adminReq: () => syncReq(), fetchRoster, reach, notify: (...a) => comms.notify(...a), siteUrl: SITE_URL });
 
 // The staff "This week" page (lib/week.js): what needs attention and what is coming up, read from the modules above.
 const week = require('../lib/week')({
@@ -3058,7 +3072,7 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
   const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];

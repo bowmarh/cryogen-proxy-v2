@@ -67,3 +67,12 @@ test('the race-day board shows a countdown, the pen count and standings, and not
   await expect(page.locator('.pod')).toContainText('Alpha');
   await expect(page.locator('#updated')).toContainText('Updated');
 });
+
+test('a rider who cannot be messaged is asked to link their Discord, and a captain sees which of their team cannot be messaged', async ({ page, baseURL }) => {
+  await page.route('**/api/me/reach', r => r.fulfill({ json: { reachable: false, discord: false, push: false } }));
+  await page.route('**/api/me/cockpit', r => r.fulfill({ json: { captain: true, round: 'Round 2', teams: [{ id: 't1', name: 'CRYO-GEN Beta', next: { week: 2, weekIndex: 1, date: '2026-11-17', racing: 3, lineupSet: false, yes: ['Ann Lee'], maybe: [], no: [], pending: ['Di Fox'], inPen: [], lineup: [], short: 2, suggestion: ['Ann Lee'], unreachable: ['Di Fox'] } }] } }));
+  await signInAsRider(page, baseURL);
+  await expect(page.locator('#reach-card')).toContainText('Link your Discord');
+  await expect(page.locator('#reach-card').getByRole('button', { name: 'Link now' })).toBeVisible();
+  await expect(page.locator('#cockpit-card')).toContainText("Can't be messaged (no linked Discord): Di Fox");
+});

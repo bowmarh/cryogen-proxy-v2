@@ -66,6 +66,7 @@
       return `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800">🎖️ Captain's cockpit · ${E(t.name)} · race ${n.week}, ${E(n.date)}</div>
         <div style="font-size:13px;line-height:1.7;margin-top:6px"><div>✅ Yes (${n.yes.length} of ${n.racing} needed): ${names(n.yes, '#34d399')}</div><div>🤔 Maybe: ${names(n.maybe, '#FBBF24')}</div><div>❌ No: ${names(n.no, '#f87171')}</div><div>⏳ Not answered: ${names(n.pending, '#e5e7eb')}</div>${n.inPen.length ? `<div>🏁 In the pen: ${names(n.inPen, '#22d3ee')}</div>` : ''}</div>
         ${n.lineupSet ? `<div style="font-size:12px;color:#8b95a5;margin-top:6px">Line-up set: ${n.lineup.map(E).join(', ')}</div>` : n.suggestion.length ? `<div style="font-size:12px;color:#d1d5db;margin-top:6px"><b>Suggested line-up</b> (yes first, then maybe, strongest vELO first): ${n.suggestion.map(E).join(', ')}${n.short ? `. Still ${n.short} short on yeses.` : ''}</div>` : ''}
+        ${n.unreachable && n.unreachable.length ? `<div style="font-size:12px;color:#FBBF24;margin-top:6px">📵 Can't be messaged (no linked Discord): ${n.unreachable.map(E).join(', ')}. Ask them to link it on the dashboard.</div>` : ''}
         ${n.pending.length ? `<div style="margin-top:10px"><button type="button" style="${btn}" onclick="cockpitNudge('${E(t.id)}',${n.weekIndex},this)">Ask the ${n.pending.length} who haven't answered</button> <span class="cockpit-msg" role="status" style="font-size:12px;color:#8b95a5"></span></div>` : ''}</div>`;
     }).join('');
   }
@@ -124,6 +125,16 @@
     try { const d = await api('/api/me/data/erase-request', true); m.textContent = d.already ? 'You have already asked: an administrator will be in touch.' : 'Asked. An administrator will review it.'; } catch (e) { m.textContent = e.message; }
   };
 
+  // ── Reach: a rider who cannot be messaged is shown how to join in ──
+  async function loadReach() {
+    const el = document.getElementById('reach-card'); if (!el) return;
+    try {
+      const d = await api('/api/me/reach');
+      el.innerHTML = d.reachable ? '' : `<div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:800;font-size:13px">💬 Link your Discord</div><div style="font-size:12px;color:#8b95a5">Then your captain, ride leaders and the club can reach you with race reminders, and you can answer in one tap (and use /week, /recap and /answer in Discord). It takes a minute.</div></div><button type="button" style="${btn}" onclick="reachGo()">Link now</button></div>`;
+    } catch (e) { el.innerHTML = ''; }
+  }
+  window.reachGo = () => { const b = document.querySelector('.navbtn[onclick*="\'profile\'"]'); if (b) b.click(); setTimeout(() => { const h = [...document.querySelectorAll('#page-profile *')].find(x => /Discord/i.test(x.textContent) && x.children.length === 0); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 400); };
+
   // ── Install the app, and a note while the phone is offline ──
   let installEvent = null;
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -146,5 +157,5 @@
   };
   window.addEventListener('offline', offlineNote); window.addEventListener('online', offlineNote);
   if (document.readyState !== 'loading') offlineNote(); else document.addEventListener('DOMContentLoaded', offlineNote);
-  window.MemberCards = { loadMyData, load: () => { showInstall(); loadOnboard(); loadRecap(); loadBadges(); loadWrapped(); loadCockpit(); } };
+  window.MemberCards = { loadMyData, load: () => { loadReach(); showInstall(); loadOnboard(); loadRecap(); loadBadges(); loadWrapped(); loadCockpit(); } };
 })();
