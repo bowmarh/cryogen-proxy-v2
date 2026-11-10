@@ -17,7 +17,7 @@ test('the TTT schedule workflow makes the tick call as its first and only step, 
   assert.match(y, /"\$code" != "200"[\s\S]*exit 1/); assert.match(y, /-ge 3[\s\S]*exit 1/, 'three or more failed jobs fail the run');
 });
 
-test('an independent job in the uptime workflow fails when the schedule has not succeeded for 90 minutes', () => {
+test('an independent job in the uptime workflow fails only when the schedule has not succeeded for 12 hours (GitHub itself runs it only every few hours)', () => {
   const y = wf('uptime.yml');
-  assert.match(y, /ticks:/); assert.match(y, /actions: read/); assert.match(y, /workflows\/ttt-schedule\.yml\/runs\?status=success/); assert.match(y, /-gt 90/);
+  assert.match(y, /ticks:/); assert.match(y, /actions: read/); assert.match(y, /workflows\/ttt-schedule\.yml\/runs\?status=success/); assert.match(y, /-gt 720/);
 });
