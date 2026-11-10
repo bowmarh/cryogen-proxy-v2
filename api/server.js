@@ -236,7 +236,13 @@ async function redisRaw(commands){
     if (!timedOut) console.error('Storage (REST):', code || (e && e.message));   // the reason shows in the Vercel logs and in the health panel
     throw new HttpError(timedOut ? 504 : 502, timedOut ? 'Shared storage did not answer in time.' : `Shared storage could not be reached${code ? ` (${String(code).slice(0, 60)})` : ''}.`);
   }
-  if (!r.ok) throw new HttpError(502, `storage error (${r.status})`);
+  if (!r.ok){
+    // Upstash answers with {"error": "..."}: say what it said (it holds no secrets), so a refused request can be told apart from a refused account.
+    const detail = String(await r.text().catch(() => '')).replace(/[\u0000-\u001f]/g, ' ').trim();
+    let why = detail; try { const j = JSON.parse(detail); why = j && j.error ? String(j.error) : detail; } catch (e) { /* not JSON: use the text */ }
+    console.error('Storage (REST) HTTP', r.status, why.slice(0, 200));
+    throw new HttpError(502, `storage error (${r.status})${why ? `: ${why.slice(0, 160)}` : ''}`);
+  }
   const out = await r.json();
   const failed = out.find(x => x.error);
   if (failed) throw new HttpError(502, `storage error: ${failed.error}`);

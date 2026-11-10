@@ -40,3 +40,11 @@ test('the health panel warns at 70% of the monthly plan, fails at 90%, and the a
   app.world.db['cg:usage'] = { [`m:${month}`]: '10' };
   assert.equal((await checks()).usage.status, 'ok');
 });
+
+test('a refused request says what the storage service said, so the cause is visible in the health panel and the logs', async () => {
+  app.world.redisDown = true;
+  try {
+    const r = await app.get('/api/fairplay', { token: admin });
+    assert.equal(r.status, 502); assert.match(r.body.error, /^storage error \(500\): ERR max requests limit exceeded/);
+  } finally { app.world.redisDown = false; }
+});
