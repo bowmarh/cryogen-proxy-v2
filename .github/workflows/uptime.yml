@@ -41,7 +41,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
   # Independent of the app and its database: has the "TTT schedule" workflow succeeded lately? When storage is down the dashboard cannot record
-  # its own scheduled runs, so GitHub's own record is the one to trust. A gap over 90 minutes fails this run (GitHub emails you).
+  # its own scheduled runs, so GitHub's own record is the one to trust. GitHub itself starts a scheduled run only every few hours (it delays and drops frequent schedules), so
+  # this fails only after 12 hours without a success: a gap longer than GitHub's own, meaning the workflow or its secret is really broken.
   ticks:
     name: Have the scheduled runs happened?
     runs-on: ubuntu-latest
@@ -60,7 +61,7 @@ jobs:
           fi
           age=$(( ( $(date +%s) - $(date -d "$last" +%s) ) / 60 ))
           echo "Last successful scheduled run: $last ($age minutes ago)"
-          if [ "$age" -gt 90 ]; then
-            echo "::error::No successful scheduled run for $age minutes. Check the TTT schedule workflow and the CRON_SECRET secret."
+          if [ "$age" -gt 720 ]; then
+            echo "::error::No successful scheduled run for $age minutes (over 12 hours). Check the TTT schedule workflow and the CRON_SECRET secret."
             exit 1
           fi
