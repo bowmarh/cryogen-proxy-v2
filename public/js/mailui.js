@@ -130,13 +130,13 @@
   window.mailCancel = () => act('cancel', async () => { cur = (await api('/api/mail/cancel', { id: cur.id })).campaign || cur; say('Stopped.'); st = await api('/api/mail'); });
   window.mailResume = () => act('resume', async () => { await api('/api/mail/resume', { id: cur.id }); cur = (await api('/api/mail/campaign?id=' + encodeURIComponent(cur.id))).campaign; say('Resumed.'); });
   window.mailGroupSave = () => act('group', async () => {
-    await api('/api/mail/group', { name: val('g-name'), segments: [...document.querySelectorAll('.g-seg:checked')].map(c => c.value), zwids: val('g-ids').split(/[\s,;]+/).filter(Boolean) }); st = await api('/api/mail'); say('Group saved.');
+    const g = (await api('/api/mail/group', { name: val('g-name'), segments: [...document.querySelectorAll('.g-seg:checked')].map(c => c.value), zwids: val('g-ids').split(/[\s,;]+/).filter(Boolean) })).group; st.groups = st.groups.filter(x => x.id !== g.id).concat(g); say('Group saved.');
   });
-  window.mailGroupDelete = id => { if (!confirm('Delete this group?')) return; act('group', async () => { await api('/api/mail/group-delete', { id }); st = await api('/api/mail'); say('Group deleted.'); }); };
+  window.mailGroupDelete = id => { if (!confirm('Delete this group?')) return; act('group', async () => { await api('/api/mail/group-delete', { id }); st.groups = st.groups.filter(x => x.id !== id); say('Group deleted.'); }); };
   window.mailSettings = () => act('settings', async () => {
-    await api('/api/mail/settings', { enabled: document.getElementById('s-enabled').checked, fromName: val('s-from'), replyTo: val('s-reply'), footer: val('s-footer'), perHour: Number(val('s-hour')), perDay: Number(val('s-day')),
+    const saved = await api('/api/mail/settings', { enabled: document.getElementById('s-enabled').checked, fromName: val('s-from'), replyTo: val('s-reply'), footer: val('s-footer'), perHour: Number(val('s-hour')), perDay: Number(val('s-day')),
       automations: { newsletter: { on: document.getElementById('a-news').checked, mode: val('a-mode') }, welcome: { on: document.getElementById('a-welcome').checked }, quiet: { on: document.getElementById('a-quiet').checked } } });
-    st = await api('/api/mail'); say('Settings saved.');
+    st.settings = saved.settings; say('Settings saved.');   // the answer to the save, not a fresh read: a read can come from a server that has not seen the save yet
   });
   window.mailAddresses = () => act('addr', async () => { addr = await api('/api/mail/addresses'); });
   window.mailAddress = z => act('addr', async () => { await api('/api/mail/address', { zwid: z, email: val('am-' + z) }); addr = await api('/api/mail/addresses'); st = await api('/api/mail'); say('Address saved.'); });
