@@ -55,3 +55,9 @@ If the service keeps refusing, the send **pauses**, the admin Discord channel is
 ## 7. The AI
 
 The AI drafts with `{first}` in place of names (**no member names or addresses are sent to it**) and a second AI pass checks the wording; fixed rules (unfilled placeholders, insecure links, spam phrases, shouting) always run even if the AI is off. Editing an email clears its check, so what is approved is exactly what was checked.
+
+## 8. Replies to club emails (reply triage)
+
+Staff can paste a reply into **AI desk → Replies** to have it sorted into question, opt-out, complaint or other. Opt-outs unsubscribe the sender from all emails immediately; complaints alert the admin Discord channel; questions get a suggested reply for you to send.
+
+To have replies arrive automatically, set `MAIL_INBOUND_SECRET` in Vercel and point the mail provider's webhook (or a forwarding rule) at `POST https://<your site>/api/mail/inbound` with header `X-Inbound-Secret: <the secret>` and a JSON body `{ "from": "...", "subject": "...", "text": "..." }`. Without the secret the endpoint refuses everything.
