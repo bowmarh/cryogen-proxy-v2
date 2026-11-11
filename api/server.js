@@ -1678,7 +1678,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Email', () => mail.runSchedule(Date.now())], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2815,6 +2815,30 @@ const investigations = require('../lib/investigations')({ redis, HttpError, requ
 const badges = require('../lib/badges')({ HttpError, memberFromRequest, season: m => seasonOf(m), fetchRoster });
 const wrapped = require('../lib/wrapped')({ redis, HttpError, memberFromRequest, season: m => seasonOf(m), fetchRoster, badgesFrom: badges.badgesFrom, discord, discordEscape });
 const recap = require('../lib/recap')({ redis, HttpError, memberFromRequest, fetchRoster, zrl, discord, discordEscape });
+// Email (lib/mail.js): addresses are the WordPress user accounts' emails, matched to members by name.
+async function fetchWpUsers(){
+  const auth = wpAuth(); if (!auth) throw new HttpError(409, 'The WordPress connection is not set up (WP_API_USER / WP_API_APP_PASSWORD).');
+  const out = [];
+  for (let page = 1; page <= 30; page++){
+    const r = await fetch(`${wpSite()}/wp-json/wp/v2/users?context=edit&per_page=100&page=${page}&_fields=id,name,email`, { headers: { Authorization: `Basic ${Buffer.from(auth).toString('base64')}`, Accept: 'application/json', 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(15000) }).catch(() => null);
+    if (!r) throw new HttpError(502, 'WordPress could not be reached.');
+    if (r.status === 400 && page > 1) break;   // WordPress answers 400 past the last page
+    if (r.status === 401 || r.status === 403) throw new HttpError(409, 'The WordPress API user is not allowed to list users and their emails (it needs the Administrator role, or the list_users permission).');
+    if (!r.ok) throw new HttpError(502, `WordPress answered HTTP ${r.status}.`);
+    const list = await r.json(); out.push(...list); if (list.length < 100) break;
+  }
+  return out;
+}
+const mailSegments = async name => {
+  if (name === 'zrl'){ const z = await zrl.load(); return new Set(z.signups.filter(x => x.in).map(x => String(x.key))); }
+  if (name === 'captains'){ const z = await zrl.load(); return new Set(((z.round && z.round.teams) || []).map(t => t.captain).filter(Boolean).map(String)); }
+  if (name === 'new') return new Set((await onboarding.scan()).filter(m => m.days <= 30).map(m => String(m.zwid)));
+  if (name === 'quiet') return new Set((await lifecycle.quiet()).map(m => String(m.zwid)));
+  if (name.startsWith('cat:')){ const c = name.slice(4); return new Set((await fetchRoster()).riders.filter(r => r.zpCategory === c).map(r => String(r.riderId))); }
+  return new Set();
+};
+const mail = require('../lib/mail')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), mailer: require('../lib/mailer').createMailer(), ai, fetchRoster, activeMembers,
+  wpUsers: fetchWpUsers, segmentsOf: mailSegments, publicClub: now => publicClub(now), lifecycle, onboarding, discord, secret: () => tokenSecret(), siteUrl: SITE_URL });
 const coach = require('../lib/coach')({ redis, HttpError, memberFromRequest, fetchRoster, support, myweek: { build: req => myweek.build(req) }, analyse: fitAnalysis.analyse,
   clubData: () => publicClub(Date.now()), seasonOf: m => seasonOf(m) });
 // The AI messages that go to riders on their own (Monday plans, race-day briefings) and the AI drafts for the staff.
@@ -2957,7 +2981,7 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
@@ -3055,6 +3079,14 @@ async function route(req, res){
     try { await redis([['GET', 'cg:ping']]); } catch (e) { return sendJSON(res, 503, { ok: false, redis: false }); }
     return sendJSON(res, 200, { ok: true, redis: true, at: new Date().toISOString() });
   }
+  // Unsubscribe links in emails: a page with two buttons (nothing happens on opening it, so a mail scanner cannot unsubscribe anyone), then the choice.
+  if (pathname === '/api/mail/unsubscribe' && (req.method === 'GET' || req.method === 'POST')){
+    const html = body => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'" }); res.end(body); };
+    if (req.method === 'GET') return html(mail.unsubscribePage(String(parsed.query.t || '')));
+    const form = new URLSearchParams(await readRawBody(req));
+    try { const out = await mail.unsubscribe(form.get('t') || parsed.query.t, form.get('scope')); return html(mail.donePage(out.scope)); }
+    catch (e){ return html(mail.unsubscribePage('')); }
+  }
   // An administrator registers the slash commands with Discord (a bulk overwrite of this application's global commands).
   if (pathname === '/api/discord/register-commands' && req.method === 'POST'){
     requireRole(req, ['admin']);
@@ -3078,7 +3110,7 @@ async function route(req, res){
   }
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
-  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
+  const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
   const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
