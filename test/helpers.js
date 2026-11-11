@@ -197,6 +197,18 @@ function installFetch(world) {
       const out = JSON.parse(opts.body).map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
       return json(out);
     }
+    if (u.host === 'wp.test' && u.pathname === '/wp-json/wp/v2/users') {   // the WordPress user list (with emails): world.wpUsers; world.wpUsersStatus makes it refuse
+      if (world.wpUsersStatus) return json({ code: 'rest_forbidden' }, world.wpUsersStatus);
+      const per = Number(u.searchParams.get('per_page') || 10), pg = Number(u.searchParams.get('page') || 1), all = world.wpUsers || [];
+      return pg > 1 && (pg - 1) * per >= all.length ? json({ code: 'rest_post_invalid_page_number' }, 400) : json(all.slice((pg - 1) * per, pg * per));
+    }
+    if (u.host === 'api.mail.hostinger.com') {   // Hostinger Mail API: world.mails collects what was sent; world.mailFail is an HTTP status to answer instead; world.mailFailFor is a set of addresses refused with 422
+      const m = /^\/api\/v1\/mailboxes\/([^/]+)\/send$/.exec(u.pathname), body = JSON.parse(opts.body || '{}');
+      if (!m || (opts.headers || {}).Authorization !== 'Bearer mail-token') return json({ message: 'unauthorized' }, 401);
+      if (world.mailFail) return json({ message: 'service trouble' }, world.mailFail);
+      if (world.mailFailFor && world.mailFailFor.has((body.to || [])[0])) return json({ message: 'invalid recipient' }, 422);
+      (world.mails = world.mails || []).push({ mailbox: m[1], ...body }); return json({ ok: true }, 202);
+    }
     if (u.host === 'wp.test' && u.pathname === '/wp-json/wp/v2/users/me') return world.wpNoPosts ? json({ name: 'API user', capabilities: { read: true } }) : json({ name: 'API user', capabilities: { edit_posts: true, publish_posts: true } });
     if (u.host === 'wp.test' && u.pathname === '/wp-json/wp/v2/posts') { (world.wpPosts = world.wpPosts || []).push({ body: JSON.parse(opts.body), auth: (opts.headers || {}).Authorization }); return world.wpFail ? json({ message: 'Sorry, you are not allowed to publish posts.' }, 403) : json({ id: 7, link: 'https://cryogen.team/?p=7' }, 201); }   // publishing to the website
     if (u.host === 'api.telegram.org') { (world.telegram = world.telegram || []).push({ path: u.pathname, body: JSON.parse(opts.body) }); return world.telegramFail ? json({ ok: false, description: 'chat not found' }, 400) : json({ ok: true }); }

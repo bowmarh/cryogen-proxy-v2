@@ -1061,7 +1061,7 @@ function setupRole(){
     }
     document.getElementById('nav-upgrade').style.display='flex';
   }
-  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; }
+  if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; document.getElementById('nav-mail').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
@@ -1090,6 +1090,7 @@ function showTab(id,btn){
   if(id==='clubstats'&&window.ClubStatsUI)ClubStatsUI.load();
   if(id==='inv'&&window.invLoad)invLoad();
   if(id==='studio'&&window.studioLoad)studioLoad();
+  if(id==='mail'&&window.mailLoad)mailLoad();
   if(id==='coach'&&window.coachOpen)coachOpen();
   if(window.uiSeries) uiSeries(id);
 }
