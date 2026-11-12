@@ -16,7 +16,7 @@ test('a new staff login chooses its own password, and the forgot-password form a
   await expect(page.getByText('Choose your own password')).toBeVisible();
   await page.locator('#auth-cur').fill('start-pass-123'); await page.locator('#auth-new').fill('my-own-pass-2468'); await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page.locator('#login-screen')).toBeHidden();
-  await page.evaluate(() => sessionStorage.clear());
+  await page.waitForLoadState('networkidle'); await page.evaluate(() => sessionStorage.clear());
   await page.goto(baseURL); await page.locator('#owner-btn').locator('xpath=following-sibling::button[1]').click(); await page.locator('#login-form-admin').getByText('Use my own staff login instead').click(); await page.getByText('Forgot your password?').click();
   await page.locator('#auth-user').fill('nobody-here'); await page.getByRole('button', { name: 'Send reset link' }).click(); await expect(page.getByText(/If that account has an email address/)).toBeVisible();
 });
