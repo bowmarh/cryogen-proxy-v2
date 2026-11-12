@@ -1679,7 +1679,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Email', () => mail.runSchedule(Date.now())], ['Race radio', () => aiops.radioTick()], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Email', () => mail.runSchedule(Date.now())], ['Race radio', () => aiops.radioTick()], ['Watchdog', () => controlRoom.watchdog()], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2874,6 +2874,9 @@ const aiStaff = require('../lib/aistaff')({ redis, HttpError, requireRole, membe
   } });
 // The AI desk: radio, smart line-ups, staff Q&A, churn radar, team reports by email, reply triage (lib/aiops.js).
 const aiops = require('../lib/aiops')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), ai, zrl, tidy, fetchRoster, publicClub: now => publicClub(now), digest: aiStaff.digest, discord, mail, siteUrl: SITE_URL });
+const rsvp = require('../lib/rsvp')({ redis, zrl, readToken: t => mail.readToken(t), siteUrl: SITE_URL });   // one-tap availability from an email
+const join = require('../lib/join')({ redis, HttpError, requireRole, discord, mail, siteUrl: SITE_URL, hashIp: ip => require('crypto').createHash('sha256').update(`${ip}:${process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || 'cg'}`).digest('hex').slice(0, 16) });   // the public join queue
+const controlRoom = require('../lib/controlroom')({ redis, requireRole, zrl, aiops, mail, join, gsheets, ai, discord, siteUrl: SITE_URL });   // race day and system health
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -2994,7 +2997,7 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/join' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
@@ -3097,6 +3100,15 @@ async function route(req, res){
     let j = {}; try { j = JSON.parse(await readRawBody(req)); } catch (e) { /* empty */ }
     return sendJSON(res, 200, await aiops.inbound(req.headers['x-inbound-secret'] || parsed.query.s, j));
   }
+  // One-tap availability (from the email link): GET shows the buttons, POST records the answer.
+  if (pathname === '/api/rsvp' && (req.method === 'GET' || req.method === 'POST')){
+    const html = body => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'" }); res.end(body); };
+    if (req.method === 'GET') return html(await rsvp.show(String(parsed.query.t || ''), parsed.query.w));
+    const form = new URLSearchParams(await readRawBody(req));
+    return html(await rsvp.answer(form.get('t') || '', form.get('w'), form.get('a') || ''));
+  }
+  // The public join form (public/join.html) posts here: a request goes in a queue for staff; nothing is created.
+  if (pathname === '/api/join' && req.method === 'POST') return sendJSON(res, 200, await join.submit(await readJSONBody(req, 5000), clientIp(req)));
   if (pathname === '/api/mail/unsubscribe' && (req.method === 'GET' || req.method === 'POST')){
     const html = body => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'" }); res.end(body); };
     if (req.method === 'GET') return html(mail.unsubscribePage(String(parsed.query.t || '')));
@@ -3130,7 +3142,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
   if (bigRoute) return sendJSON(res, 200, await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query));
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
