@@ -147,6 +147,13 @@ test('messages go to the webhook for WhatsApp first and fall back to Discord whe
   assert.ok(!co.includes('**'), 'WhatsApp bold is a single asterisk');
 });
 
+test('a Discord webhook address in RIDE_COVER_WEBHOOK_URL gets a plain message (Discord answers 400 to the Zapier-style body)', async () => {
+  process.env.RIDE_COVER_WEBHOOK_URL = 'https://discord.com/api/webhooks/123/abcdef';
+  assert.equal((await post('send', {})).status, 200);
+  assert.ok(app.world.discord.some(d => /Ride cover needed/.test(String((d.body && d.body.content) || d.content || JSON.stringify(d)))), 'the message arrived as plain Discord content');
+  assert.ok(!app.world.discord.some(d => JSON.stringify(d).includes('cryogen-ride-cover')), 'the Zapier-style body was not sent to Discord');
+});
+
 test('an iCal link becomes ride series: preview first, repeats are one series, bad links are explained', async () => {
   const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:Thursday Tempo', 'DTSTART;TZID=Europe/London:20261105T190000', 'END:VEVENT',
     'BEGIN:VEVENT', 'SUMMARY:Thursday Tempo', 'DTSTART;TZID=Europe/London:20261112T190000', 'END:VEVENT',

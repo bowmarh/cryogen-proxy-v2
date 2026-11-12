@@ -51,7 +51,7 @@
   // A gentle note, never a wall: open by itself only when the free allowance has run out.
   function support() {
     if (st.tier === 'supporter') return `<div class="card" style="padding:12px 16px;margin-top:12px;font-size:13px">⭐ Thank you for supporting the club. You are helping keep the coach running for everyone.</div>${cost()}`;
-    const out = st.remaining === 0 || st.ridesLeft === 0, link = st.payUrl ? `<a href="${E(st.payUrl)}" target="_blank" rel="noopener" class="btn-cyan" style="display:inline-block;width:auto;padding:8px 18px;font-size:13px;text-decoration:none;margin-top:8px">⭐ Become a supporter${st.price ? ' · £' + E(st.price) + ' a month' : ''}</a>` : '';
+    const out = st.remaining === 0 || st.ridesLeft === 0, link = st.checkout ? `<button type="button" class="btn-cyan" style="width:auto;padding:8px 18px;font-size:13px;margin-top:8px" onclick="coachSupport()">⭐ Become a supporter${st.price ? ' · £' + E(st.price) + ' a month' : ''}</button>` : st.payUrl ? `<a href="${E(st.payUrl)}" target="_blank" rel="noopener" class="btn-cyan" style="display:inline-block;width:auto;padding:8px 18px;font-size:13px;text-decoration:none;margin-top:8px">⭐ Become a supporter${st.price ? ' · £' + E(st.price) + ' a month' : ''}</a>` : '';
     return `<details class="card" ${out ? 'open' : ''} style="padding:12px 16px;margin-top:12px"><summary style="cursor:pointer;font-size:13px">⭐ Keep the coach going</summary><div style="font-size:13px;color:#d1d5db;margin-top:8px">The racing tools, results and the club wall are free for everyone, and always will be. The coach is the one thing that costs the club money each time it is used, so it has a free allowance and a bigger one for supporters.</div>
       <ul style="margin:8px 0 0 18px;font-size:13px;color:#d1d5db"><li>Free: ${E(st.limit)} questions a week and one ride explained a month</li><li>Supporters: up to ${E(st.supporterDaily)} questions a day, any number of rides explained, and a ⭐ by their name</li></ul>${link || '<div style="font-size:12px;color:#8b95a5;margin-top:8px">Supporter membership opens soon.</div>'}</details>${cost()}`;
   }
@@ -68,6 +68,7 @@
     catch (e) { chat.push({ role: 'assistant', content: '⚠️ ' + e.message }); }
     busy = false; render();
   }
+  window.coachSupport = async () => { try { const d = await api('/api/support/checkout', {}); if (d.url) location.href = d.url; } catch (e) { alert(e.message); } };
   window.coachMode = v => { mode = v === 'club' ? 'club' : 'coach'; render(); };
   window.coachRideMode = v => { rideMode = v === 'debrief' ? 'debrief' : 'training'; };
   window.coachStory = async () => {
