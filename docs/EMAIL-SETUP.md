@@ -79,3 +79,10 @@ The AI drafts with `{first}` in place of names (**no member names or addresses a
 Staff can paste a reply into **AI desk → Replies** to have it sorted into question, opt-out, complaint or other. Opt-outs unsubscribe the sender from all emails immediately; complaints alert the admin Discord channel; questions get a suggested reply for you to send.
 
 To have replies arrive automatically, set `MAIL_INBOUND_SECRET` in Vercel and point the mail provider's webhook (or a forwarding rule) at `POST https://<your site>/api/mail/inbound` with header `X-Inbound-Secret: <the secret>` and a JSON body `{ "from": "...", "subject": "...", "text": "..." }`. Without the secret the endpoint refuses everything.
+
+## 9. One-tap availability, season reports, the join page and the watchdog
+
+- **Ask a team for availability:** AI desk → Radio & reports → pick the team and race → *Ask for availability*. It makes a draft in Email whose message holds each rider's own one-tap link (`{rsvp}` is filled in per rider). Open the draft, run the check and approve it. The link opens a page with Yes / Maybe / No buttons; the answer is recorded only when a button is pressed and shows on the ZRL page for the captain.
+- **Season so far:** same place, *Season so far* previews a team's summary (all races entered), and an administrator can email it to the team. With *email each team automatically* on, it is sent once when a team's results are complete.
+- **Join page:** share `https://<your site>/join.html`. Requests wait in **Control room → Join requests**; an administrator sends the welcome email (or declines). It does not create a WordPress account: add the person in WordPress too.
+- **Watchdog:** the hourly job checks storage, email, member addresses, Google and the AI and posts to the admin Discord channel when something goes red, once per change, and again when it recovers.

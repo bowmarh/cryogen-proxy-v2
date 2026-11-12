@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Join Team CRYO-GEN</title>
+<style>body{font-family:system-ui,Arial,sans-serif;background:#0b1220;color:#e5e7eb;margin:0}main{max-width:480px;margin:32px auto;padding:0 16px}h1{font-size:24px}label{display:block;margin:12px 0 4px;font-size:14px}input,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #374151;background:#111827;color:#e5e7eb;font:inherit}button{margin-top:16px;padding:12px 20px;border:0;border-radius:8px;background:#22d3ee;color:#042f3a;font-weight:700;font-size:16px;cursor:pointer}.hp{position:absolute;left:-9999px}#msg{margin-top:14px}.ok{color:#6ee7b7}.bad{color:#fca5a5}a{color:#67e8f9}</style></head>
+<body><main><h1>Join Team CRYO-GEN</h1><p>A friendly Zwift cycling club: ZRL, team time trials, social rides, a Ladder and a DIRT series. Tell us a little about you and a club volunteer will be in touch.</p>
+<form id="f"><label for="name">Your name</label><input id="name" autocomplete="name" required maxlength="80"/>
+<label for="email">Email address</label><input id="email" type="email" autocomplete="email" required maxlength="160"/>
+<label for="zwid">Zwift ID (optional)</label><input id="zwid" inputmode="numeric" maxlength="12"/>
+<label for="note">Anything we should know? (optional)</label><textarea id="note" rows="3" maxlength="400"></textarea>
+<div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" tabindex="-1" autocomplete="off"/></div>
+<label style="display:flex;gap:8px;align-items:flex-start"><input id="consent" type="checkbox" style="width:auto;margin-top:4px"/> <span>I am happy for the club to email me about joining.</span></label>
+<button type="submit">Ask to join</button><div id="msg" role="status"></div></form></main>
+<script>
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault(); const m = document.getElementById('msg'), v = id => document.getElementById(id).value; m.className = ''; m.textContent = 'Sending…';
+  try {
+    const r = await fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: v('name'), email: v('email'), zwid: v('zwid'), note: v('note'), website: v('website'), consent: document.getElementById('consent').checked }) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
+    m.className = 'ok'; m.textContent = 'Thank you! A club volunteer will be in touch by email.'; document.getElementById('f').reset();
+  } catch (x) { m.className = 'bad'; m.textContent = x.message; }
+});
+</script></body></html>
