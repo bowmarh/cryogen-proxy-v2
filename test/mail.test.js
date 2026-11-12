@@ -216,3 +216,11 @@ test('through the app: approving a small send delivers it straight away, without
   await post('check', { id: c.id }); const r = await post('approve', { id: c.id });
   assert.equal(r.status, 200); assert.ok(world.mails.length >= 1, 'it was sent during the approval'); assert.equal(r.body.campaign.status, 'sent');
 });
+
+test('the preferences page can turn everything back on after an opt-out, and offers the three choices', async () => {
+  const k = kit(); await enable(k); const tok = k.m.tokenFor('2', 'bo@x.test');
+  assert.match(k.m.unsubscribePage(tok), /Stop newsletters and club news[\s\S]*Stop all emails[\s\S]*Turn everything back on/);
+  await k.m.unsubscribe(tok, 'all'); assert.equal((await run(k.m, 'POST /api/mail/audience', { audience: { type: 'all' }, category: 'service' })).optedOut, 1);
+  assert.equal((await k.m.unsubscribe(tok, 'on')).scope, 'on'); assert.equal((await run(k.m, 'POST /api/mail/audience', { audience: { type: 'all' }, category: 'service' })).optedOut, 0, 'back on');
+  assert.match(k.m.donePage('on'), /get club news and team emails again/);
+});

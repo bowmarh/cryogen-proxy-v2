@@ -95,3 +95,11 @@ To have replies arrive automatically, set `MAIL_INBOUND_SECRET` in Vercel and po
 - **Join requests:** requests that include a Zwift ID show the rider's category, rating and the ZRL teams that still have places; the welcome email lists the next three events.
 - **Monthly club report:** AI desk → *Download the report (PDF)*: key numbers, ZRL standings as bars, what is coming up. No rider names.
 - **Backups:** the Control room's Systems list now includes the backup status (a stale copy or a failed restore test shows red and alerts the admin channel through the watchdog).
+
+## 11. Race week on autopilot, captain approval, preferences, engagement, go-live check, WordPress embed
+
+- **Race week on autopilot** (Control room → Now): switch it on and, for each team, the app asks for availability 6 to 5 days before a race (Discord buttons; riders without Discord get the one-tap email), reminds those who have not answered 4 to 3 days before, and 2 to 1 days before proposes a line-up and sends the captain Discord buttons **Approve line-up** / **No thanks, I will pick**. Nothing is set without the captain's tap; if the captain cannot be reached on Discord the admin channel is told. Each step runs once.
+- **Email preferences:** the link in every email's footer opens a page where a member can stop club news, stop all emails, or turn everything back on.
+- **Engagement** (Control room → Engagement): racing activity bands, a monthly trend (saved automatically on the first run of each month), ZRL line-ups filled race by race, and the members most at risk. The active percentage is approximate.
+- **Go-live check** (Control room → Go-live check): one real test per feature (email, admin Discord, a DM, the availability link, preferences page, join form, race page, PDF, AI, systems, radio) with a pass/fail and the time. Use it once after every setup change.
+- **WordPress embed:** in a Custom HTML block on cryogen.team paste `<div data-cryogen="race"></div>` and/or `<div data-cryogen="join"></div>` followed by `<script src="https://club.cryo-gen.team/embed.js" async></script>`. The race table follows the public on/off switch.
