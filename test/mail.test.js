@@ -198,3 +198,14 @@ test('through the app: when WordPress blocks the standard users list, the site-o
   try { const r = await app.get('/api/mail/addresses', { token: adminTok }); assert.equal(r.status, 200); assert.ok(r.body.withEmail >= 1); }
   finally { delete world.wpCustomUsers; }
 });
+
+test('find riders by name or Zwift ID, and the preview greets the first real recipient by name', async () => {
+  const k = kit(); await enable(k);
+  assert.deepEqual((await run(k.m, 'GET /api/mail/find', {}, { q: 'ann' })).matches.map(x => [x.zwid, x.name, x.hasEmail]), [['1', 'Ann Lee', true]]);
+  assert.deepEqual((await run(k.m, 'GET /api/mail/find', {}, { q: '5' })).matches.map(x => x.zwid), ['5'], 'an ID (or the start of one) finds the member');
+  assert.deepEqual((await run(k.m, 'GET /api/mail/find', {}, { q: 'a' })).matches, [], 'one letter is too little to search on');
+  assert.equal((await run(k.m, 'GET /api/mail/find', {}, { q: 'hal' })).matches[0].hasEmail, false, 'a rider with two possible addresses is shown as having none yet');
+  const p = await run(k.m, 'POST /api/mail/preview', { subject: 'Hi', body: 'Hi {first},', category: 'news', audience: { type: 'people', zwids: ['2'] } });
+  assert.equal(p.as, 'Bo Dunn'); assert.match(p.html, /Hi Bo,/);
+  assert.match((await run(k.m, 'POST /api/mail/preview', { subject: 'Hi', body: 'Hi {first},' })).html, /Hi Alex,/, 'no audience: the sample name');
+});

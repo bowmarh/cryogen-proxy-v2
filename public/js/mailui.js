@@ -2,7 +2,7 @@
 // Staff: the Email page. Write (or have the AI draft) an email, run the check, pick who gets it, preview, approve (admins). Settings, groups,
 // address matching and the automatic emails live under the same page. Every action goes through /api/mail/*; nothing is stored in the browser.
 (function () {
-  let st = null, cur = null, check = null, aud = null, prev = null, view = 'write', addr = null, busy = '', note = '';
+  let names = {}, findTimer = null, st = null, cur = null, check = null, aud = null, prev = null, view = 'write', addr = null, busy = '', note = '';
   const E = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const root = () => document.getElementById('mail-content');
   const isAdmin = () => typeof role !== 'undefined' && role === 'admin';
@@ -50,6 +50,7 @@
     const a = cur && cur.audience || { type: 'all' }, v = a.type === 'group' ? 'group:' + a.group : a.type;
     return `<select id="mail-aud" class="inp" aria-label="Who gets it" onchange="mailAudChange()">${`<option value="all" ${v === 'all' ? 'selected' : ''}>Everyone with an address</option>`}${st.groups.map(g => `<option value="group:${E(g.id)}" ${v === 'group:' + g.id ? 'selected' : ''}>👥 ${E(g.name)}</option>`).join('')}<option value="people" ${v === 'people' ? 'selected' : ''}>Chosen riders (Zwift IDs)</option></select>`;
   }
+  const chosenText = ids => ids.length ? 'Sending to: ' + ids.map(z => E(names[z] ? `${names[z]} (${z})` : z)).join(', ') : '';
   function writeView() {
     const c = cur || { subject: '', body: '', category: 'news', audience: { type: 'all' }, status: 'draft' }, locked = c.status && c.status !== 'draft';
     const a = c.audience || {}, issues = check && check.issues ? check.issues : [];
@@ -64,7 +65,8 @@
       <textarea id="mail-body" class="inp" rows="12" maxlength="8000" style="width:100%;font-family:inherit" ${locked ? 'disabled' : ''}>${E(c.body)}</textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><div><label class="lbl" for="mail-cat">Type</label><select id="mail-cat" class="inp" ${locked ? 'disabled' : ''}><option value="news" ${c.category !== 'service' ? 'selected' : ''}>Club news (can unsubscribe)</option><option value="service" ${c.category === 'service' ? 'selected' : ''}>Service (reminders, race info)</option></select></div>
         <div><label class="lbl" for="mail-aud">Who</label>${audienceSelect()}</div></div>
-      <div id="mail-people-row" style="${a.type === 'people' ? '' : 'display:none;'}margin-top:6px"><label class="lbl" for="mail-people">Zwift IDs (separated by spaces or commas)</label><input id="mail-people" class="inp" value="${E((a.zwids || []).join(' '))}" ${locked ? 'disabled' : ''}/></div>
+      <div id="mail-people-row" style="${a.type === 'people' ? '' : 'display:none;'}margin-top:6px"><label class="lbl" for="mail-find">Find riders by name or Zwift ID</label><input id="mail-find" class="inp" autocomplete="off" oninput="mailFind()" placeholder="Start typing a name or an ID" ${locked ? 'disabled' : ''}/><div id="mail-find-res" style="margin:4px 0"></div>
+        <label class="lbl" for="mail-people">Chosen riders (Zwift IDs; you can also type or paste IDs here)</label><input id="mail-people" class="inp" oninput="mailChosen()" value="${E((a.zwids || []).join(' '))}" ${locked ? 'disabled' : ''}/><div id="mail-chosen" style="font-size:12px;color:#9ca3af;margin-top:4px">${chosenText((a.zwids || []).map(String))}</div></div>
       ${au}${ck}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
         <button type="button" style="${btn}" ${busy || locked ? 'disabled' : ''} onclick="mailSave()">💾 Save draft</button>
@@ -76,7 +78,7 @@
         ${isAdmin() && ['scheduled', 'sending', 'paused'].includes(c.status) ? `<button type="button" style="${btn}" onclick="mailCancel()">Stop</button>` : ''}${isAdmin() && c.status === 'paused' ? `<button type="button" style="${btn}" onclick="mailResume()">Resume</button>` : ''}
         ${c.id ? `<button type="button" style="${btn}" onclick="mailNew()">New email</button>` : ''}</div>
       ${isAdmin() ? '' : '<div style="font-size:12px;color:#8b95a5;margin-top:6px">Moderators can draft and check. An administrator approves and sends.</div>'}
-      ${prev ? `<div class="card" style="padding:12px 16px;margin-top:10px"><b>${E(prev.subject)}</b><iframe title="Email preview" sandbox="" srcdoc="${E(prev.html)}" style="width:100%;height:360px;border:0;background:#fff;margin-top:8px;border-radius:6px"></iframe></div>` : ''}`;
+      ${prev ? `<div class="card" style="padding:12px 16px;margin-top:10px"><b>${E(prev.subject)}</b>${prev.as ? ` <span style="font-size:12px;color:#9ca3af">· previewed as ${E(prev.as)}</span>` : ' <span style="font-size:12px;color:#9ca3af">· sample name</span>'}<iframe title="Email preview" sandbox="" srcdoc="${E(prev.html)}" style="width:100%;height:360px;border:0;background:#fff;margin-top:8px;border-radius:6px"></iframe></div>` : ''}`;
   }
   function sentView() {
     const rows = st.campaigns.map(c => `<tr><td style="padding:6px 8px"><a href="#" onclick="mailOpen('${E(c.id)}');return false">${E(c.subject || '(no subject)')}</a></td><td>${E(c.status)}</td><td>${(c.counts && c.counts.sent) || 0}/${(c.counts && c.counts.total) || 0}</td><td style="color:#8b95a5">${E((c.createdAt || '').slice(0, 10))}</td></tr>`).join('');
@@ -111,11 +113,29 @@
     const el = root(); if (!el || !st) return;
     const body = view === 'sent' ? sentView() : view === 'groups' ? groupsView() : view === 'auto' ? autoView() : writeView();
     el.innerHTML = `<h2 style="font-size:20px;font-weight:900;margin-bottom:4px">✉️ Email</h2><p style="font-size:13px;color:#8b95a5;margin-bottom:6px">Write or AI-draft, check, then send to everyone, a group or one rider.</p>${status()}${tabs()}${note}${body}`;
+    if (view === 'write') setTimeout(() => window.mailChosen && window.mailChosen(), 0);
   }
 
   window.mailLoad = open;
   window.mailView = v => { view = v; say(''); render(); };
   window.mailAudChange = () => { const r = document.getElementById('mail-people-row'); if (r) r.style.display = val('mail-aud') === 'people' ? '' : 'none'; aud = null; };
+  // Picking riders by name or ID: results are drawn straight into the page (no redraw), so what is typed stays put.
+  window.mailFind = () => {
+    clearTimeout(findTimer);
+    findTimer = setTimeout(async () => {
+      const box = document.getElementById('mail-find-res'), q = val('mail-find').trim(); if (!box) return; if (q.length < 2) { box.innerHTML = ''; return; }
+      try {
+        const r = (await api('/api/mail/find?q=' + encodeURIComponent(q))).matches;
+        box.innerHTML = r.length ? r.map(m => { names[m.zwid] = m.name; return `<button type="button" style="${btn};margin:2px 4px 2px 0" onclick="mailPick('${E(m.zwid)}')">${E(m.name)} · ${E(m.zwid)}${m.hasEmail ? '' : ' (no email)'}</button>`; }).join('') : '<span style="font-size:12px;color:#8b95a5">No one found.</span>';
+      } catch (e) { box.innerHTML = `<span style="font-size:12px;color:#fca5a5">${E(e.message)}</span>`; }
+    }, 250);
+  };
+  window.mailPick = z => { const ids = val('mail-people').split(/[\s,;]+/).filter(Boolean); if (!ids.includes(z)) ids.push(z); document.getElementById('mail-people').value = ids.join(' '); document.getElementById('mail-find').value = ''; document.getElementById('mail-find-res').innerHTML = ''; aud = null; window.mailChosen(); };
+  window.mailChosen = async () => {
+    const ids = val('mail-people').split(/[\s,;]+/).filter(Boolean), el = () => document.getElementById('mail-chosen'); if (el()) el().innerHTML = chosenText(ids);
+    for (const z of ids.filter(x => !names[x] && /^\d{2,}$/.test(x))) { try { const m = (await api('/api/mail/find?q=' + z)).matches.find(x => x.zwid === z); if (m) names[z] = m.name; } catch (e) { /* the ID shows on its own */ } }
+    if (el()) el().innerHTML = chosenText(val('mail-people').split(/[\s,;]+/).filter(Boolean));
+  };
   window.mailNew = () => { cur = null; prev = null; check = null; aud = null; say(''); render(); };
   window.mailOpen = async id => { try { cur = (await api('/api/mail/campaign?id=' + encodeURIComponent(id))).campaign; check = cur.check || null; aud = null; view = 'write'; say(''); render(); } catch (e) { say(e.message, true); render(); } };
   window.mailDraft = () => act('draft', async () => {
@@ -125,7 +145,7 @@
   window.mailSave = () => act('save', async () => { await saveDraft(); say('Saved.'); });
   window.mailCheck = () => act('check', async () => { await saveDraft(); check = (await api('/api/mail/check', { id: cur.id })).check; say(check.ok ? 'Passed the check.' : 'The check found problems.', !check.ok); });
   window.mailAudience = () => act('aud', async () => { aud = await api('/api/mail/audience', { audience: audFromForm(), category: val('mail-cat') || 'news' }); });
-  window.mailPreview = () => act('prev', async () => { prev = await api('/api/mail/preview', { subject: val('mail-subject'), body: val('mail-body'), category: val('mail-cat') || 'news' }); });
+  window.mailPreview = () => act('prev', async () => { prev = await api('/api/mail/preview', { subject: val('mail-subject'), body: val('mail-body'), category: val('mail-cat') || 'news', audience: audFromForm() }); });
   window.mailTest = () => { const to = prompt('Send a test to which address?'); if (!to) return; act('test', async () => { await api('/api/mail/test', { to, subject: val('mail-subject'), body: val('mail-body') }); say('Test sent to ' + to + '.'); }); };
   window.mailApprove = () => act('approve', async () => {
     await saveDraft(); check = (await api('/api/mail/check', { id: cur.id })).check; if (!check.ok) { say('Fix the problems first.', true); return; }

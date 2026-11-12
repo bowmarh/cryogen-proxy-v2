@@ -21,6 +21,7 @@ test('staff can draft, check, preview and count an email, and the page is access
   await page.route('**/api/mail/save', r => r.fulfill({ json: { campaign: { id: 'c1', subject: 'Race week', body: 'Hi {first}', category: 'news', audience: { type: 'all' }, status: 'draft' } } }));
   await page.route('**/api/mail/check', r => r.fulfill({ json: { check: { ok: true, issues: [], ai: { ran: false, note: 'The AI check could not run: only the fixed rules were applied.' } } } }));
   await page.route('**/api/mail/audience', r => r.fulfill({ json: { count: 8, noEmail: 2, optedOut: 0, estimate: 'about 1 hour' } }));
+  await page.route('**/api/mail/find**', r => r.fulfill({ json: { matches: [{ zwid: '24650', name: 'Rick Bowman', hasEmail: true }] } }));
   await page.route('**/api/mail/preview', r => r.fulfill({ json: { subject: 'Race week', html: '<p>Hi Alex,</p>', text: 'Hi Alex,' } }));
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
   await page.locator('#nav-mail').click();
@@ -31,6 +32,8 @@ test('staff can draft, check, preview and count an email, and the page is access
   expect(sent.draft.brief).toBe('Remind riders about race week');   // what was typed reaches the server (the page must not redraw before reading it)
   await page.getByRole('button', { name: /Check/ }).click();
   await expect(page.locator('#mail-content')).toContainText('Passed the check');
+  await page.locator('#mail-aud').selectOption('people'); await page.locator('#mail-find').fill('rick');
+  await page.getByRole('button', { name: /Rick Bowman · 24650/ }).click(); await expect(page.locator('#mail-people')).toHaveValue('24650'); await expect(page.locator('#mail-chosen')).toContainText('Rick Bowman');
   await page.getByRole('button', { name: /Count recipients/ }).click();
   await expect(page.locator('#mail-content')).toContainText('8');
   await page.getByRole('button', { name: /Preview/ }).click();
