@@ -197,6 +197,7 @@ function installFetch(world) {
       const out = JSON.parse(opts.body).map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
       return json(out);
     }
+    if (u.host === 'wp.test' && u.pathname === '/wp-json/cryogen/v1/user-emails') return world.wpCustomUsers ? json(world.wpCustomUsers) : json({ code: 'rest_no_route' }, 404);   // the site-owned fallback endpoint
     if (u.host === 'wp.test' && u.pathname === '/wp-json/wp/v2/users') {   // the WordPress user list (with emails): world.wpUsers; world.wpUsersStatus makes it refuse
       if (world.wpUsersStatus) return json({ code: 'rest_forbidden' }, world.wpUsersStatus);
       const per = Number(u.searchParams.get('per_page') || 10), pg = Number(u.searchParams.get('page') || 1), all = world.wpUsers || [];

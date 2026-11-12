@@ -192,3 +192,9 @@ test('through the app: a test send goes only where the administrator says and a 
   assert.equal((await post('test', { to: 'nope' })).status, 400); world.mailFail = 503;
   const r = await post('test', { to: 'me@example.com' }); assert.equal(r.status, 502); assert.match(r.body.error, /HTTP 503/);
 });
+
+test('through the app: when WordPress blocks the standard users list, the site-owned user-emails endpoint is used instead', async () => {
+  world.wpUsersStatus = 403; world.wpCustomUsers = [{ id: 1, name: 'Rick DB', email: 'rick@example.com' }];
+  try { const r = await app.get('/api/mail/addresses', { token: adminTok }); assert.equal(r.status, 200); assert.ok(r.body.withEmail >= 1); }
+  finally { delete world.wpCustomUsers; }
+});

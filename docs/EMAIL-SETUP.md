@@ -22,6 +22,24 @@ To use **Resend** instead (better for large lists): set `EMAIL_PROVIDER=resend`,
 
 The app reads `wp/v2/users` with the same WordPress login it already uses for member data. That account must be an **Administrator** (it needs the `list_users` permission). If not, the page says "not allowed to list users".
 
+**If WordPress still refuses** (the page says "rest_user_cannot_view" or similar even though the account is an Administrator), a security plugin or the host is blocking the standard users list. Add this once with the *Code Snippets* plugin (or your theme's functions.php); the app tries it automatically:
+
+```php
+add_action('rest_api_init', function () {
+  register_rest_route('cryogen/v1', '/user-emails', [
+    'methods' => 'GET',
+    'permission_callback' => function () { return current_user_can('list_users'); },
+    'callback' => function () {
+      $out = [];
+      foreach (get_users(['fields' => ['ID', 'display_name', 'user_email']]) as $u) $out[] = ['id' => $u->ID, 'name' => $u->display_name, 'email' => $u->user_email];
+      return $out;
+    },
+  ]);
+});
+```
+
+It is read-only and only an account that is allowed to list users can call it.
+
 Members are matched to WordPress users **by name**. Only a unique match is used. Where two WordPress users share a name, or none is found, they appear under *Review addresses* and an administrator types the right address once.
 
 ## 3. DNS records for cryogen.team (so mail is not marked as spam)
