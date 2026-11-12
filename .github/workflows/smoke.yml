@@ -1,0 +1,28 @@
+# After every successful production deploy, asks the live app to check itself (storage, systems, PDF, public data, key files). The run FAILS (GitHub emails
+# you) and the admin Discord channel is told if anything is wrong. Uses the same CRON_SECRET repository secret as the schedule.
+name: Post-deploy smoke test
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the live app
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::The CRON_SECRET repository secret is not set."; exit 1; fi
+          sleep 20   # let the new deployment take over the domain
+          for i in 1 2 3; do
+            code=$(curl -sS --max-time 60 -o resp.json -w '%{http_code}' -X POST -H "Authorization: Bearer $CRON_SECRET" "https://club.cryo-gen.team/api/smoke") || code=000
+            echo "Attempt $i: HTTP $code"; cat resp.json 2>/dev/null; echo
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "::error::The post-deploy check failed (see the response above)."
+          exit 1

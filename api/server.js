@@ -538,6 +538,7 @@ async function sendHook(hook, payload){
 // A post that hits a hiccup (Discord busy, a timeout) is tried once more straight away; if it still fails it goes in the outbox and the
 // scheduled run keeps trying for up to a day. A bad hook (a 4xx other than "slow down") is not retried: that needs a person.
 async function discord(channel, payload, opts = {}){
+  if (process.env.VERCEL_ENV === 'preview' && process.env.ALLOW_OUTBOUND !== '1') return false;   // a preview deployment posts nothing to the club's Discord
   const hook = (DISCORD_HOOKS[channel] || DISCORD_HOOKS.public).map(k => process.env[k]).find(Boolean);
   if (!hook) return false;
   let r = await sendHook(hook, payload);
@@ -2888,6 +2889,8 @@ const raceWeek = require('../lib/raceweek')({ redis, HttpError, requireRole, zrl
 const engagement = require('../lib/engagement')({ redis, requireRole, tidy, zrl, aiops });   // retention picture for the committee
 const controlRoom = require('../lib/controlroom')({ redis, requireRole, zrl, aiops, mail, join, gsheets, ai, backup: { healthRow: now => backup.healthRow(now) }, discord, siteUrl: SITE_URL });   // race day and system health
 const liveCheck = require('../lib/livecheck')({ redis, HttpError, requireRole, mail, discord, notify: (...a) => comms.notify(...a), aiops, controlRoom, ai, siteUrl: SITE_URL });   // the go-live check list
+const stripeSupport = require('../lib/stripe')({ redis, HttpError, memberFromRequest, support, discord, siteUrl: SITE_URL });   // supporter payments (off until the Stripe keys are set)
+const audit = require('../lib/audit')({ redis, requireRole });   // who did what, for admins
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -3008,7 +3011,7 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/join' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/stripe/webhook' && pathname !== '/api/join' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
@@ -3042,6 +3045,20 @@ async function route(req, res){
   if (tidyRoute) return sendJSON(res, 200, await tidyRoute(req));
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
+  // A check of the deployed app for the post-deploy smoke test (.github/workflows/smoke.yml): same secret as the cron call; tells the admin channel when it fails.
+  if (pathname === '/api/smoke' && (req.method === 'POST' || req.method === 'GET')){
+    const secret = process.env.CRON_SECRET; if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
+    if (!passwordMatches((/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '', secret)) return sendJSON(res, 401, { error: 'unauthorized' });
+    const checks = []; const check = async (name, fn) => { try { const d = await fn(); checks.push({ name, ok: true, detail: String(d || 'ok').slice(0, 160) }); } catch (e){ checks.push({ name, ok: false, detail: String(e.message || e).slice(0, 160) }); } };
+    await check('Storage', async () => { await redis([['GET', 'cg:smoke:ping']]); return 'answered'; });
+    await check('Systems', async () => { const bad = (await controlRoom.systems()).filter(x => x.level === 'bad'); if (bad.length) throw new Error(bad.map(x => `${x.name}: ${x.detail}`).join('; ')); return 'none red'; });
+    await check('Monthly PDF', async () => { const b = await aiops.monthlyPdf(Date.now()); if (b.subarray(0, 5).toString() !== '%PDF-') throw new Error('not a PDF'); return `${b.length} bytes`; });
+    await check('Public race data', async () => { const d = await controlRoom.publicRace(); if (!('teams' in d)) throw new Error('no teams field'); return 'ok'; });
+    await check('Static pages', async () => { const fs = require('fs'), path = require('path'); for (const f of ['index.html', 'join.html', 'race.html', 'js/app.js', 'js/control.js']) if (!fs.existsSync(path.join(__dirname, '..', 'public', f))) throw new Error(`${f} is missing`); return 'present'; });
+    const ok = checks.every(c => c.ok);
+    if (!ok) await discord('admin', { content: `🚨 **Post-deploy check failed:**\n${checks.filter(c => !c.ok).map(c => `- ${c.name}: ${c.detail}`).join('\n')}\n${SITE_URL}` }).catch(() => {});
+    return sendJSON(res, ok ? 200 : 503, { ok, checks });
+  }
 
   const dataRoute = DATA_ROUTES[`${req.method} ${pathname}`];
   if (dataRoute) return handleData(dataRoute, req, res);
@@ -3124,6 +3141,11 @@ async function route(req, res){
     let j = {}; try { j = JSON.parse(await readRawBody(req)); } catch (e) { /* empty */ }
     return sendJSON(res, 200, await aiops.inbound(req.headers['x-inbound-secret'] || parsed.query.s, j));
   }
+  // Stripe tells the app about supporter subscriptions: the signature over the exact bytes is checked before anything is read.
+  if (pathname === '/api/stripe/webhook' && req.method === 'POST'){
+    try { return sendJSON(res, 200, await stripeSupport.webhook(await readRawBody(req), req.headers['stripe-signature'])); }
+    catch (e){ return sendJSON(res, e.status || 400, { error: e.message }); }
+  }
   // One-tap availability (from the email link): GET shows the buttons, POST records the answer.
   if (pathname === '/api/rsvp' && (req.method === 'GET' || req.method === 'POST')){
     const html = body => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'" }); res.end(body); };
@@ -3164,10 +3186,10 @@ async function route(req, res){
   if (pathname === '/api/selfcheck' && req.method === 'POST'){ requireRole(req, ['admin']); return sendJSON(res, 200, await selfCheck()); }
   if (pathname === '/api/outbox/flush' && req.method === 'POST'){ requireRole(req, ['admin']); await flushOutbox(); const [left] = await redis([['HLEN', OUTBOX_KEY]]); return sendJSON(res, 200, { left }); }
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
-  if (trendRoute) return sendJSON(res, 200, await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query));
+  if (trendRoute){ const out = await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
-  if (bigRoute) return sendJSON(res, 200, await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query));
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
+  if (bigRoute){ const out = await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));
   const stagingRoute = staging.routes[`${req.method} ${pathname}`];
