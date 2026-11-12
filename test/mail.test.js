@@ -209,3 +209,10 @@ test('find riders by name or Zwift ID, and the preview greets the first real rec
   assert.equal(p.as, 'Bo Dunn'); assert.match(p.html, /Hi Bo,/);
   assert.match((await run(k.m, 'POST /api/mail/preview', { subject: 'Hi', body: 'Hi {first},' })).html, /Hi Alex,/, 'no audience: the sample name');
 });
+
+test('through the app: approving a small send delivers it straight away, without waiting for the hourly job', async () => {
+  await post('settings', { enabled: true, perHour: 50, perDay: 500 });
+  const c = (await post('save', { subject: 'Just you', body: 'Hi {first}', category: 'news', audience: { type: 'people', zwids: ['1002'] } })).body.campaign;
+  await post('check', { id: c.id }); const r = await post('approve', { id: c.id });
+  assert.equal(r.status, 200); assert.ok(world.mails.length >= 1, 'it was sent during the approval'); assert.equal(r.body.campaign.status, 'sent');
+});
