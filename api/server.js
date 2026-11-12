@@ -2825,11 +2825,15 @@ async function fetchWpUsers(){
     if (!r) throw new HttpError(502, 'WordPress could not be reached.');
     if (r.status === 400 && page > 1) break;   // WordPress answers 400 past the last page
     if (r.status === 401 || r.status === 403){
+      // Some WordPress sites (a security plugin, or the host) block the standard users list even for an administrator. A tiny site-owned endpoint
+      // (docs/EMAIL-SETUP.md has the snippet) is the way round it: tried here before giving up.
+      const alt = await fetch(`${wpSite()}/wp-json/cryogen/v1/user-emails`, { headers: { Authorization: `Basic ${Buffer.from(auth).toString('base64')}`, Accept: 'application/json', 'User-Agent': 'cryogen-proxy/2.0' }, signal: AbortSignal.timeout(20000) }).then(x => x.ok ? x.json() : null).catch(() => null);
+      if (Array.isArray(alt)) return alt.map(u => ({ id: u.id, name: u.name, email: u.email }));
       // Say what WordPress actually answered and which account the app is logged in as, so the fix is obvious.
       const why = await r.json().catch(() => ({})), hdr = { Authorization: `Basic ${Buffer.from(auth).toString('base64')}`, Accept: 'application/json', 'User-Agent': 'cryogen-proxy/2.0' };
       const me = await fetch(`${wpSite()}/wp-json/wp/v2/users/me?context=edit&_fields=slug,roles`, { headers: hdr, signal: AbortSignal.timeout(10000) }).then(x => x.ok ? x.json() : { status: x.status }).catch(() => null);
       const who = me && me.slug ? `The app is logged in to WordPress as "${me.slug}" with role ${(me.roles || []).join(', ') || 'none'}.` : me && me.status ? `WordPress did not accept the app's login at all (HTTP ${me.status}): check WP_API_USER is the login name and WP_API_APP_PASSWORD is a current Application Password.` : 'Could not check which account the app logs in as.';
-      throw new HttpError(409, `The WordPress API user is not allowed to list users and their emails (it needs the Administrator role, or the list_users permission). ${who} WordPress said: ${String(why.code || r.status)}${why.message ? ' - ' + String(why.message).slice(0, 160) : ''}.`);
+      throw new HttpError(409, `The WordPress API user is not allowed to list users and their emails (it needs the Administrator role, or the list_users permission). ${who} WordPress said: ${String(why.code || r.status)}${why.message ? ' - ' + String(why.message).slice(0, 160) : ''}. If the account is an administrator, a security plugin is blocking the users list: add the small snippet in docs/EMAIL-SETUP.md (section 2).`);
     }
     if (!r.ok) throw new HttpError(502, `WordPress answered HTTP ${r.status}.`);
     const list = await r.json(); out.push(...list); if (list.length < 100) break;
