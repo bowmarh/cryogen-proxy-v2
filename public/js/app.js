@@ -1073,11 +1073,17 @@ function setupRole(){
   if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; document.getElementById('nav-mail').style.display='flex'; document.getElementById('nav-aidesk').style.display='flex'; document.getElementById('nav-control').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role==='member'&&window.captainInit) captainInit();
+  if(role==='member'){ document.getElementById('nav-mydetails').style.display='flex'; if(!isAssoc()) document.getElementById('nav-plan').style.display='flex'; }
+  openDeepLink();
   applyAccessBadge();
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
 }
 
+// A link like /?tab=control (from the installed app's shortcuts or an alert) opens that page once signed in.
+function openDeepLink(){
+  try{ const t=new URLSearchParams(location.search).get('tab'); if(!t) return; const b=document.getElementById('nav-'+t); if(b&&b.style.display!=='none'&&getComputedStyle(b).display!=='none') showTab(t,b); }catch(e){ /* stay on the home page */ }
+}
 // The header badge says the person's real level: Owner, Administrator, Moderator, Captain, Racing, Standard or Social (worked out by the server).
 const LEVEL_BADGE={Owner:['rgba(250,204,21,0.15)','#facc15'],Administrator:['rgba(239,68,68,0.15)','#f87171'],Moderator:['rgba(251,191,36,0.12)','#FBBF24'],Captain:['rgba(var(--accent-rgb),0.18)','var(--accent)'],Racing:['rgba(var(--accent-rgb),0.1)','var(--accent)'],Standard:['rgba(148,163,184,0.15)','#cbd5e1'],Social:['rgba(168,85,247,0.15)','#c084fc']};
 async function applyAccessBadge(){
@@ -1115,6 +1121,8 @@ function showTab(id,btn){
   if(id==='aidesk'&&window.aideskLoad)aideskLoad();
   if(id==='control'&&window.controlLoad)controlLoad();
   if(id==='captain'&&window.captainLoad)captainLoad();
+  if(id==='mydetails'&&window.mydetailsLoad)mydetailsLoad();
+  if(id==='plan'&&window.planLoad)planLoad();
   if(id==='profile'&&window.referralLoad)setTimeout(referralLoad,400);
   if(id==='coach'&&window.coachOpen)coachOpen();
   if(window.uiSeries) uiSeries(id);

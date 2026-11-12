@@ -44,3 +44,15 @@ Control room → **Usage**: storage commands, AI spend and emails sent today aga
 - **Dependabot** opens a weekly pull request when the build tools or GitHub automation have an update; merge it when the check is green.
 - **Watchdog, smoke test, usage alerts and the go-live check** (above) tell the admin channel when something needs a person; otherwise nothing needs doing.
 - **Owner login:** see `docs/ACCESS.md`. Add `OWNER_PASSWORD` once.
+
+## My details, requests and season plans
+Members open **🙋 My details** to choose how we email them (everything, only what they need, nothing) and the first name used in emails; both apply at once. A change to their name, email or membership is a *request*: it appears in Control room → **Member requests** (and the admin channel), because the club's member plugin only lets the app change tier, status and the off-boarding ticks. Make the change in WordPress and press *Mark done*; for *I want to leave* an Administrator can press *Mark as left in WordPress*. **📅 My plan** builds a 4–16 week plan from the rider's own FTP (no AI, no cost) and sends each week's sessions on Monday morning.
+
+## WordPress accounts for join requests (owner switch)
+Control room → **Website** → *Allow creating WordPress accounts* (owner only). Then on a join request an Administrator can **Preview** what would be created and **Create** it: a standard WordPress "subscriber" account with a long random password nobody sees (the person uses *Lost your password?*). It checks the account exists afterwards and links an existing account rather than duplicating it. You still add the Zwift ID and tier in WordPress, because the member plugin's fields are not documented. The welcome email then tells them to set their password.
+
+## Standings on the website (owner switch)
+Control room → **Website** → *Post standings automatically*. When every team has a result for a race, one post ("<round>: standings after race N": a table per division and that race's results) is made on cryogen.team, as a **draft** unless *Publish straight away* is ticked. Team names and points only.
+
+## Alerts on your phone, and app shortcuts
+Control room → *Alerts on this device* (needs the push keys, see the Notifications setting) sends a phone alert when a system goes red or a post-deploy check fails. Long-press the installed app's icon for shortcuts to This week, Control room, Email and My team; `/?tab=control` style links open a page directly.

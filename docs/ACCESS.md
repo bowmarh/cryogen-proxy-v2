@@ -38,3 +38,8 @@ The header badge shows the real level ("Owner", "Captain · Racing", "Social" �
 1. In Vercel add `OWNER_PASSWORD` (a long password only you know) and redeploy.
 2. Sign in with 👑 **Owner**. Changing `OWNER_PASSWORD` signs the owner out everywhere.
 3. **Until `OWNER_PASSWORD` exists, every Administrator keeps the owner's powers** so nothing is locked out; the Control room's Systems list shows an amber *Owner login* row until you add it.
+
+## Added in this release
+- **My details** (everyone who is a member, Social included): choose how the club emails you, the first name used in emails, and ask for a change or to leave. Changes to the club's website records are requests a volunteer applies (Control room → Member requests); an Administrator can mark a leaver as left in one click.
+- **My plan** (Standard, Racing, Captain): a season-long training plan built from your FTP.
+- **Owner-only switches:** WordPress account creation and standings posts to the website.

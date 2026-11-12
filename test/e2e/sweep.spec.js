@@ -75,3 +75,22 @@ for (const who of ['owner', 'admin']) {
     if (who === 'owner') await expect(page.locator('#control-content select').first()).toBeVisible(); else await expect(page.locator('#control-content select')).toHaveCount(0);
   });
 }
+
+test('a rider can open My details and My plan, save an email choice, and send a change request', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  const sent = {}; await page.route('**/api/me/prefs', r => { sent.prefs = r.request().postDataJSON(); r.continue(); }); await page.route('**/api/me/request', r => { sent.req = r.request().postDataJSON(); r.continue(); });
+  await page.locator('#nav-mydetails').click(); await expect(page.locator('#mydetails-content')).toContainText('Emails from the club');
+  await page.locator('#md-name').fill('Ricky'); await page.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.locator('#mydetails-content')).toContainText('Saved.'); expect(sent.prefs.preferredName).toBe('Ricky');
+  await page.locator('#md-text').fill('Please change my email address'); await page.getByRole('button', { name: 'Send my change request' }).click(); await expect(page.locator('#mydetails-content')).toContainText('Sent.'); expect(sent.req).toEqual({ type: 'details', text: 'Please change my email address' });
+  await page.locator('#nav-plan').click(); await expect(page.locator('#plan-content')).toContainText('Build my season plan');
+  await page.locator('#pl-ftp').fill('240'); await page.locator('#pl-hours').fill('6'); await page.locator('#pl-weeks').fill('8'); await page.getByRole('button', { name: 'Build the plan' }).click(); await expect(page.locator('#plan-content')).toContainText('Week 8');
+});
+
+test('the Control room has the member requests and website tabs for the owner', async ({ page, baseURL }) => {
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
+  await page.goto(baseURL); await page.evaluate(() => launchApp('admin')); await page.locator('#nav-control').click();
+  await page.getByRole('tab', { name: /Member requests/ }).click(); await expect(page.locator('#control-content')).toContainText('From My details');
+  await page.getByRole('tab', { name: /Website/ }).click(); await expect(page.locator('#control-content')).toContainText('Standings on the website'); await expect(page.locator('#control-content')).toContainText('WordPress accounts for join requests'); await expect(page.locator('#sf-on')).toBeEnabled();
+});
