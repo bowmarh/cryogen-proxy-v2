@@ -97,3 +97,11 @@ test('triage works with the AI off (fixed rules) and a reply with no text is ref
   const k = kit(), r = (await call(k, 'POST /api/aiops/triage', { from: 'a@x.test', subject: 's', text: 'Can I bring a friend?' })).item; assert.deepEqual([r.kind, r.by], ['question', 'rules']);
   await assert.rejects(() => call(k, 'POST /api/aiops/triage', { from: 'a@x.test', text: '' }), /sender and some text/);
 });
+
+test('the whole-round plan shares races out fairly, leaves out anyone who said no, flags short weeks, and changes nothing', async () => {
+  const k = kit({ avail: { '0:1': 'yes', '0:2': 'yes', '0:3': 'yes', '1:1': 'yes', '1:2': 'yes', '1:3': 'yes', '2:2': 'no', '2:3': 'no', '2:1': 'yes' } }), r = await call(k, 'POST /api/aiops/season-lineups', { team: 't1' });
+  assert.equal(r.weeks.length, 4); assert.deepEqual(r.weeks[0].picks.map(p => p.name), ['Ann Lee', 'Cy Ray'], 'highest rated first when nobody has raced yet');
+  assert.ok(r.weeks[1].picks.some(p => p.name === 'Bo Dunn'), 'week 2: the rider who has not raced yet comes in before someone who has');
+  assert.equal(r.weeks[2].short, 1, 'only one rider can ride in week 3'); assert.ok(r.weeks.every(w => w.picks.length <= 2)); assert.equal(r.races.reduce((n, x) => n + x.races, 0), r.weeks.reduce((n, w) => n + w.picks.length, 0));
+  await assert.rejects(() => call(k, 'POST /api/aiops/season-lineups', { team: 'nope' }), /does not exist/);
+});
