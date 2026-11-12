@@ -180,7 +180,10 @@ async function handleLogin(req, res){
     const failKey = `cg:rl:login:${clientIp(req)}`;
     if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
     const u = typeof payload.password === 'string' ? await staff.verify(String(payload.username), payload.password) : null;
-    if (u) return sendJSON(res, 200, { role: u.role, name: u.name, token: signToken(u.role, { staffName: u.name, user: u.username }) });
+    if (u){
+      const step = await authsec.afterPassword({ id: `user:${u.username}`, role: u.role, name: u.name, user: u.username, mustChange: u.mustChange });
+      return sendJSON(res, 200, step.token ? { role: u.role, name: u.name, token: step.token, mustChange: u.mustChange === true } : { ...step, role: u.role, name: u.name });   // or a second step: the authenticator code (or setting one up)
+    }
     await counter(failKey, LOGIN_WINDOW_SEC);
     return sendJSON(res, 401, { error: 'incorrect username or password' });
   }
@@ -188,7 +191,10 @@ async function handleLogin(req, res){
     const expectedOwner = process.env.OWNER_PASSWORD; if (!expectedOwner) return sendJSON(res, 503, { error: 'login not configured', missing: 'OWNER_PASSWORD' });
     const failKey = `cg:rl:login:${clientIp(req)}`;
     if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
-    if (typeof payload.password === 'string' && passwordMatches(payload.password, expectedOwner)) return sendJSON(res, 200, { role: 'admin', owner: true, token: signToken('admin', { owner: true, staffName: 'Owner', ov: require('crypto').createHash('sha256').update(String(expectedOwner)).digest('hex').slice(0, 10) }) });
+    if (typeof payload.password === 'string' && passwordMatches(payload.password, expectedOwner)){
+      const step = await authsec.afterPassword({ id: 'owner', role: 'admin', name: 'Owner' });
+      return sendJSON(res, 200, step.token ? { role: 'admin', owner: true, token: step.token } : { ...step, role: 'admin', owner: true });
+    }
     await counter(failKey, LOGIN_WINDOW_SEC); return sendJSON(res, 401, { error: 'incorrect password' });
   }
   const envName = ROLE_PASSWORD_ENV[payload.role];
@@ -199,6 +205,7 @@ async function handleLogin(req, res){
   const failKey = `cg:rl:login:${clientIp(req)}`;
   if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
   if (typeof payload.password === 'string' && passwordMatches(payload.password, expected)){
+    if (await authsec.blockedShared(payload.role)) return sendJSON(res, 403, { error: 'The shared password is switched off. Sign in with your own staff login (or ask the owner for one).' });
     return sendJSON(res, 200, { role: payload.role, token: signToken(payload.role) });
   }
   await counter(failKey, LOGIN_WINDOW_SEC);
@@ -2922,7 +2929,8 @@ async function wpSetMemberStatus(zwid, status){
   if (!after || String(after.status) !== String(status)) throw new HttpError(502, 'WordPress accepted the request but did not keep the change: check the member record.');
 }
 const wpPublishPost = async body => { const r = await fetch(`${wpSite()}/wp-json/wp/v2/posts`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Basic ${Buffer.from(wpAuth()).toString('base64')}`, 'User-Agent': 'cryogen-proxy/2.0' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`WordPress refused the post (${r.status} ${String(d.message || '').slice(0, 120)})`); return d; };
-const selfService = require('../lib/selfservice')({ redis, HttpError, requireRole, memberFromRequest, mail, access, discord, setMemberStatus: wpSetMemberStatus, siteUrl: SITE_URL });   // "My details"
+const selfService = require('../lib/selfservice')({ redis, HttpError, requireRole, memberFromRequest, mail, access, discord, setMemberStatus: wpSetMemberStatus, siteUrl: SITE_URL, security: () => ({ lostPasswordUrl: `${wpSite()}/wp-login.php?action=lostpassword`, profileUrl: `${wpSite()}/wp-admin/profile.php` }) });   // "My details"
+const authsec = require('../lib/authsec')({ redis, HttpError, requireRole, sessionFromRequest, signToken, staff, mail, audit, counter, peek, clientIp, siteUrl: SITE_URL });   // authenticator codes, recovery codes, forgotten passwords
 const seasonPlan = require('../lib/seasonplan')({ redis, HttpError, memberFromRequest, fetchRoster, notify: (...a) => comms.notify(...a) });   // season-long plans from the rider's FTP
 const wpSync = require('../lib/wpsync')({ redis, HttpError, requireRole, join, wpSite, wpAuth, discord });   // create a WordPress account for a join request (owner switch)
 const wpProbe = require('../lib/wpprobe')({ redis, HttpError, requireRole, wpApi: WP_API, wpAuth });   // read-only look at what the member plugin offers
@@ -3053,12 +3061,14 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/stripe/webhook' && pathname !== '/api/join' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && !/^\/api\/auth\/(2fa|forgot|reset|totp\/setup|totp\/enable)$/.test(pathname) && pathname !== '/api/stripe/webhook' && pathname !== '/api/join' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
   // A signed-in associate reaches only the routes above; staff approval lifts it at once, even mid-session.
   const sess = sessionFromRequest(req);
+  // Someone who signed in with a temporary password may only choose a new one.
+  if (sess && sess.mc === 1 && pathname.startsWith('/api/') && !['/api/auth/security', '/api/auth/password', '/api/access/me', '/api/login'].includes(pathname)) return sendJSON(res, 403, { error: 'Choose a new password first.', mustChange: true });
   // The owner-only list (backups and erasure, money, access, the switches): an Administrator who is not the owner is refused in one place.
   if (access.ownerOnly(req.method, pathname)){
     if (!roleFromRequest(req)) return sendJSON(res, 401, { error: 'Please log in again.' });
@@ -3072,7 +3082,7 @@ async function route(req, res){
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
-    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });
+    return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, lostPasswordUrl: `${wpSite()}/wp-login.php?action=lostpassword`, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });
   }
   if (pathname === '/api/auth/wp' && req.method === 'GET') return handleWpSso(req, res, parsed.query.t);
   if (pathname === '/api/me' && req.method === 'GET') return handleMe(req, res);
@@ -3242,7 +3252,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute){ const out = await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || access.routes[`${req.method} ${pathname}`] || selfService.routes[`${req.method} ${pathname}`] || seasonPlan.routes[`${req.method} ${pathname}`] || wpSync.routes[`${req.method} ${pathname}`] || siteFeed.routes[`${req.method} ${pathname}`] || wpProbe.routes[`${req.method} ${pathname}`] || launch.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || access.routes[`${req.method} ${pathname}`] || selfService.routes[`${req.method} ${pathname}`] || authsec.routes[`${req.method} ${pathname}`] || seasonPlan.routes[`${req.method} ${pathname}`] || wpSync.routes[`${req.method} ${pathname}`] || siteFeed.routes[`${req.method} ${pathname}`] || wpProbe.routes[`${req.method} ${pathname}`] || launch.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
   if (bigRoute){ const out = await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));

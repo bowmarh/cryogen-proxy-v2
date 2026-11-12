@@ -147,7 +147,7 @@ async function sharedWrite(path,payload){
 function loginStep(type){
   document.getElementById('login-step1').style.display='none';
   document.getElementById('login-step2').style.display='block';
-  ['owner','admin','mod','user','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
+  ['owner','admin','mod','user','member','auth'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
   document.getElementById('login-form-'+type).style.display='block';
   setTimeout(()=>{ const el=document.getElementById(type==='owner'?'owner-pw':type==='admin'?'admin-pw':type==='mod'?'mod-pw':type==='user'?'user-name':'member-search'); if(el)el.focus(); },50);
 }
@@ -159,15 +159,16 @@ async function doRoleLogin(role, inputId){
   try{
     res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password})});
   }catch(e){showLoginErr('Could not reach the login server.');return;}
-  if(res.ok){const d=await res.json();sessionStorage.setItem('token',d.token);launchApp(role);}
+  if(res.ok){const d=await res.json();authGate(d,d2=>{sessionStorage.setItem('token',d2.token);launchApp(role);});}
   else if(res.status===401){showLoginErr('Incorrect password.');}
+  else if(res.status===403){ let m='That password is switched off.'; try{ m=(await res.json()).error||m; }catch(e){} showLoginErr(m); }
   else{showLoginErr('Login is unavailable right now. Please try again later.');}
 }
 async function doUserLogin(){
   const username=document.getElementById('user-name').value.trim(), password=document.getElementById('user-pw').value;
   if(!username||!password){ showLoginErr('Enter your username and password.'); return; }
   let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
-  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d.name); }catch(e){} launchApp(d.role); }
+  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d2.name||d.name); }catch(e){} launchApp(d2.role||d.role); }); }
   else if(res.status===401) showLoginErr('Incorrect username or password.');
   else if(res.status===429) showLoginErr('Too many wrong attempts from this connection. Try again in 15 minutes.');
   else showLoginErr('Login is unavailable right now. Please try again later.');
@@ -175,7 +176,7 @@ async function doUserLogin(){
 async function doOwnerLogin(){
   const password=document.getElementById('owner-pw').value; let res;
   try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'owner',password})}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
-  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); sessionStorage.setItem('owner','1'); launchApp('admin'); }
+  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('owner','1'); launchApp('admin'); }); }
   else if(res.status===401) showLoginErr('Incorrect password.');
   else if(res.status===503) showLoginErr('Owner login is not set up yet: add OWNER_PASSWORD in Vercel.');
   else showLoginErr('Login is unavailable right now. Please try again later.');

@@ -160,7 +160,9 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
           <label class="lbl">Your password</label>
           <input id="user-pw" type="password" class="inp" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doUserLogin()" style="margin-bottom:12px"/>
           <button class="btn-cyan" onclick="doUserLogin()">Sign in</button>
+          <a href="#" onclick="authForgot();return false" style="display:block;margin-top:10px;font-size:12px;color:#8b95a5">Forgot your password?</a>
         </div>
+        <div id="login-form-auth" style="display:none"></div>
         <div id="login-form-member" style="display:none">
           <label class="lbl">Your Zwift Name or Rider ID</label>
           <input id="member-search" class="inp" placeholder="e.g. Rick or 24650" onkeydown="if(event.key==='Enter')doMemberLogin()" style="margin-bottom:6px"/>
@@ -509,6 +511,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 <script src="/js/studio.js"></script>
 <script src="/js/mailui.js"></script>
 <script src="/js/aidesk.js"></script>
+<script src="/js/authui.js"></script>
 <script src="/js/control.js"></script>
 <script src="/js/captain.js"></script>
 <script src="/js/mydetails.js"></script>
