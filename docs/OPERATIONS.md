@@ -56,3 +56,15 @@ Control room → **Website** → *Post standings automatically*. When every team
 
 ## Alerts on your phone, and app shortcuts
 Control room → *Alerts on this device* (needs the push keys, see the Notifications setting) sends a phone alert when a system goes red or a post-deploy check fails. Long-press the installed app's icon for shortcuts to This week, Control room, Email and My team; `/?tab=control` style links open a page directly.
+
+## Launch plan and "needs fixing"
+Control room → **🚀 Launch**: the order to switch things on (owner password, go-live check, race radio, automatic results, race-week autopilot, website standings as drafts, share the join page, WordPress account creation), each marked done, ready or waiting, with what must be true first, worked out from the app's own state. Below it, **Needs fixing** lists open bug reports, new browser errors, red systems and failed jobs in one place; a short version is posted to the admin channel on Monday mornings when there is something to say.
+
+## Inspecting the WordPress member plugin
+Control room → **Website** → *Inspect the member plugin* (administrators): a read-only look at which routes the plugin publishes (methods and arguments) and the member field **names** and types (never values). Send that list to whoever helps with the app and it shows exactly which member details can safely be written back (name, email, Zwift ID, tier), so the manual WordPress steps can be automated.
+
+## Results from a web page
+Automatic results accept a CSV address or a web page: if the address is a page, the first table with a Team column and a Position or Points column is used. Team points themselves still come from WTRL's table: ZwiftRacing's event data lists riders' finishes but not WTRL's team points, so it cannot replace a results table.
+
+## Storage use
+Staying inside the storage plan: the Control room's systems list is reused for five minutes by an open tab (the ↻ Refresh button asks afresh), the roster refresh saves riders' weights in a handful of commands (it used to be one per rider), and the weekly housekeeping removes finished data. Control room → Usage shows storage, AI and email against their limits.

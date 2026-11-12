@@ -195,7 +195,8 @@ function installFetch(world) {
       world.redisCalls++;
       if (world.redisDown) return json({ error: 'ERR max requests limit exceeded' }, 500);   // lets a test simulate the storage plan running out
       if ((opts.headers || {}).Authorization !== `Bearer ${BASE_ENV.KV_REST_API_TOKEN}`) return json({ error: 'unauthorized' }, 401);
-      const out = JSON.parse(opts.body).map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
+      const cmds = JSON.parse(opts.body); world.redisCommands = (world.redisCommands || 0) + cmds.length; world.redisRequests = (world.redisRequests || 0) + 1;   // counted so a test can hold a flow to a budget
+      const out = cmds.map(c => { try { return { result: redisRun(world.db, c) }; } catch (e) { return { error: e.message }; } });
       return json(out);
     }
     if (u.host === 'wp.test' && u.pathname === '/wp-json/cryogen/v1/user-emails') return world.wpCustomUsers ? json(world.wpCustomUsers) : json({ code: 'rest_no_route' }, 404);   // the site-owned fallback endpoint
