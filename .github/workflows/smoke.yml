@@ -5,10 +5,12 @@ name: Post-deploy smoke test
 on:
   deployment_status:
   workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * 1'   # every Monday morning too: the same check, including that every sign-in level works and every authenticator can still be opened
 
 jobs:
   smoke:
-    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

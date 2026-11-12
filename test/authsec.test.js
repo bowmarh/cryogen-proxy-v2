@@ -97,3 +97,22 @@ test('the sign-in events are in the audit trail, members are pointed to WordPres
   const rider = await app.memberSession('1002'); const d = await app.get('/api/me/details', { token: rider }); assert.match(d.body.security.lostPasswordUrl, /\/wp-login\.php\?action=lostpassword$/); assert.match(d.body.security.profileUrl, /wp-admin\/profile\.php$/);
   assert.match((await app.get('/api/auth/status')).body.lostPasswordUrl, /action=lostpassword/);
 });
+
+test('a session ends when the password changes, the account is removed, or "sign out everywhere" is pressed', async () => {
+  await post('/api/staff', { username: 'dee', name: 'Dee Fox', role: 'mod', password: 'start-pass-123' }, owner);
+  const a = (await app.post('/api/login', { username: 'dee', password: 'start-pass-123' })).body.token, mine = (await post('/api/auth/password', { current: 'start-pass-123', next: 'chosen-pass-9876' }, a)).body.token;
+  assert.equal((await app.get('/api/auth/security', { token: mine })).status, 200); assert.equal((await app.get('/api/auth/security', { token: a })).status, 401, 'the session from before the password change is gone');
+  const other = (await app.post('/api/login', { username: 'dee', password: 'chosen-pass-9876' })).body.token; await new Promise(r => setTimeout(r, 15));
+  assert.equal((await post('/api/auth/signout-all', {}, mine)).status, 200); assert.equal((await app.get('/api/auth/security', { token: other })).status, 401); assert.equal((await app.get('/api/auth/security', { token: mine })).status, 401);
+  const again = (await app.post('/api/login', { username: 'dee', password: 'chosen-pass-9876' })).body.token; assert.equal((await app.get('/api/auth/security', { token: again })).status, 200, 'a new sign-in works');
+  assert.equal((await post('/api/auth/admin/reset-password', { username: 'dee' }, owner)).status, 200); assert.equal((await app.get('/api/auth/security', { token: again })).status, 401, 'an owner reset ends their sessions');
+  const o2 = (await app.post('/api/login', { role: 'owner', password: 'owner-pw' })).body.token; await new Promise(r => setTimeout(r, 15)); assert.equal((await post('/api/auth/signout-all', {}, o2)).status, 200);
+  assert.equal((await app.get('/api/auth/security', { token: owner })).status, 401, 'the owner signed out everywhere too');
+  assert.equal((await app.get('/api/auth/security', { token: await app.login('admin') })).status, 200, 'shared-password sessions are unaffected');
+});
+
+test('a storage outage does not sign staff out: the session check is skipped, not failed', async () => {
+  const mk = require('../lib/authsec'), HttpError = class extends Error { constructor(s, m) { super(m); this.status = s; } };
+  const a = mk({ redis: async () => { throw new Error('storage down'); }, HttpError, requireRole: () => {}, sessionFromRequest: () => null, signToken: () => '', staff: { get: async () => { throw new Error('storage down'); } }, mail: null, audit: null, counter: async () => 0, peek: async () => 0, clientIp: () => '1', siteUrl: '', env: {}, now: () => Date.now() });
+  assert.equal(await a.revoked({ role: 'mod', user: 'x', iat: 1 }), false); assert.equal(await a.revoked({ role: 'admin', owner: true, iat: 1 }), false); assert.equal(await a.revoked({ role: 'mod', iat: 1 }), false, 'a shared-password session is never checked');
+});

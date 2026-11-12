@@ -101,7 +101,7 @@ function tokenSecret(){
 }
 
 function signToken(role, extra = {}){
-  const payload = Buffer.from(JSON.stringify({ ...extra, role, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ ...extra, role, iat: Date.now(), exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
   const sig = crypto.createHmac('sha256', tokenSecret()).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
@@ -1725,6 +1725,7 @@ async function handleCron(req, res){
   for (const f of failed){
     const [claimed] = await redis([['HSETNX', CRON_ALERT_KEY, `${f.job}:${Math.floor(Date.now() / 21600000)}`, new Date().toISOString()]]).catch(() => [0]);
     if (claimed) await discord('zrl-admin', { content: `⚠️ **The scheduled ${f.job} job failed:** ${discordEscape(f.error)}\nIts reminders, posts or backups did not run this time. Check the health panel at ${SITE_URL}.` });
+    if (claimed) await alertEmail(`CRYO-GEN: the ${f.job} job failed`, `The scheduled ${f.job} job failed: ${f.error}\n\nIts reminders, posts or backups did not run this time. Check the Control room at ${SITE_URL}.`);
   }
   if (speed === 'auto' && tp.full) await redis([['SET', CRON_PLAN_KEY, JSON.stringify({ fullAt: nowMs, wake: live.wake(nowMs) })]]).catch(() => {});
   // The health panel reads these to show whether the scheduled workflow is really running, and whether a job is failing.
@@ -2914,7 +2915,9 @@ const costs = require('../lib/costs')({ redis, requireRole, support, mail, disco
 const autoResults = require('../lib/autoresults')({ redis, HttpError, requireRole, zrl, asStaff: () => syncReq(), discord, siteUrl: SITE_URL });   // results read from a table address
 const feedback = require('../lib/feedback')({ redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ai, discord, siteUrl: SITE_URL });   // the "Something wrong?" button
 const captainPage = require('../lib/captain')({ HttpError, memberFromRequest, zrl, aiops });   // the captain's page
-const controlRoom = require('../lib/controlroom')({ redis, requireRole, zrl, aiops, mail, join, costs, housekeeping, pushStaff: p => push.sendStaff(p), gsheets, ai, backup: { healthRow: now => backup.healthRow(now) }, discord, siteUrl: SITE_URL });   // race day and system health
+// An email to the owner's address (ALERT_EMAIL) for the problems that need a person: it goes through the club's own email service, so it is skipped when that is the thing that is down.
+const alertEmail = async (subject, body) => { const to = String(process.env.ALERT_EMAIL || '').trim(); if (!to) return false; try { await mail.sendDirect({ to, name: 'CRYO-GEN admin', subject, body }); return true; } catch (e) { return false; } };
+const controlRoom = require('../lib/controlroom')({ alertEmail, redis, requireRole, zrl, aiops, mail, join, costs, housekeeping, pushStaff: p => push.sendStaff(p), gsheets, ai, backup: { healthRow: now => backup.healthRow(now) }, discord, siteUrl: SITE_URL });   // race day and system health
 const liveCheck = require('../lib/livecheck')({ redis, HttpError, requireRole, mail, discord, notify: (...a) => comms.notify(...a), aiops, controlRoom, ai, siteUrl: SITE_URL });   // the go-live check list
 const stripeSupport = require('../lib/stripe')({ redis, HttpError, memberFromRequest, support, discord, siteUrl: SITE_URL });   // supporter payments (off until the Stripe keys are set)
 const audit = require('../lib/audit')({ redis, requireRole });
@@ -2933,6 +2936,7 @@ const selfService = require('../lib/selfservice')({ redis, HttpError, requireRol
 const authsec = require('../lib/authsec')({ redis, HttpError, requireRole, sessionFromRequest, signToken, staff, mail, audit, counter, peek, clientIp, siteUrl: SITE_URL });   // authenticator codes, recovery codes, forgotten passwords
 const seasonPlan = require('../lib/seasonplan')({ redis, HttpError, memberFromRequest, fetchRoster, notify: (...a) => comms.notify(...a) });   // season-long plans from the rider's FTP
 const wpSync = require('../lib/wpsync')({ redis, HttpError, requireRole, join, wpSite, wpAuth, discord });   // create a WordPress account for a join request (owner switch)
+const offboard = require('../lib/offboard')({ HttpError, requireRole, setMemberStatus: wpSetMemberStatus, mail, privacy, discord, siteUrl: SITE_URL });   // mark a member as left in one action
 const wpProbe = require('../lib/wpprobe')({ redis, HttpError, requireRole, wpApi: WP_API, wpAuth });   // read-only look at what the member plugin offers
 const siteFeed = require('../lib/sitefeed')({ redis, HttpError, requireRole, zrl, wpPost: wpPublishPost, discord, siteUrl: SITE_URL });   // standings posted to the website
 const launch = require('../lib/launch')({ redis, requireRole, discord, siteUrl: SITE_URL, state: {   // the launch plan and the weekly "what needs fixing"
@@ -3067,6 +3071,8 @@ async function route(req, res){
 
   // A signed-in associate reaches only the routes above; staff approval lifts it at once, even mid-session.
   const sess = sessionFromRequest(req);
+  // A personal login or the owner's session ends at once when the password changed, the account was removed, or "sign out everywhere" was pressed.
+  if (sess && pathname.startsWith('/api/') && await authsec.revoked(sess)) return sendJSON(res, 401, { error: 'You were signed out. Please sign in again.' });
   // Someone who signed in with a temporary password may only choose a new one.
   if (sess && sess.mc === 1 && pathname.startsWith('/api/') && !['/api/auth/security', '/api/auth/password', '/api/access/me', '/api/login'].includes(pathname)) return sendJSON(res, 403, { error: 'Choose a new password first.', mustChange: true });
   // The owner-only list (backups and erasure, money, access, the switches): an Administrator who is not the owner is refused in one place.
@@ -3102,6 +3108,14 @@ async function route(req, res){
   if (tidyRoute) return sendJSON(res, 200, await tidyRoute(req));
   if (memberMatch && req.method === 'POST') return handleMemberUpdate(req, res, memberMatch[1]);
   if (pathname === '/api/cron/tick' && (req.method === 'POST' || req.method === 'GET')) return handleCron(req, res);
+  // The nightly off-site copy (.github/workflows/backup-export.yml): the same snapshot an administrator can download, fetched with the cron secret by GitHub, encrypted there
+  // and kept as a workflow artifact, so a restore never depends on one vendor.
+  if (pathname === '/api/cron/backup-export' && req.method === 'POST'){
+    const secret = process.env.CRON_SECRET; if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
+    if (!passwordMatches((/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '', secret)) return sendJSON(res, 401, { error: 'unauthorized' });
+    const snap = await backup.snapshot(); await redis([['SET', 'cg:backup:offsite', JSON.stringify({ at: new Date().toISOString(), keys: Object.keys(snap.data || {}).length })]]);
+    return sendJSON(res, 200, snap);
+  }
   // A check of the deployed app for the post-deploy smoke test (.github/workflows/smoke.yml): same secret as the cron call; tells the admin channel when it fails.
   if (pathname === '/api/smoke' && (req.method === 'POST' || req.method === 'GET')){
     const secret = process.env.CRON_SECRET; if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
@@ -3111,6 +3125,7 @@ async function route(req, res){
     await check('Systems', async () => { const bad = (await controlRoom.systems()).filter(x => x.level === 'bad'); if (bad.length) throw new Error(bad.map(x => `${x.name}: ${x.detail}`).join('; ')); return 'none red'; });
     await check('Monthly PDF', async () => { const b = await aiops.monthlyPdf(Date.now()); if (b.subarray(0, 5).toString() !== '%PDF-') throw new Error('not a PDF'); return `${b.length} bytes`; });
     await check('Public race data', async () => { const d = await controlRoom.publicRace(); if (!('teams' in d)) throw new Error('no teams field'); return 'ok'; });
+    await check('Sign-in', async () => { const r = await authsec.selfCheck(); if (r.unreadable.length) throw new Error(`${r.unreadable.length} authenticator(s) can no longer be opened: was AUTH_ENC_KEY changed?`); if (!r.levels.admin || !r.levels.mod) throw new Error(`${!r.levels.admin ? 'Administrator' : 'Moderator'} sign-in is not set up (password missing)`); return `${r.authenticators} authenticator(s) readable; owner ${r.levels.owner ? 'set' : 'not set'}`; });
     await check('Static pages', async () => { const fs = require('fs'), path = require('path'); for (const f of ['index.html', 'join.html', 'race.html', 'js/app.js', 'js/control.js']) if (!fs.existsSync(path.join(__dirname, '..', 'public', f))) throw new Error(`${f} is missing`); return 'present'; });
     const ok = checks.every(c => c.ok);
     if (!ok) await push.sendStaff({ title: 'CRYO-GEN: post-deploy check failed', body: checks.filter(c => !c.ok).map(c => c.name).join(', '), url: SITE_URL }).catch(() => {});
@@ -3252,7 +3267,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute){ const out = await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || access.routes[`${req.method} ${pathname}`] || selfService.routes[`${req.method} ${pathname}`] || authsec.routes[`${req.method} ${pathname}`] || seasonPlan.routes[`${req.method} ${pathname}`] || wpSync.routes[`${req.method} ${pathname}`] || siteFeed.routes[`${req.method} ${pathname}`] || wpProbe.routes[`${req.method} ${pathname}`] || launch.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || access.routes[`${req.method} ${pathname}`] || selfService.routes[`${req.method} ${pathname}`] || authsec.routes[`${req.method} ${pathname}`] || seasonPlan.routes[`${req.method} ${pathname}`] || wpSync.routes[`${req.method} ${pathname}`] || offboard.routes[`${req.method} ${pathname}`] || siteFeed.routes[`${req.method} ${pathname}`] || wpProbe.routes[`${req.method} ${pathname}`] || launch.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
   if (bigRoute){ const out = await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));

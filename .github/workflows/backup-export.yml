@@ -1,0 +1,40 @@
+# A nightly off-site copy of the club's data, so a restore never depends on one vendor. GitHub fetches the same snapshot an administrator can download (using the
+# CRON_SECRET repository secret), encrypts it with BACKUP_PASSPHRASE (another repository secret: keep a copy of it somewhere safe, it is the only way to open a copy),
+# and keeps it for 30 days as a workflow artifact. Decrypt with:
+#   openssl enc -d -aes-256-cbc -pbkdf2 -in cryogen-backup.json.gz.enc | gunzip > backup.json
+name: Off-site backup
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch, compress and encrypt the snapshot
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::The CRON_SECRET repository secret is not set."; exit 1; fi
+          if [ -z "$BACKUP_PASSPHRASE" ]; then echo "::error::The BACKUP_PASSPHRASE repository secret is not set (choose a long passphrase and keep a copy of it)."; exit 1; fi
+          for i in 1 2 3; do
+            code=$(curl -sS --max-time 120 -o snapshot.json -w '%{http_code}' -X POST -H "Authorization: Bearer $CRON_SECRET" "https://club.cryo-gen.team/api/cron/backup-export") || code=000
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 20
+          done
+          [ "$code" = "200" ] || { echo "::error::The snapshot could not be fetched."; exit 1; }
+          grep -q '"app":"cryogen-proxy"' snapshot.json || { echo "::error::The response is not a snapshot."; exit 1; }
+          gzip -9 snapshot.json
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -in snapshot.json.gz -out cryogen-backup.json.gz.enc
+          rm -f snapshot.json.gz
+          ls -l cryogen-backup.json.gz.enc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cryogen-backup-${{ github.run_number }}
+          path: cryogen-backup.json.gz.enc
+          retention-days: 30

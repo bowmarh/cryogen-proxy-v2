@@ -72,7 +72,7 @@ beforeEach(() => { app.world.db = {}; });
 
 test('through the app: the smoke endpoint needs the shared secret and reports every check; the audit trail fills as staff act; the Stripe webhook refuses unsigned calls', async () => {
   assert.equal((await app.call('POST', '/api/smoke', {})).status, 401);
-  const ok = await app.call('POST', '/api/smoke', { headers: { Authorization: 'Bearer cron-secret' } }); assert.equal(ok.status, 200); assert.ok(ok.body.ok, JSON.stringify(ok.body.checks)); assert.deepEqual(ok.body.checks.map(c => c.name), ['Storage', 'Systems', 'Monthly PDF', 'Public race data', 'Static pages']); assert.ok(ok.body.ok);
+  const ok = await app.call('POST', '/api/smoke', { headers: { Authorization: 'Bearer cron-secret' } }); assert.equal(ok.status, 200); assert.ok(ok.body.ok, JSON.stringify(ok.body.checks)); assert.deepEqual(ok.body.checks.map(c => c.name), ['Storage', 'Systems', 'Monthly PDF', 'Public race data', 'Sign-in', 'Static pages']); assert.ok(ok.body.ok);
   const tok = await app.login('owner'); await app.post('/api/mail/settings', { perHour: 40 }, { token: tok });
   const a = await app.get('/api/audit', { token: tok }); assert.equal(a.status, 200); assert.ok(a.body.entries.some(e => e.action === 'POST /api/mail/settings'));
   assert.equal((await app.get('/api/audit', { token: await app.login('mod') })).status, 403, 'only admins read the audit trail');
