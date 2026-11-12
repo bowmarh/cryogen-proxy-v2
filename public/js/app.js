@@ -1063,6 +1063,7 @@ function setupRole(){
   }
   if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; document.getElementById('nav-mail').style.display='flex'; document.getElementById('nav-aidesk').style.display='flex'; document.getElementById('nav-control').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
+  if(role==='member'&&window.captainInit) captainInit();
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
 }
@@ -1093,6 +1094,8 @@ function showTab(id,btn){
   if(id==='mail'&&window.mailLoad)mailLoad();
   if(id==='aidesk'&&window.aideskLoad)aideskLoad();
   if(id==='control'&&window.controlLoad)controlLoad();
+  if(id==='captain'&&window.captainLoad)captainLoad();
+  if(id==='profile'&&window.referralLoad)setTimeout(referralLoad,400);
   if(id==='coach'&&window.coachOpen)coachOpen();
   if(window.uiSeries) uiSeries(id);
 }

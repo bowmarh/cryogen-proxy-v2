@@ -13,7 +13,7 @@
 document.getElementById('f').addEventListener('submit', async e => {
   e.preventDefault(); const m = document.getElementById('msg'), v = id => document.getElementById(id).value; m.className = ''; m.textContent = 'Sending…';
   try {
-    const r = await fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: v('name'), email: v('email'), zwid: v('zwid'), note: v('note'), website: v('website'), consent: document.getElementById('consent').checked }) });
+    const r = await fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: v('name'), email: v('email'), zwid: v('zwid'), note: v('note'), website: v('website'), ref: new URLSearchParams(location.search).get('ref') || '', consent: document.getElementById('consent').checked }) });
     const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
     m.className = 'ok'; m.textContent = 'Thank you! A club volunteer will be in touch by email.'; document.getElementById('f').reset();
   } catch (x) { m.className = 'bad'; m.textContent = x.message; }

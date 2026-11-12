@@ -109,7 +109,7 @@ test('a club logo address that is not a picture falls back to the CRYO-GEN logo 
   await page.route('**/api/club/theme', r => r.fulfill({ json: { accent: '', welcome: '', logo: 'https://not-a-picture.invalid/home' } }));
   await signInAsRider(page, baseURL);
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].map(i => i.getAttribute('src')).join(','))).toMatch(/^(\/logo\.png,?)+$/);
-  expect(await page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].every(i => i.complete && i.naturalWidth > 0))).toBe(true);
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('img[data-brand]')].every(i => i.complete && i.naturalWidth > 0))).toBe(true);   // the picture may still be loading a moment after its address is set
 });
 
 test('one-tap looks set theme, accent, text size, colour-blind-safe categories and reduced motion together', async ({ page, baseURL }) => {

@@ -20,3 +20,21 @@ Members who have not linked Discord still get availability asks and line-up news
 
 ## Ride-cover webhook
 `RIDE_COVER_WEBHOOK_URL` may be a Zapier/Make webhook or a Discord webhook address. A Discord address is sent as a plain message.
+
+## Automatic results
+Control room → **Results**. Give the address of a results table: in Google Sheets use File → Share → Publish to web → choose the results tab and **Comma-separated values (.csv)**, copy the link. The first row must name the columns (Team, and Position and/or Points). On race day and the day after, the hourly job reads it and enters results (teams matched by name; other clubs' rows ignored) whenever the table has changed. Use **Test it now** first: it shows what would be entered and changes nothing. If the address stops working the admin channel is told once. The radio, team reports and the open race page follow from the entered results.
+
+## Feedback
+Everyone signed in sees a **💬 Something wrong?** button. Reports (with the page and the last script error) appear in Control room → **Feedback**, sorted into bug / request / question / praise with a priority; a high-priority bug also posts to the admin channel. Ten reports a day per person.
+
+## Captain page
+A rider who captains a ZRL team gets **🧢 My team**: answers, line-up and result for the next race, *Ask the unanswered on Discord* and *Suggest a line-up* (then *Set this line-up*). Captains only see their own team.
+
+## Invitations
+My Profile has **🤝 Invite a friend**: a personal link to the join page. Requests that come through it are credited to the rider (Control room → Join requests shows who invited whom and the top inviters). A forged code is ignored.
+
+## End of a round
+When every team has every result, the admin channel is told once. AI desk → **Certificate (PDF)** makes a printable certificate for the chosen team; the recognition post and the end-of-round team emails (with automatic reports on) follow as before.
+
+## Usage
+Control room → **Usage**: storage commands, AI spend and emails sent today against their budgets (amber at 80%, red at 100%; the admin channel is told once at each, and the Systems list shows anything over 80%). Set the AI budget under Admin → Supporters and the email limits under Email → Settings.

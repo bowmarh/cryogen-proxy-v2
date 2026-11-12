@@ -52,3 +52,12 @@ test('the public pages load: the club page, the open race page, the join form an
   for (const p of ['/club.html', '/race.html', '/join.html', '/live.html']) { const r = await page.goto(baseURL + p); expect(r && r.status(), p).toBe(200); await page.waitForTimeout(300); }
   expect(errors).toEqual([]);
 });
+
+test('the feedback button sends what was typed with the page it was sent from; a rider who is not a captain sees no team page', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  const sent = {}; await page.route('**/api/feedback', r => { sent.body = r.request().postDataJSON(); r.fulfill({ json: { ok: true } }); });
+  await expect(page.locator('#fb-btn')).toBeVisible({ timeout: 8000 }); await expect(page.locator('#nav-captain')).toBeHidden();
+  await page.locator('#fb-btn').click(); await page.locator('#fb-text').fill('The buttons are not working'); await page.locator('#fb-send').click();
+  await expect(page.locator('#fb-msg')).toContainText('Thank you'); expect(sent.body.text).toBe('The buttons are not working'); expect(typeof sent.body.page).toBe('string');
+});
