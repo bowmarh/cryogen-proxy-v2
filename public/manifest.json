@@ -5,14 +5,73 @@
   "id": "/",
   "start_url": "/",
   "lang": "en-GB",
-  "categories": ["sports", "social"],
+  "categories": [
+    "sports",
+    "social"
+  ],
   "orientation": "any",
   "scope": "/",
   "display": "standalone",
   "background_color": "#060a14",
   "theme_color": "#060a14",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "This week",
+      "short_name": "This week",
+      "url": "/?tab=week",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Control room",
+      "short_name": "Control room",
+      "url": "/?tab=control",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Email",
+      "short_name": "Email",
+      "url": "/?tab=mail",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "My team",
+      "short_name": "My team",
+      "url": "/?tab=captain",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }
