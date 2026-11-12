@@ -98,7 +98,7 @@ test('progress cards: nothing without activity, numbers only to the AI, once per
   const seasons = { 1: { zrl: { placed: true, round: 'Round 2', team: 'Alpha', races: 3, picked: 3, points: 70, podiums: 1 }, highlights: ['🏁 Raced every ZRL race so far'] }, 2: {} };
   const ai = { available: async () => true, clip: (v, n) => String(v).slice(0, n), complete: async o => { seen.push(o.user); return 'You are flying.'; } };
   const mail = { everyone: async () => ({ list: [{ z: '1', n: 'Ann Lee', e: 'a@x' }, { z: '2', n: 'Bo Dunn', e: 'b@x' }] }), sendTo: async m => sent.push(m) };
-  const p = createProgress({ redis, HttpError, requireRole: () => {}, mail, seasonOf: async m => seasons[m.zwid] || {}, ai, siteUrl: 'https://club.test' });
+  const p = createProgress({ redis, HttpError, requireRole: () => {}, mail, seasonOf: async m => seasons[m.zwid] || {}, ai, siteUrl: 'https://club.test', eligible: async z => z !== '3' });
   assert.deepEqual(await p.run(Date.parse('2026-11-03T10:00:00Z')), [], 'off by default'); await p.routes['POST /api/aiops/progress-settings']({}, { on: true });
   assert.deepEqual(await p.run(Date.parse('2026-11-20T10:00:00Z')), [], 'only in the first week of the month'); assert.deepEqual(await p.run(Date.parse('2026-11-03T07:00:00Z')), [], 'not before 9 in the morning');
   assert.deepEqual(await p.run(Date.parse('2026-11-03T10:00:00Z')), ['progress-1']); assert.equal(sent.length, 1); assert.match(sent[0].body, /Hi \{first\},[\s\S]*ZRL Round 2 with Alpha: raced 3 of 3 races so far, 70 team points, 1 podium\.[\s\S]*You are flying\./); assert.equal(sent[0].category, 'news');
@@ -114,4 +114,12 @@ test('the open race page shows team results and the radio only; join requests ge
   await j.submit({ name: 'New Rider', email: 'n@x.test', zwid: '24650', consent: true }, '9.9.9.9'); await j.submit({ name: 'No Id', email: 'o@x.test', consent: true }, '8.8.8.8');
   const list = await j.list(), withId = list.find(x => x.zwid === '24650'); assert.deepEqual([withId.look.category, withId.look.vELO, withId.look.teams[0].name], ['B', 1500, 'Bravo']); assert.equal(list.find(x => !x.zwid).look, null);
   await j.routes['POST /api/join/decide']({}, { id: withId.id, action: 'welcome' }); assert.match(sent[0].body, /2026-11-17 ZRL: Race 3/);
+});
+
+test('progress cards go to Racing members only: a Standard or Social member is skipped without a card', async () => {
+  const createProgress = require('../lib/progress'), { redis } = mem(), sent = [];
+  const mail = { everyone: async () => ({ list: [{ z: '1', n: 'Ann', e: 'a@x' }, { z: '3', n: 'Cy', e: 'c@x' }] }), sendTo: async m => sent.push(m.zwid) };
+  const seasons = { 1: { zrl: { placed: true, round: 'R', team: 'A', races: 1, picked: 1, points: 5, podiums: 0 } }, 3: { zrl: { placed: true, round: 'R', team: 'A', races: 1, picked: 1, points: 5, podiums: 0 } } };
+  const p = createProgress({ redis, HttpError, requireRole: () => {}, mail, seasonOf: async m => seasons[m.zwid], ai: null, siteUrl: 'https://club.test', eligible: async z => z === '1' });
+  await p.routes['POST /api/aiops/progress-settings']({}, { on: true }); await p.run(Date.parse('2026-11-03T10:00:00Z')); assert.deepEqual(sent, ['1']);
 });

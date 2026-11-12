@@ -8,7 +8,7 @@ h.setEnv();
 let app, admin, world;
 before(async () => {
   world = h.createWorld(); world.members = world.members.filter(m => m.status !== 'left');
-  app = await h.startApp(world); admin = { token: await app.login('admin') };
+  app = await h.startApp(world); admin = { token: await app.login('owner') };
 });
 after(() => { delete process.env.ANTHROPIC_API_KEY; return app.close(); });
 beforeEach(() => { world.anthropic = { reply: 'Spin easy.', status: 200, seen: [] }; process.env.ANTHROPIC_API_KEY = 'sk-test'; app.world.db = {}; });

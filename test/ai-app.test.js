@@ -10,7 +10,7 @@ const CATS = ['Ruby', 'Ruby', 'Emerald', 'Emerald', 'Sapphire', 'Sapphire', 'Sap
 before(async () => {
   world = h.createWorld({ riders: CATS.map((cat, i) => ({ riderId: 3000 + i, name: `Squad ${i}`, country: 'gb', zpCategory: 'B', zpFTP: 250, power: { wkg300: 4 - i * 0.1, wkg1200: 3.4 - i * 0.1 }, race: { current: { rating: 1500 - i * 50, mixed: { category: cat } } } })) });
   world.members = world.members.filter(m => m.status !== 'left');
-  app = await h.startApp(world); admin = { token: await app.login('admin') }; mod = { token: await app.login('mod') };
+  app = await h.startApp(world); admin = { token: await app.login('owner') }; mod = { token: await app.login('mod') };
 });
 after(() => { delete process.env.ANTHROPIC_API_KEY; return app.close(); });
 beforeEach(() => { world.anthropic = { reply: 'ok', status: 200, seen: [] }; process.env.ANTHROPIC_API_KEY = 'sk-test'; });

@@ -7,7 +7,7 @@ h.setEnv();
 let app, admin, ann, bo;
 before(async () => {
   app = await h.startApp(h.createWorld());
-  admin = await app.login('admin'); ann = await app.memberSession('2000', { name: 'Ann Lee' }); bo = await app.memberSession('2001', { name: 'Bo Dunn' });
+  admin = await app.login('owner'); ann = await app.memberSession('2000', { name: 'Ann Lee' }); bo = await app.memberSession('2001', { name: 'Bo Dunn' });
 });
 after(() => app.close());
 beforeEach(() => {

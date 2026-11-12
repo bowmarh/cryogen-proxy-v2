@@ -61,3 +61,17 @@ test('the feedback button sends what was typed with the page it was sent from; a
   await page.locator('#fb-btn').click(); await page.locator('#fb-text').fill('The buttons are not working'); await page.locator('#fb-send').click();
   await expect(page.locator('#fb-msg')).toContainText('Thank you'); expect(sent.body.text).toBe('The buttons are not working'); expect(typeof sent.body.page).toBe('string');
 });
+
+for (const who of ['owner', 'admin']) {
+  test(`the ${who} sees the right level badge and the access tab; only the owner can change a member's type or see the audit trail`, async ({ page, baseURL }) => {
+    const tok = (await (await page.request.post('/api/login', { data: { role: who, password: who === 'owner' ? h.BASE_ENV.OWNER_PASSWORD : h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+    await page.addInitScript(([t, owner]) => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); if (owner) sessionStorage.setItem('owner', '1'); } }, [tok, who === 'owner']);
+    await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
+    await expect(page.locator('#role-badge')).toHaveText(who === 'owner' ? 'Owner' : 'Administrator');
+    await page.locator('#nav-control').click(); await page.getByRole('tab', { name: /Access/ }).click();
+    await expect(page.locator('#control-content')).toContainText('Who can do what'); await expect(page.locator('#control-content')).toContainText('Backups: make, download and restore');
+    await page.evaluate(() => window.controlAccessSearch && controlAccessSearch());
+    await expect(page.getByRole('tab', { name: /Audit/ })).toHaveCount(who === 'owner' ? 1 : 0);
+    if (who === 'owner') await expect(page.locator('#control-content select').first()).toBeVisible(); else await expect(page.locator('#control-content select')).toHaveCount(0);
+  });
+}

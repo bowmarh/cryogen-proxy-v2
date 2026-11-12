@@ -9,7 +9,7 @@ let app, admin, mod;
 before(async () => {
   const world = h.createWorld();
   world.members = world.members.filter(m => m.status !== 'left');
-  app = await h.startApp(world); admin = await app.login('admin'); mod = await app.login('mod');
+  app = await h.startApp(world); admin = await app.login('owner'); mod = await app.login('mod');
 });
 after(() => app.close());
 
