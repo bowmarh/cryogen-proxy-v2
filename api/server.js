@@ -209,6 +209,7 @@ function redisConfig(){
 // Each running copy of the app counts its own, so the totals are a floor, not an exact bill.
 const usage = { redis: 0, discord: 0 };
 async function redisRaw(commands){
+  if (!commands || !commands.length) return [];   // an empty pipeline is a 400 from Upstash ("ERR empty pipeline request"); nothing to do
   const cfg = redisConfig();
   usage.redis += commands.length;
   // The Upstash REST settings are the normal way in. REDIS_URL (redis:// or rediss://) is used over TCP only when there are no REST settings, or when
