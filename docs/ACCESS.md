@@ -43,3 +43,14 @@ The header badge shows the real level ("Owner", "Captain · Racing", "Social" �
 - **My details** (everyone who is a member, Social included): choose how the club emails you, the first name used in emails, and ask for a change or to leave. Changes to the club's website records are requests a volunteer applies (Control room → Member requests); an Administrator can mark a leaver as left in one click.
 - **My plan** (Standard, Racing, Captain): a season-long training plan built from your FTP.
 - **Owner-only switches:** WordPress account creation and standings posts to the website.
+
+## Signing in safely: authenticator app, forgotten passwords
+
+| Who | Password | Authenticator app | If they forget |
+|---|---|---|---|
+| Owner | `OWNER_PASSWORD` (Vercel) | Optional, set up under Control room → Security | Change `OWNER_PASSWORD` in Vercel (signs the owner out everywhere). Lost phone: recovery code, or set `OWNER_2FA_OFF=1` for one sign-in, then remove it |
+| Staff with a personal login | Their own (they must choose it at first sign-in) | Optional, or required for all staff if the owner switches that rule on | "Forgot your password?" on the sign-in page emails a link (needs an email address on the account and Email switched on; single use, 30 minutes). Otherwise the owner resets it (temporary password, must be changed) and can reset the authenticator |
+| Shared Administrator / Moderator password | `ADMIN_PASSWORD` / `MOD_PASSWORD` | Not possible (shared) | Owner changes it in Vercel. The owner can switch a shared password off once a personal Administrator exists |
+| Members | Their cryogen.team (WordPress) account | Managed by WordPress | "Forgot or reset my password" link under My details and on the sign-in page |
+
+Recovery codes (10, one use each) are shown once when the authenticator is turned on. Secrets are stored encrypted (set `AUTH_ENC_KEY` in Vercel to keep the key outside the database). Sessions last up to 12 hours; a password change does not end sessions already open on other devices.
