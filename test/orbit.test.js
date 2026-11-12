@@ -123,3 +123,9 @@ test('progress cards go to Racing members only: a Standard or Social member is s
   const p = createProgress({ redis, HttpError, requireRole: () => {}, mail, seasonOf: async m => seasons[m.zwid], ai: null, siteUrl: 'https://club.test', eligible: async z => z === '1' });
   await p.routes['POST /api/aiops/progress-settings']({}, { on: true }); await p.run(Date.parse('2026-11-03T10:00:00Z')); assert.deepEqual(sent, ['1']);
 });
+
+test('the Control room reuses its systems list for five minutes, so an open tab does not re-run every check each refresh', async () => {
+  const { redis } = mem(); let pings = 0; const counting = async c => { pings += c.length; return redis(c); };
+  const cr = createControlRoom({ redis: counting, requireRole: () => {}, zrl: { load: async () => ({ round: null }) }, aiops: { settings: async () => ({ radio: { on: false } }), feed: async () => [] }, mail: null, join: null, gsheets: { status: () => ({ configured: false }) }, ai: { enabled: () => false, available: async () => false } });
+  await cr.overview(); const first = pings; await cr.overview(); await cr.overview(); assert.ok(pings - first < first, `later refreshes cost less than the first (${first} then ${pings - first})`); assert.equal((await cr.systemsCached(0)).length > 0, true, 'a zero ttl asks afresh');
+});

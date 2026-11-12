@@ -92,9 +92,9 @@ test('until an owner password exists, administrators keep the owner\'s powers (n
   try {
     assert.equal((await app.post('/api/mail/settings', { perHour: 41 }, { token: tokens.admin })).status, 200, 'an administrator can still change the switches');
     assert.equal((await call('admin', 'GET', '/api/access/me')).body.level, 'Administrator', 'but is not called the owner');
-    const sys = (await call('admin', 'GET', '/api/control')).body.systems.find(s => s.name === 'Owner login'); assert.equal(sys.level, 'warn'); assert.match(sys.detail, /Add OWNER_PASSWORD/);
+    const sys = (await call('admin', 'GET', '/api/control?fresh=1')).body.systems.find(s => s.name === 'Owner login'); assert.equal(sys.level, 'warn'); assert.match(sys.detail, /Add OWNER_PASSWORD/);
     assert.equal((await call('mod', 'POST', '/api/mail/settings', {})).status, 403, 'a moderator never gets it');
   } finally { process.env.OWNER_PASSWORD = saved; }
   assert.equal((await call('admin', 'POST', '/api/mail/settings', { perHour: 42 })).status, 403, 'with the owner password set, administrators are refused again');
-  assert.equal((await call('admin', 'GET', '/api/control')).body.systems.find(s => s.name === 'Owner login').level, 'ok');
+  assert.equal((await call('admin', 'GET', '/api/control?fresh=1')).body.systems.find(s => s.name === 'Owner login').level, 'ok');
 });

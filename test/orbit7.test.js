@@ -24,7 +24,7 @@ test('automatic results: only on race day and the day after, only when the table
   assert.deepEqual(await ar.tick(race + DAY + 3600000), ['autoresults-0'].slice(1), 'the day after a race the same table (week 0) is still unchanged');
   status = 503; csv = 'x'; await ar.tick(race + 20 * 3600000); await ar.tick(race + 21 * 3600000); assert.equal(posts.filter(p => /could not be read/.test(p)).length, 1, 'the same error is told once');
   const st = await ar.routes['GET /api/autoresults']({}); assert.equal(st.last.ok, false); assert.match(st.last.note, /HTTP 503/);
-  status = 200; csv = '<html><body>sign in</body></html>'; await ar.tick(race + 22 * 3600000); assert.match((await ar.routes['GET /api/autoresults']({})).last.note, /web page, not a CSV/);
+  status = 200; csv = '<html><body>sign in</body></html>'; await ar.tick(race + 22 * 3600000); assert.match((await ar.routes['GET /api/autoresults']({})).last.note, /web page with no results table/);
   const off = createAutoResults({ redis: mem().redis, HttpError, requireRole: () => {}, zrl, asStaff: () => ({}), fetchImpl: async () => { throw new Error('must not fetch'); } }); assert.deepEqual(await off.tick(race), [], 'off by default');
 });
 
