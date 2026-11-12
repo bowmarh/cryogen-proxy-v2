@@ -74,3 +74,44 @@ test('through the app: the join form is public and queues a request for staff; t
   const ctl = await app.get('/api/control', { token: tok }); assert.equal(ctl.status, 200); assert.ok(ctl.body.systems.some(s => s.name === 'Storage'));
   assert.equal((await app.get('/api/control', { token: await app.memberSession('1002') })).status, 401);
 });
+
+test('the PDF writer makes a valid file: header, correct cross-reference offsets, text and bars, and odd characters become "?"', () => {
+  const { buildPdf } = require('../lib/pdf'), buf = buildPdf([{ items: [{ t: 'rect', x: 10, y: 10, w: 50, h: 5, color: [0, 0.5, 1] }, { t: 'text', x: 20, y: 700, size: 12, bold: true, text: 'Alpha (1st) \\ ✓' }] }, { items: [] }]), txt = buf.toString('latin1');
+  assert.match(txt, /^%PDF-1\.4/); assert.match(txt, /\/Count 2/); assert.match(txt, /Alpha \\\(1st\\\) \\\\ \?/); assert.ok(txt.trimEnd().endsWith('%%EOF'));
+  const start = Number(/startxref\n(\d+)/.exec(txt)[1]); assert.equal(txt.slice(start, start + 4), 'xref');
+  const entries = [...txt.slice(start).matchAll(/(\d{10}) 00000 n/g)].map(m => Number(m[1])); entries.forEach((off, i) => assert.equal(txt.slice(off, off + `${i + 1} 0 obj`.length), `${i + 1} 0 obj`, 'every object starts where the table says'));
+});
+
+test('Discord availability asks reach riders who have not answered and say who could not be reached; a proposed line-up is applied through the ZRL route', async () => {
+  const { db, redis } = mem(), asked = [], applied = [];
+  const zrl = { ...zrlStub(db), availOf: (w, wk, z) => (z === '1' ? 'yes' : ''), routes: { 'POST /api/zrl/lineup': async (req, b) => applied.push(b) } };
+  const o = createAiOps({ redis, HttpError, requireRole: () => 'admin', staffNameOf: () => 'R', ai: { enabled: () => false, available: async () => false, clip: String, json: JSON.parse }, zrl, tidy: { analyse: async () => ({ inactive: [] }) }, fetchRoster: async () => ({ riders: [] }), publicClub: async () => ({}), digest: async () => ({}), discord: async () => true,
+    notify: async (z, text, opt) => { asked.push([z, text, opt.key, opt.components]); return z !== '3'; }, buttons: (s, id) => `buttons:${s}:${id}`, siteUrl: 'https://club.test' });
+  const r = await o.routes['POST /api/aiops/discord-ask']({}, { team: 't1', week: 1 }); assert.deepEqual([r.reached, r.answered, r.unreachable], [1, 1, ['Cy Ray']]);
+  assert.deepEqual(asked.map(a => a[0]), ['2', '3'], 'the rider who already answered is not asked again'); assert.equal(asked[0][3], 'buttons:zrl:1:t1'); assert.match(asked[0][1], /Hi Bo, can you race for Alpha in race 2 of Round 2/);
+  await o.routes['POST /api/aiops/lineup-apply']({}, { team: 't1', week: 1, zwids: ['1', '2'] }); assert.deepEqual(applied, [{ team: 't1', week: 1, zwids: ['1', '2'] }]);
+  await assert.rejects(() => o.routes['POST /api/aiops/lineup-apply']({}, { team: 't1', week: 1, zwids: [] }), /no line-up/);
+});
+
+test('progress cards: nothing without activity, numbers only to the AI, once per rider per month in the first week, only when switched on', async () => {
+  const createProgress = require('../lib/progress'), { redis } = mem(), sent = [], seen = [];
+  const seasons = { 1: { zrl: { placed: true, round: 'Round 2', team: 'Alpha', races: 3, picked: 3, points: 70, podiums: 1 }, highlights: ['🏁 Raced every ZRL race so far'] }, 2: {} };
+  const ai = { available: async () => true, clip: (v, n) => String(v).slice(0, n), complete: async o => { seen.push(o.user); return 'You are flying.'; } };
+  const mail = { everyone: async () => ({ list: [{ z: '1', n: 'Ann Lee', e: 'a@x' }, { z: '2', n: 'Bo Dunn', e: 'b@x' }] }), sendTo: async m => sent.push(m) };
+  const p = createProgress({ redis, HttpError, requireRole: () => {}, mail, seasonOf: async m => seasons[m.zwid] || {}, ai, siteUrl: 'https://club.test' });
+  assert.deepEqual(await p.run(Date.parse('2026-11-03T10:00:00Z')), [], 'off by default'); await p.routes['POST /api/aiops/progress-settings']({}, { on: true });
+  assert.deepEqual(await p.run(Date.parse('2026-11-20T10:00:00Z')), [], 'only in the first week of the month'); assert.deepEqual(await p.run(Date.parse('2026-11-03T07:00:00Z')), [], 'not before 9 in the morning');
+  assert.deepEqual(await p.run(Date.parse('2026-11-03T10:00:00Z')), ['progress-1']); assert.equal(sent.length, 1); assert.match(sent[0].body, /Hi \{first\},[\s\S]*ZRL Round 2 with Alpha: raced 3 of 3 races so far, 70 team points, 1 podium\.[\s\S]*You are flying\./); assert.equal(sent[0].category, 'news');
+  assert.ok(!/Ann|Alpha/.test(seen[0]), 'no names go to the AI'); assert.deepEqual(await p.run(Date.parse('2026-11-04T10:00:00Z')), [], 'once each, and a rider with nothing to report is skipped');
+});
+
+test('the open race page shows team results and the radio only; join requests get a first look from the racing data and a welcome that lists what is coming up', async () => {
+  const { redis } = mem(), cr = createControlRoom({ redis, requireRole: () => {}, zrl: { ...zrlStub({}), load: async () => ({ round: { ...ROUND, start: '2030-01-07' }, signups: SIGN, assign: { k1: ['t1'], k2: ['t1'], k3: ['t1'] } }), loadWeekly: async () => ({ avail: { '0:1': 'yes' }, lineup: {} }), loadResults: async () => ({ '0:t1': { pos: 1, pts: 30 } }), availOf: () => 'yes' },
+    aiops: { settings: async () => ({ radio: { on: true } }), feed: async () => [{ at: 'x', team: 'Alpha', text: 'Alpha 1st', secret: 'no' }] }, mail: null, join: null, gsheets: { status: () => ({ configured: false }) }, ai: { enabled: () => false, available: async () => false }, backup: { healthRow: async () => ['warn', '1 daily copy kept; the last was 80 h ago.'] } });
+  const pub = await cr.publicRace(); assert.deepEqual(Object.keys(pub.teams[0]).sort(), ['name', 'result']); assert.deepEqual(pub.feed, [{ at: 'x', text: 'Alpha 1st' }]); assert.ok(!JSON.stringify(pub).includes('yes'), 'no answers or names on the open page');
+  const sys = await cr.systems(); assert.deepEqual([sys[0].name, sys[0].level], ['Backups', 'bad'], 'an old backup is a problem, listed first');
+  const { redis: r2 } = mem(), sent = [], j = createJoin({ redis: r2, HttpError, requireRole: () => {}, mail: { sendDirect: async m => sent.push(m) }, lookup: async z => (z === '24650' ? { category: 'B', vELO: 1500 } : null), teamsWithSpace: async () => [{ name: 'Bravo', grade: 'B', places: 2 }], nextEvents: async () => [{ series: 'ZRL', title: 'Race 3', date: '2026-11-17' }], siteUrl: 'https://club.test', hashIp: s => s });
+  await j.submit({ name: 'New Rider', email: 'n@x.test', zwid: '24650', consent: true }, '9.9.9.9'); await j.submit({ name: 'No Id', email: 'o@x.test', consent: true }, '8.8.8.8');
+  const list = await j.list(), withId = list.find(x => x.zwid === '24650'); assert.deepEqual([withId.look.category, withId.look.vELO, withId.look.teams[0].name], ['B', 1500, 'Bravo']); assert.equal(list.find(x => !x.zwid).look, null);
+  await j.routes['POST /api/join/decide']({}, { id: withId.id, action: 'welcome' }); assert.match(sent[0].body, /2026-11-17 ZRL: Race 3/);
+});

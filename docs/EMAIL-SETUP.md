@@ -86,3 +86,12 @@ To have replies arrive automatically, set `MAIL_INBOUND_SECRET` in Vercel and po
 - **Season so far:** same place, *Season so far* previews a team's summary (all races entered), and an administrator can email it to the team. With *email each team automatically* on, it is sent once when a team's results are complete.
 - **Join page:** share `https://<your site>/join.html`. Requests wait in **Control room → Join requests**; an administrator sends the welcome email (or declines). It does not create a WordPress account: add the person in WordPress too.
 - **Watchdog:** the hourly job checks storage, email, member addresses, Google and the AI and posts to the admin Discord channel when something goes red, once per change, and again when it recovers.
+
+## 10. Discord asks, proposed line-ups, the open race page, progress cards, the monthly report
+
+- **Control room → each team row:** *Suggest* proposes a line-up (yes, then maybe, then rating) with an *Apply this line-up* button; *Ask on Discord* sends each unanswered rider the Yes / Maybe / No buttons by DM (riders without a linked Discord are listed, ask them by email); *Ask by email* makes the one-tap email draft.
+- **Open race page:** share `https://<your site>/race.html`. It shows team results and the radio's words only, and follows the same on/off switch as the public club page. It updates every 30 seconds.
+- **Rider progress cards:** AI desk → *Rider progress cards*. Off by default. When on, each rider with something to report gets one card in the first week of the month (10 per run), unless they opted out of club news. Preview any rider by Zwift ID first.
+- **Join requests:** requests that include a Zwift ID show the rider's category, rating and the ZRL teams that still have places; the welcome email lists the next three events.
+- **Monthly club report:** AI desk → *Download the report (PDF)*: key numbers, ZRL standings as bars, what is coming up. No rider names.
+- **Backups:** the Control room's Systems list now includes the backup status (a stale copy or a failed restore test shows red and alerts the admin channel through the watchdog).
