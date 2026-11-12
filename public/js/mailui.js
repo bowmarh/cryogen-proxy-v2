@@ -14,7 +14,13 @@
   }
   const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   const say = (m, bad) => { note = m ? `<div role="status" style="margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;background:${bad ? 'rgba(248,113,113,.12);color:#fca5a5' : 'rgba(52,211,153,.12);color:#6ee7b7'}">${E(m)}</div>` : ''; };
-  async function act(label, fn) { busy = label; render(); try { await fn(); } catch (e) { say(e.message, true); } busy = ''; render(); }
+  // Keeps what is typed in the write form (so a redraw does not wipe it) and starts the action BEFORE the page is redrawn: the action reads the
+  // form fields in its first lines, and a redraw first would reset them to what was last saved.
+  function capture() { if (view === 'write' && document.getElementById('mail-subject') && !(cur && cur.status && cur.status !== 'draft')) cur = { ...(cur || { status: 'draft' }), subject: val('mail-subject'), body: val('mail-body'), category: val('mail-cat') || 'news', audience: audFromForm() }; }
+  async function act(label, fn) {
+    capture(); let p; try { p = fn(); } catch (e) { p = Promise.reject(e); }
+    busy = label; render(); try { await p; } catch (e) { say(e.message, true); } busy = ''; render();
+  }
 
   async function open() {
     const el = root(); if (!el) return;
