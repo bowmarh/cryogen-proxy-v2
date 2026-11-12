@@ -1921,6 +1921,9 @@ async function fetchRoster(){
 // "Half" and "associate" are the same membership: WordPress records still saying half are read as associate everywhere in the app.
 const normTier = t => (String(t || '').toLowerCase() === 'half' ? 'associate' : t);
 
+// Whether WordPress holds the value that was sent. WordPress stores the associate tier as 'half'.
+const savedAs = (k, got, sent) => (k === 'tier' ? normTier(got) === normTier(sent) : String(got) === String(sent));
+
 function uniqueMembers(list){
   const byId = new Map();
   for (const m of Array.isArray(list) ? list : []){
@@ -2011,7 +2014,7 @@ async function handleMemberBulk(req, res){
     const after = new Map(uniqueMembers(await wpGet('/members', auth)).map(m => [String(m.zwift_id), m]));
     for (const r of results) {
       if (!r.ok) continue;
-      const missed = Object.keys(changes).filter(k => String(after.get(r.zwid)?.[k]) !== changes[k] && String((echoed.get(r.zwid) || {})[k]) !== changes[k]);
+      const missed = Object.keys(changes).filter(k => !savedAs(k, after.get(r.zwid)?.[k], changes[k]) && !savedAs(k, (echoed.get(r.zwid) || {})[k], changes[k]));
       if (missed.length){ r.ok = false; r.error = `WordPress did not keep the change (${missed.join(', ')})`; }
     }
   }
@@ -2052,7 +2055,7 @@ async function handleMemberUpdate(req, res, zwiftId){
   // WordPress echoes the fields it applied (e.g. {"ok":true,"id":1,"tier":"half"}); that counts as saved too.
   let echoed = {};
   try { echoed = JSON.parse(replyText) || {}; } catch (e) { /* not JSON */ }
-  const missed = Object.keys(changes).filter(k => String(after?.[k]) !== changes[k] && String(echoed[k]) !== changes[k]);
+  const missed = Object.keys(changes).filter(k => !savedAs(k, after?.[k], changes[k]) && !savedAs(k, echoed[k], changes[k]));
   if (missed.length){
     // The plugin's fields aren't documented, so say what was sent and what came back (no secrets in any of it).
     throw new HttpError(502, `WordPress accepted the request but didn't save: ${missed.join(', ')}. ` +

@@ -33,3 +33,15 @@ test('unsigned, wrongly signed and replayed pings are refused', async () => {
   const old = { event: 'member_updated', ts: now() - 3600 };
   assert.equal((await ping(old)).status, 401);
 });
+
+test('an associate tier saved by WordPress as "half" counts as saved (plugin 1.24.6 stores both names as half)', async () => {
+  const rec = world.members.find(m => m.tier === 'full') || world.members[0];
+  world.patchApply = (r, body) => Object.assign(r, body, body.tier === 'associate' ? { tier: 'half' } : {});
+  world.patchEcho = [];   // nothing echoed: the check must rely on the re-read
+  const token = await app.login('admin');
+  const r = await app.post(`/api/members/${rec.zwift_id}`, { tier: 'associate' }, { token });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(rec.tier, 'half');
+  const bulk = await app.post('/api/members/bulk', { zwids: [String(rec.zwift_id)], changes: { tier: 'associate' } }, { token });
+  assert.equal(bulk.body.saved, 1, JSON.stringify(bulk.body));
+});
