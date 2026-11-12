@@ -1866,8 +1866,37 @@ async function loadRiders(){
   }
 }
 
+// Two-way member sync. WordPress tells the app the moment a member record changes (POST /api/wp/members-changed, signed with
+// WP_SYNC_SECRET), and every save the app makes bumps the same marker. Each server instance keeps its own short cache, so the marker
+// lives in shared storage: an instance whose copy is older than the last change reads WordPress again instead of waiting out the TTL.
+const MEMBERS_VER_KEY = 'cg:members:ver';
+async function membersChangedAt(){
+  try { const [v] = await redis([['GET', MEMBERS_VER_KEY]]); return Number(v) || 0; } catch (e) { return 0; }
+}
+async function markMembersChanged(){
+  rosterCache = null;
+  await redis([['SET', MEMBERS_VER_KEY, String(Date.now()), 'EX', '2592000']]).catch(() => {});
+}
+
+// WordPress -> app push. Body: JSON {event, zwift_id?, ts}; header X-Cryogen-Signature: hex HMAC-SHA256(WP_SYNC_SECRET, raw body).
+// Requests older than five minutes are refused so a captured one can't be replayed later.
+const WP_SYNC_MAX_SKEW_MS = 5 * 60 * 1000;
+async function handleWpMembersChanged(req, res){
+  const secret = process.env.WP_SYNC_SECRET;
+  if (!secret) return sendJSON(res, 503, { error: 'WP_SYNC_SECRET is not set' });
+  const raw = await readRawBody(req, 5000);
+  const sig = String(req.headers['x-cryogen-signature'] || '');
+  const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return sendJSON(res, 401, { error: 'bad signature' });
+  let body; try { body = JSON.parse(raw); } catch (e) { return sendJSON(res, 400, { error: 'not JSON' }); }
+  const ts = Number(body.ts) * 1000;
+  if (!ts || Math.abs(Date.now() - ts) > WP_SYNC_MAX_SKEW_MS) return sendJSON(res, 401, { error: 'stale request' });
+  await markMembersChanged();
+  sendJSON(res, 200, { ok: true });
+}
+
 async function fetchRoster(){
-  if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache;
+  if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS && await membersChangedAt() <= rosterCache.at) return rosterCache;
   const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
     ? `${process.env.WP_API_USER}:${process.env.WP_API_APP_PASSWORD}` : null;
   const [club, members] = await Promise.allSettled([
@@ -1977,7 +2006,7 @@ async function handleMemberBulk(req, res){
       } catch (e) { results.push({ zwid: z, ok: false, error: e.message }); }
     }));
   }
-  rosterCache = null;
+  if (results.some(r => r.ok)) await markMembersChanged(); else rosterCache = null;
   if (results.some(r => r.ok)){
     const after = new Map(uniqueMembers(await wpGet('/members', auth)).map(m => [String(m.zwift_id), m]));
     for (const r of results) {
@@ -2030,7 +2059,7 @@ async function handleMemberUpdate(req, res, zwiftId){
       `Patched /members/${recordId} with ${JSON.stringify(changes)}; WordPress replied ${replyText.slice(0, 200)}; ` +
       `record fields: ${Object.keys(record).join(', ')}.`);
   }
-  rosterCache = null;
+  await markMembersChanged();
   sendJSON(res, 200, { member: { ...pick(after, MEMBER_VIEW_KEYS), ...changes } });
 }
 
@@ -2337,6 +2366,11 @@ async function healthChecks(){
       // GitHub's own schedule often runs hours apart, so a gap alone is a warning; a day of silence is a failure.
       return [age <= 26 * 3600000 ? 'warn' : 'fail', `Last scheduled run ${ago(age)}. Expected every 15 minutes: without a QStash schedule (see README) the TTT only runs on time when someone opens the page.`];
     }),
+    run('wpsync', 'Member sync from cryogen.team', async () => {
+      if (!process.env.WP_SYNC_SECRET) return ['warn', 'WP_SYNC_SECRET is not set, so edits made on cryogen.team take up to 5 minutes to show here.'];
+      const at = await membersChangedAt();
+      return ['ok', at ? `On. Last member change seen ${new Date(at).toISOString()}.` : 'On. No member change has been received yet.'];
+    }),
     run('signin', 'Member sign-in (cryogen.team)', async () => process.env.WP_SSO_SECRET
       ? ['ok', 'On. Riders can sign in with their cryogen.team account.']
       : ['warn', 'WP_SSO_SECRET is not set, so the sign-in button is hidden.']),
@@ -2544,7 +2578,7 @@ async function wpSaveMember(zwiftId, changes){
     body: JSON.stringify(changes),
   });
   if (!r.ok) throw new HttpError(502, `WordPress refused the change (${r.status}).`);
-  rosterCache = null;
+  await markMembersChanged();
   return true;
 }
 const assoc = require('../lib/assoc')({
@@ -2918,7 +2952,7 @@ async function wpSetMemberStatus(zwid, status){
   const rec = uniqueMembers(await wpGet('/members', auth)).find(m => String(m.zwift_id) === String(zwid)); if (!rec) throw new HttpError(404, 'This rider has no member record in WordPress.');
   const r = await fetch(`${WP_API}/members/${encodeURIComponent(rec.id ?? zwid)}`, { method: 'PATCH', headers: { 'User-Agent': 'cryogen-proxy/2.0', Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(auth).toString('base64')}` }, body: JSON.stringify(memberChanges({ status })) });
   if (!r.ok) throw new HttpError(502, `WordPress refused the change (${r.status}).`);
-  const after = uniqueMembers(await wpGet('/members', auth)).find(m => String(m.zwift_id) === String(zwid)); rosterCache = null;
+  const after = uniqueMembers(await wpGet('/members', auth)).find(m => String(m.zwift_id) === String(zwid)); await markMembersChanged();
   if (!after || String(after.status) !== String(status)) throw new HttpError(502, 'WordPress accepted the request but did not keep the change: check the member record.');
 }
 const wpPublishPost = async body => { const r = await fetch(`${wpSite()}/wp-json/wp/v2/posts`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Basic ${Buffer.from(wpAuth()).toString('base64')}`, 'User-Agent': 'cryogen-proxy/2.0' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`WordPress refused the post (${r.status} ${String(d.message || '').slice(0, 120)})`); return d; };
@@ -3053,7 +3087,7 @@ async function route(req, res){
   }
 
   // Writes by anyone who is not staff are capped per connection per minute (stops a script flooding sign-ups, RSVPs or storage).
-  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/stripe/webhook' && pathname !== '/api/join' && !roleFromRequest(req)){
+  if (req.method === 'POST' && pathname !== '/api/login' && pathname !== '/api/cron/tick' && pathname !== '/api/wp/members-changed' && pathname !== '/api/client-error' && pathname !== '/api/mail/unsubscribe' && pathname !== '/api/mail/inbound' && pathname !== '/api/rsvp' && pathname !== '/api/stripe/webhook' && pathname !== '/api/join' && !roleFromRequest(req)){
     if (await counter(`cg:rl:w:${clientIp(req)}:${Math.floor(Date.now() / 60000)}`, 120) > writesPerMinute()) throw new HttpError(429, 'Too many requests. Please slow down and try again in a minute.');
   }
 
@@ -3070,6 +3104,7 @@ async function route(req, res){
   }
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
+  if (pathname === '/api/wp/members-changed' && req.method === 'POST') return handleWpMembersChanged(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
     return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });
