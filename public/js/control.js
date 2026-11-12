@@ -2,7 +2,7 @@
 // Staff: the control room. Race day at a glance (per team: answers, line-up, result), the radio's recent posts, whether every system is healthy,
 // and the queue of join requests. It refreshes itself every 30 seconds while it is on screen.
 (function () {
-  let sug = null, data = null, view = 'now', joins = null, busy = false, timer = null, note = '';
+  let live = null, eng = null, rw = null, sug = null, data = null, view = 'now', joins = null, busy = false, timer = null, note = '';
   const E = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const root = () => document.getElementById('control-content');
   const isAdmin = () => typeof role !== 'undefined' && role === 'admin';
@@ -15,7 +15,7 @@
   const dot = l => ({ bad: '🔴', warn: '🟡', ok: '🟢', off: '⚪' }[l] || '⚪');
   async function load(quiet) {
     const el = root(); if (!el) return;
-    try { data = await api('/api/control'); if (view === 'join') joins = (await api('/api/join')).requests; } catch (e) { if (!quiet) el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; return; }
+    try { data = await api('/api/control'); try { rw = await api('/api/raceweek'); } catch (e) { rw = null; } if (view === 'join') joins = (await api('/api/join')).requests; } catch (e) { if (!quiet) el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; return; }
     render();
   }
   function nowView() {
@@ -25,7 +25,31 @@
       <table style="width:100%;font-size:13px;margin-top:8px"><thead><tr style="text-align:left;color:#8b95a5"><th>Team</th><th>Yes</th><th>Maybe</th><th>No</th><th>Line-up</th><th>Result</th><th><span class="sr-only" style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>${r.teams.map(t => `<tr><td style="padding:4px 0">${E(t.name)}</td><td>${t.yes}</td><td>${t.maybe}</td><td>${t.no}</td><td style="color:${t.short ? '#fcd34d' : '#6ee7b7'}">${t.picked}/${r.racing}${t.short ? ` (${t.short} short)` : ' ✓'}</td><td>${t.result ? `${t.result.pos ? E(t.result.pos) + (['st', 'nd', 'rd'][t.result.pos - 1] || 'th') : 'in'}${t.result.pts !== null ? ` · ${E(t.result.pts)} pts` : ''}` : '<span style="color:#8b95a5">waiting</span>'}</td><td style="white-space:nowrap"><button type="button" style="${btn}" aria-label="Suggest a line-up for ${E(t.name)}" onclick="controlSuggest('${E(t.id)}')">Suggest</button> <button type="button" style="${btn}" aria-label="Ask ${E(t.name)} on Discord" onclick="controlAsk('${E(t.id)}','discord')">Ask on Discord</button> <button type="button" style="${btn}" aria-label="Draft an availability email for ${E(t.name)}" onclick="controlAsk('${E(t.id)}','email')">Ask by email</button></td></tr>`).join('')}</tbody></table>${sugView()}</div>`;
     const feed = `<div class="card" style="padding:12px 16px;margin-top:10px"><b>📻 Radio</b>${data.feed.length ? data.feed.map(f => `<div style="font-size:13px;margin-top:6px">${E(f.text)}</div>`).join('') : '<div style="font-size:12px;color:#8b95a5;margin-top:4px">Nothing posted yet. Switch the radio on in AI desk → Radio &amp; reports.</div>'}</div>`;
     const sys = `<div class="card" style="padding:12px 16px;margin-top:10px"><b>Systems</b>${data.systems.map(s => `<div style="font-size:13px;margin-top:4px">${dot(s.level)} <b>${E(s.name)}</b> <span style="color:${col(s.level)}">${E(s.detail)}</span></div>`).join('')}</div>`;
-    return attention + teams + feed + sys;
+    return attention + autopilot() + teams + feed + sys;
+  }
+  function autopilot() {
+    if (!rw) return '';
+    const s = rw.settings || {};
+    return `<div class="card" style="padding:12px 16px;margin-bottom:10px"><b>🤖 Race week on autopilot</b> <span style="font-size:12px;color:#9ca3af">${rw.daysToRace === null ? '' : `race ${rw.week + 1} is in ${rw.daysToRace} day${rw.daysToRace === 1 ? '' : 's'}`}</span><div style="font-size:12px;color:#9ca3af;margin:4px 0 6px">6 to 5 days out: ask each rider for availability (Discord, or the email link). 4 to 3 days: remind those who have not answered. 2 to 1 days: propose a line-up and send the captain Approve / No thanks buttons. Nothing is applied without the captain's tap.</div>
+      <label style="font-size:13px"><input type="checkbox" id="rw-on" ${s.on ? 'checked' : ''} ${isAdmin() ? '' : 'disabled'}/> Switched on</label> ${isAdmin() ? `<button type="button" class="btn-cyan" style="width:auto;padding:4px 14px;font-size:12px" onclick="controlRaceWeek()">Save</button>` : ''}${rw.doneSteps && rw.doneSteps.length ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">Done this week: ${rw.doneSteps.length} step${rw.doneSteps.length === 1 ? '' : 's'}.</div>` : ''}</div>`;
+  }
+  function engageView() {
+    if (!eng) return '<div class="card" style="padding:14px 16px">Loading…</div>';
+    const max = Math.max(1, ...eng.bands.map(b => b.count)), colr = { active: '#10b981', cooling: '#f59e0b', quiet: '#f97316', gone: '#ef4444' };
+    const bars = eng.bands.map(b => `<div style="margin:6px 0;font-size:13px"><div>${E(b.label)}: <b>${b.count}</b></div><div style="height:10px;border-radius:5px;background:rgba(255,255,255,.08)"><div style="height:10px;border-radius:5px;width:${Math.round(100 * b.count / max)}%;background:${colr[b.key]}"></div></div></div>`).join('');
+    const hist = eng.history.length ? `<table style="width:100%;font-size:12px;margin-top:6px"><thead><tr style="text-align:left;color:#8b95a5"><th>Month</th><th>Active</th><th>Cooling</th><th>Quiet</th><th>Gone</th></tr></thead><tbody>${eng.history.map(h => `<tr><td>${E(h.month)}</td><td>${h.active}</td><td>${h.cooling}</td><td>${h.quiet}</td><td>${h.gone}</td></tr>`).join('')}</tbody></table>` : '<div style="font-size:12px;color:#8b95a5">A snapshot is saved automatically on the first run of each month; the trend appears after the first one.</div>';
+    const z = eng.zrl.length ? `<table style="width:100%;font-size:12px;margin-top:6px"><thead><tr style="text-align:left;color:#8b95a5"><th>Race</th><th>Date</th><th>Line-ups filled</th><th>Teams scored</th></tr></thead><tbody>${eng.zrl.map(r => `<tr><td>${r.race}</td><td>${E(r.date)}</td><td>${r.filled}%</td><td>${r.past ? r.teamsScored + '/' + r.teams : '-'}</td></tr>`).join('')}</tbody></table>` : '<div style="font-size:12px;color:#8b95a5">No ZRL round.</div>';
+    const risk = eng.atRisk.length ? eng.atRisk.map(m => `<div style="font-size:13px;margin-top:4px">${E(m.name)} <span style="color:#9ca3af">· ${Math.round(m.days / 7)} weeks · ${E(m.level)}</span></div>`).join('') : '<div style="font-size:12px;color:#8b95a5">Nobody is drifting.</div>';
+    return `<div class="card" style="padding:14px 16px"><b>Racing activity</b> <span style="font-size:12px;color:#9ca3af">${eng.activePercent}% of ${eng.total} on the books raced in the last 30 days (approximate)</span>${bars}</div><div class="card" style="padding:14px 16px;margin-top:10px"><b>Month by month</b>${hist}</div><div class="card" style="padding:14px 16px;margin-top:10px"><b>ZRL participation</b>${z}</div><div class="card" style="padding:14px 16px;margin-top:10px"><b>Most at risk</b>${risk}</div>`;
+  }
+  function liveView() {
+    if (!live) return '<div class="card" style="padding:14px 16px">Loading…</div>';
+    const done = live.filter(i => i.result && i.result.ok === true).length;
+    const rows = live.map(i => { const r = i.result, st = !r ? '⚪ not tested' : r.ok === true ? '🟢 passed' : r.ok === false ? '🔴 failed' : '🟡 waiting for you';
+      const needs = i.needs ? `<input id="lc-${E(i.id)}" class="inp" style="width:260px;margin-right:6px" aria-label="${E(i.needs)}" placeholder="${E(i.needs)}"/>` : '';
+      const act = isAdmin() ? (i.how === 'manual' ? '' : `${needs}<button type="button" style="${btn}" onclick="controlLiveRun('${E(i.id)}')">${i.how === 'link' ? 'Get the link' : 'Run'}</button>`) + ` <button type="button" style="${btn}" onclick="controlLiveMark('${E(i.id)}',true)">Mark as working</button> <button type="button" style="${btn}" onclick="controlLiveMark('${E(i.id)}',false)">Not working</button>` : '';
+      return `<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px"><div><b>${E(i.label)}</b> · ${st}${r ? ` <span style="color:#8b95a5">${E((r.at || '').slice(0, 16).replace('T', ' '))}</span>` : ''}</div>${i.hint ? `<div style="color:#9ca3af;font-size:12px">${E(i.hint)}</div>` : ''}${r && r.note ? `<div style="color:#d1d5db">${E(r.note)}</div>` : ''}${r && r.link ? `<div><a href="${E(r.link)}" target="_blank" rel="noopener">${E(r.link)}</a></div>` : ''}<div style="margin-top:4px">${act}</div></div>`; }).join('');
+    return `<div class="card" style="padding:14px 16px"><b>Go-live check</b> <span style="font-size:12px;color:#9ca3af">${done} of ${live.length} proven working</span><div style="font-size:12px;color:#9ca3af;margin:4px 0">One real test per feature. Automatic ones run when you press Run; the others give a link and you confirm what you saw.</div>${rows}</div>`;
   }
   function sugView() {
     if (!sug) return '';
@@ -39,7 +63,7 @@
   function render() {
     const el = root(); if (!el || !data) return;
     const tab = (k, l) => `<button type="button" role="tab" aria-selected="${view === k}" style="${btn};${view === k ? 'border-color:var(--accent,#22d3ee);color:#fff' : ''}" onclick="controlView('${k}')">${l}</button>`;
-    el.innerHTML = `<h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🛰️ Control room</h2><p style="font-size:13px;color:#8b95a5;margin-bottom:6px">Race day and system health in one place. Updated ${E((data.generated || '').slice(11, 19))} UTC.</p><div role="tablist" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${tab('now', '🏁 Now')}${tab('join', `🙋 Join requests${data.joinOpen ? ' (' + data.joinOpen + ')' : ''}`)}</div><button type="button" style="${btn}" onclick="controlLoad()">↻ Refresh</button>${note}${view === 'join' ? joinView() : nowView()}`;
+    el.innerHTML = `<h2 style="font-size:20px;font-weight:900;margin-bottom:4px">🛰️ Control room</h2><p style="font-size:13px;color:#8b95a5;margin-bottom:6px">Race day and system health in one place. Updated ${E((data.generated || '').slice(11, 19))} UTC.</p><div role="tablist" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${tab('now', '🏁 Now')}${tab('join', `🙋 Join requests${data.joinOpen ? ' (' + data.joinOpen + ')' : ''}`)}${tab('engage', '📈 Engagement')}${tab('live', '✅ Go-live check')}</div><button type="button" style="${btn}" onclick="controlLoad()">↻ Refresh</button>${note}${view === 'join' ? joinView() : view === 'engage' ? engageView() : view === 'live' ? liveView() : nowView()}`;
   }
   window.controlLoad = async () => { await load(false); clearInterval(timer); timer = setInterval(() => { const p = document.getElementById('page-control'); if (p && p.classList.contains('active')) load(true); else { clearInterval(timer); timer = null; } }, 30000); };
   const say = (m, bad) => { note = m ? `<div role="status" style="margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;background:${bad ? 'rgba(248,113,113,.12);color:#fca5a5' : 'rgba(52,211,153,.12);color:#6ee7b7'}">${E(m)}</div>` : ''; };
@@ -52,6 +76,9 @@
       else { const r = await api('/api/aiops/rsvp-draft', { team: id, week: data.race.week }); say(`${r.note} (${r.recipients} riders)`); }
     } catch (e) { say(e.message, true); } render();
   };
-  window.controlView = async v => { view = v; note = ''; if (v === 'join') { try { joins = (await api('/api/join')).requests; } catch (e) { note = `<div style="color:#fca5a5;font-size:13px">${E(e.message)}</div>`; } } render(); };
+  window.controlRaceWeek = async () => { try { rw.settings = (await api('/api/raceweek/settings', { on: document.getElementById('rw-on').checked })).settings; say('Saved.'); } catch (e) { say(e.message, true); } render(); };
+  window.controlLiveRun = async id => { const inp = document.getElementById('lc-' + id), v = inp ? inp.value.trim() : '', body = { id }; if (inp) { if (/@/.test(v) || id === 'email') body.to = v; else body.zwid = v; } if (id === 'rsvp' || id === 'optout') { const raw = (inp ? inp.value : '').split(/[\s,]+/); body.zwid = raw.find(x => /^\d+$/.test(x)) || ''; body.to = raw.find(x => /@/.test(x)) || ''; } try { await api('/api/livecheck/run', body); live = (await api('/api/livecheck')).items; say(''); } catch (e) { say(e.message, true); } render(); };
+  window.controlLiveMark = async (id, ok) => { try { await api('/api/livecheck/mark', { id, ok }); live = (await api('/api/livecheck')).items; say(''); } catch (e) { say(e.message, true); } render(); };
+  window.controlView = async v => { view = v; note = ''; if (v === 'engage') { try { eng = await api('/api/engagement'); } catch (e) { note = `<div style="color:#fca5a5;font-size:13px">${E(e.message)}</div>`; } } if (v === 'live') { try { live = (await api('/api/livecheck')).items; } catch (e) { note = `<div style="color:#fca5a5;font-size:13px">${E(e.message)}</div>`; } } if (v === 'join') { try { joins = (await api('/api/join')).requests; } catch (e) { note = `<div style="color:#fca5a5;font-size:13px">${E(e.message)}</div>`; } } render(); };
   window.controlDecide = async (id, action) => { if (action === 'welcome' && !confirm('Send the welcome email?')) return; try { await api('/api/join/decide', { id, action }); joins = (await api('/api/join')).requests; data = await api('/api/control'); note = '<div role="status" style="margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;background:rgba(52,211,153,.12);color:#6ee7b7">Done.</div>'; } catch (e) { note = `<div role="status" style="margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;background:rgba(248,113,113,.12);color:#fca5a5">${E(e.message)}</div>`; } render(); };
 })();
