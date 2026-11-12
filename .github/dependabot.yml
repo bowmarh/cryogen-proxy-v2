@@ -1,0 +1,11 @@
+# Keeps the build tools and the automation up to date by itself: a weekly pull request when something has a new version. The tests run on each one,
+# so a green check means it is safe to merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

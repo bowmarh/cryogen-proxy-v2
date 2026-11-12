@@ -115,6 +115,8 @@ function sessionFromRequest(req){
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    // An owner session is only good while OWNER_PASSWORD is set and unchanged (changing it signs the owner out everywhere).
+    if (session.owner === true && (!process.env.OWNER_PASSWORD || session.ov !== require('crypto').createHash('sha256').update(String(process.env.OWNER_PASSWORD)).digest('hex').slice(0, 10))) return null;
     return session.exp > Date.now() ? session : null;
   } catch (e) { return null; }
 }
@@ -181,6 +183,13 @@ async function handleLogin(req, res){
     if (u) return sendJSON(res, 200, { role: u.role, name: u.name, token: signToken(u.role, { staffName: u.name, user: u.username }) });
     await counter(failKey, LOGIN_WINDOW_SEC);
     return sendJSON(res, 401, { error: 'incorrect username or password' });
+  }
+  if (payload.role === 'owner'){   // the owner: an Administrator session that also carries the owner mark
+    const expectedOwner = process.env.OWNER_PASSWORD; if (!expectedOwner) return sendJSON(res, 503, { error: 'login not configured', missing: 'OWNER_PASSWORD' });
+    const failKey = `cg:rl:login:${clientIp(req)}`;
+    if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
+    if (typeof payload.password === 'string' && passwordMatches(payload.password, expectedOwner)) return sendJSON(res, 200, { role: 'admin', owner: true, token: signToken('admin', { owner: true, staffName: 'Owner', ov: require('crypto').createHash('sha256').update(String(expectedOwner)).digest('hex').slice(0, 10) }) });
+    await counter(failKey, LOGIN_WINDOW_SEC); return sendJSON(res, 401, { error: 'incorrect password' });
   }
   const envName = ROLE_PASSWORD_ENV[payload.role];
   if (!envName) throw new HttpError(400, 'unknown role');
@@ -1680,7 +1689,7 @@ async function handleCron(req, res){
   // Each job runs on its own, so one broken job cannot stop the others. A failure is told to the admin channel (once per job every six hours)
   // and shown in the health panel; the backup is otherwise quiet: not an event anyone needs to be told about.
   const ran = [], failed = [];
-  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Email', () => mail.runSchedule(Date.now())], ['Auto results', () => autoResults.tick(Date.now())], ['Race radio', () => aiops.radioTick()], ['Usage alerts', () => costs.check(Date.now())], ['Watchdog', () => controlRoom.watchdog()], ['Progress cards', () => progress.run(Date.now())], ['Race week', () => raceWeek.tick(Date.now())], ['Engagement snapshot', () => engagement.runSchedule(Date.now())], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
+  const jobs = [['TTT', runTttSchedule], ['ZRL', () => zrl.runSchedule()], ['Rides', runRidesSchedule], ['Ride cover', () => cover.runSchedule()], ['Ladder', () => ladder.runSchedule()], ['DIRT series', () => drs.runSchedule()], ['Associates', () => assoc.runSchedule()], ['Comms', () => comms.runSchedule()], ['Race day', () => live.runSchedule()], ['Onboarding', () => onboarding.runSchedule()], ['Win-back', () => lifecycle.runSchedule()], ['Digest', () => runDigest()], ['Outbox', () => flushOutbox()], ['Usage', () => flushUsage()], ['Trend', () => trend.runSchedule()], ['Fair play', () => fairplay.runSchedule()], ['Reach summary', () => reach.runSchedule(Date.now())], ['Email', () => mail.runSchedule(Date.now())], ['Auto results', () => autoResults.tick(Date.now())], ['Race radio', () => aiops.radioTick()], ['Usage alerts', () => costs.check(Date.now())], ['Housekeeping', () => housekeeping.runSchedule(Date.now())], ['Watchdog', () => controlRoom.watchdog()], ['Progress cards', () => progress.run(Date.now())], ['Race week', () => raceWeek.tick(Date.now())], ['Engagement snapshot', () => engagement.runSchedule(Date.now())], ['Case log purge', () => caselog.runSchedule(Date.now())], ['AI plans and briefings', () => aiplans.runSchedule(Date.now())], ['AI weekly report', () => aiStaff.runSchedule(Date.now())], ['Comms Studio', () => studio.runSchedule(Date.now())], ['Sheet sync', () => sheetSync.runSchedule()], ['Backup', async () => { await backup.runBackup(); await backup.verify(); return []; }]];
   // A job that fails is tried once more at the end of the same run (most failures are a service having a bad moment). The jobs that were
   // failing on earlier runs are remembered, so the admin channel hears once when one has fixed itself.
   const retry = [];
@@ -2553,7 +2562,7 @@ const assoc = require('../lib/assoc')({
 });
 // What a signed-in associate may call: the weekly TTT and ZRL sign-up, the other race sign-ups and the social-ride RSVPs, plus what the pages
 // read and their own upgrade journey. Everything else answers "for full members".
-const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
+const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/access/me', 'POST /api/feedback', 'GET /api/me/referral', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
@@ -2887,18 +2896,20 @@ const join = require('../lib/join')({ redis, HttpError, requireRole, discord, ma
   lookup: async zwid => { const { riders } = await fetchRoster(); const r = (riders || []).find(x => String(x.riderId) === String(zwid)); return r ? { category: r.zpCategory || '', vELO: r.race && r.race.current ? Math.round(r.race.current.rating) : 0 } : null; },
   teamsWithSpace: async () => { const z = await zrl.load(); if (!z.round) return []; const size = z.round.rosterSize || 8; return z.round.teams.map(t => ({ name: t.name, grade: t.grade || '', places: size - z.signups.filter(x => x.in && (z.assign[x.key] || []).includes(t.id)).length })).filter(t => t.places > 0).sort((a, b) => b.places - a.places); },
   nextEvents: async () => ((await publicClub()).next || []).map(n => ({ series: n.series, title: n.title, date: n.at ? new Date(n.at).toISOString().slice(0, 10) : (n.date || '') })), hashIp: ip => require('crypto').createHash('sha256').update(`${ip}:${process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || 'cg'}`).digest('hex').slice(0, 16) });   // the public join queue
-const progress = require('../lib/progress')({ redis, HttpError, requireRole, mail, seasonOf, ai, siteUrl: SITE_URL });   // monthly rider progress cards
+const progress = require('../lib/progress')({ redis, HttpError, requireRole, mail, seasonOf, ai, siteUrl: SITE_URL, eligible: async z => (await access.typeOf(z, await assoc.stillAssociate(z))).type === 'racing' });   // monthly rider progress cards
 const raceWeek = require('../lib/raceweek')({ redis, HttpError, requireRole, zrl, aiops, mail, discord, siteUrl: SITE_URL, notify: (...a) => comms.notify(...a), lineupButtons: (week, team) => discordInteractions.lineupButtons(week, team),
   applyLineup: async (zwid, team, week, zwids) => { const m = await memberByZwid(zwid); await zrl.routes['POST /api/zrl/lineup'](asMember(zwid, m.name), { team, week, zwids }); } });   // race week on autopilot
 const engagement = require('../lib/engagement')({ redis, requireRole, tidy, zrl, aiops });   // retention picture for the committee
+const housekeeping = require('../lib/housekeeping')({ redis });   // weekly tidy-up of finished data
 const costs = require('../lib/costs')({ redis, requireRole, support, mail, discord, usageKey: USAGE_KEY });   // usage against budgets
 const autoResults = require('../lib/autoresults')({ redis, HttpError, requireRole, zrl, asStaff: () => syncReq(), discord, siteUrl: SITE_URL });   // results read from a table address
 const feedback = require('../lib/feedback')({ redis, HttpError, requireRole, roleFromRequest, memberFromRequest, ai, discord, siteUrl: SITE_URL });   // the "Something wrong?" button
 const captainPage = require('../lib/captain')({ HttpError, memberFromRequest, zrl, aiops });   // the captain's page
-const controlRoom = require('../lib/controlroom')({ redis, requireRole, zrl, aiops, mail, join, costs, gsheets, ai, backup: { healthRow: now => backup.healthRow(now) }, discord, siteUrl: SITE_URL });   // race day and system health
+const controlRoom = require('../lib/controlroom')({ redis, requireRole, zrl, aiops, mail, join, costs, housekeeping, gsheets, ai, backup: { healthRow: now => backup.healthRow(now) }, discord, siteUrl: SITE_URL });   // race day and system health
 const liveCheck = require('../lib/livecheck')({ redis, HttpError, requireRole, mail, discord, notify: (...a) => comms.notify(...a), aiops, controlRoom, ai, siteUrl: SITE_URL });   // the go-live check list
 const stripeSupport = require('../lib/stripe')({ redis, HttpError, memberFromRequest, support, discord, siteUrl: SITE_URL });   // supporter payments (off until the Stripe keys are set)
-const audit = require('../lib/audit')({ redis, requireRole });   // who did what, for admins
+const audit = require('../lib/audit')({ redis, requireRole });
+const access = require('../lib/access')({ redis, HttpError, requireRole, sessionFromRequest, memberFromRequest, zrl, tidy, fetchRoster });   // who may do what (levels, member types, owner-only list)   // who did what, for admins
 const clubTheme = require('../lib/clubtheme')({ redis, HttpError, requireRole });
 const history = require('../lib/history')({ redis, requireRole, xlsx: require('../lib/xlsx'), keys: { zrl: zrl.KEYS, ladder: ladder.KEYS, drs: drs.KEYS } });
 const staging = require('../lib/staging')({ requireRole, zrl, asStaff: syncReq });
@@ -3025,6 +3036,11 @@ async function route(req, res){
 
   // A signed-in associate reaches only the routes above; staff approval lifts it at once, even mid-session.
   const sess = sessionFromRequest(req);
+  // The owner-only list (backups and erasure, money, access, the switches): an Administrator who is not the owner is refused in one place.
+  if (access.ownerOnly(req.method, pathname)){
+    if (!roleFromRequest(req)) return sendJSON(res, 401, { error: 'Please log in again.' });
+    if (!access.isOwner(req)) return sendJSON(res, 403, { error: 'Only the owner can do this.' });
+  }
   if (sess && sess.role === 'member' && sess.assoc === true && pathname.startsWith('/api/') && !['/api/login', '/api/auth/wp', '/api/auth/status', '/api/cron/tick'].includes(pathname)
       && !ASSOCIATE_ALLOWED.has(`${req.method} ${pathname}`) && await assoc.stillAssociate(sess.zwid)){
     return sendJSON(res, 403, { error: 'That is for full members. Request full membership from your profile to unlock it.', associate: true });
@@ -3202,7 +3218,7 @@ async function route(req, res){
   const trendRoute = trend.routes[`${req.method} ${pathname}`] || clubTheme.routes[`${req.method} ${pathname}`] || avatars.routes[`${req.method} ${pathname}`] || fairplay.routes[`${req.method} ${pathname}`] || caselog.routes[`${req.method} ${pathname}`] || recap.routes[`${req.method} ${pathname}`] || badges.routes[`${req.method} ${pathname}`] || wrapped.routes[`${req.method} ${pathname}`] || cockpit.routes[`${req.method} ${pathname}`] || reach.routes[`${req.method} ${pathname}`] || zrlHelper.routes[`${req.method} ${pathname}`] || mail.routes[`${req.method} ${pathname}`] || clubstats.routes[`${req.method} ${pathname}`] || privacy.routes[`${req.method} ${pathname}`] || clientErrors.routes[`${req.method} ${pathname}`] || support.routes[`${req.method} ${pathname}`];
   if (trendRoute){ const out = await trendRoute(req, req.method === 'POST' ? await readJSONBody(req) : undefined, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   // Investigation files and the coach take whole rides (up to six hours of one-second data), so their uploads may be larger than other requests.
-  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
+  const bigRoute = investigations.routes[`${req.method} ${pathname}`] || coach.routes[`${req.method} ${pathname}`] || aiplans.routes[`${req.method} ${pathname}`] || aiStaff.routes[`${req.method} ${pathname}`] || aiops.routes[`${req.method} ${pathname}`] || join.routes[`${req.method} ${pathname}`] || progress.routes[`${req.method} ${pathname}`] || raceWeek.routes[`${req.method} ${pathname}`] || engagement.routes[`${req.method} ${pathname}`] || liveCheck.routes[`${req.method} ${pathname}`] || stripeSupport.routes[`${req.method} ${pathname}`] || audit.routes[`${req.method} ${pathname}`] || access.routes[`${req.method} ${pathname}`] || costs.routes[`${req.method} ${pathname}`] || autoResults.routes[`${req.method} ${pathname}`] || feedback.routes[`${req.method} ${pathname}`] || captainPage.routes[`${req.method} ${pathname}`] || controlRoom.routes[`${req.method} ${pathname}`] || studio.routes[`${req.method} ${pathname}`];
   if (bigRoute){ const out = await bigRoute(req, req.method === 'POST' ? await readJSONBody(req, ['/api/inv/file', '/api/coach/ride'].includes(pathname) ? 3000000 : 20000) : {}, parseRequestUrl(req).query); if (audit.watched(req.method, pathname)) await audit.record({ who: (sessionFromRequest(req) || {}).staffName, role: roleFromRequest(req), method: req.method, path: pathname }).catch(() => {}); return sendJSON(res, 200, out); }
   const historyRoute = history.routes[`${req.method} ${pathname}`];
   if (historyRoute) return sendJSON(res, 200, await historyRoute(req));

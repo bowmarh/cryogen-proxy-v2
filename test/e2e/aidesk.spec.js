@@ -8,8 +8,8 @@ const h = require('../helpers');
 h.setEnv();
 
 test('staff can use every tab of the AI desk and the page is accessible', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.route(/\/api\/aiops$/, r => r.fulfill({ json: { settings: { radio: { on: false }, reports: { auto: false } }, aiOn: true, mailOn: true, triage: 1 } }));
   await page.route(/\/api\/zrl$/, r => r.fulfill({ json: { round: { name: 'R', weeks: 3, teams: [{ id: 't1', name: 'Alpha' }] } } }));

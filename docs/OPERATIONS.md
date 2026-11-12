@@ -38,3 +38,9 @@ When every team has every result, the admin channel is told once. AI desk → **
 
 ## Usage
 Control room → **Usage**: storage commands, AI spend and emails sent today against their budgets (amber at 80%, red at 100%; the admin channel is told once at each, and the Systems list shows anything over 80%). Set the AI budget under Admin → Supporters and the email limits under Email → Settings.
+
+## Keeping it maintenance-free
+- **Weekly housekeeping** (early Sunday): removes finished, old data (old email recipient lists, decided join requests, answered feedback, the autopilot/radio/report "already done" markers). Control room → Systems shows when it last ran.
+- **Dependabot** opens a weekly pull request when the build tools or GitHub automation have an update; merge it when the check is green.
+- **Watchdog, smoke test, usage alerts and the go-live check** (above) tell the admin channel when something needs a person; otherwise nothing needs doing.
+- **Owner login:** see `docs/ACCESS.md`. Add `OWNER_PASSWORD` once.

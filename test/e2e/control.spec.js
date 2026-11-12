@@ -8,8 +8,8 @@ const h = require('../helpers');
 h.setEnv();
 
 test('staff see race day and system health and can answer a join request; the public join page works', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   const errors = []; page.on('pageerror', e => errors.push(e.message)); const sent = {};
   await page.route(/\/api\/control$/, r => r.fulfill({ json: { generated: '2026-11-04T10:00:00Z', joinOpen: 1, feed: [{ team: 'Alpha', text: '🏁 Alpha finished 1st' }], systems: [{ name: 'Email service', level: 'bad', detail: 'A send is paused.' }, { name: 'Storage', level: 'ok', detail: 'Answered in 5 ms.' }],
     race: { round: 'Round 2', week: 0, date: '2026-11-10', racing: 2, teams: [{ id: 't1', name: 'Alpha', riders: 3, yes: 2, maybe: 1, no: 0, picked: 1, short: 1, result: { pos: 1, pts: 30 } }] } } }));

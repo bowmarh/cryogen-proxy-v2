@@ -6,6 +6,7 @@
   const E = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const root = () => document.getElementById('mail-content');
   const isAdmin = () => typeof role !== 'undefined' && role === 'admin';
+  const isOwner = () => isAdmin() && sessionStorage.getItem('owner') === '1';
   const btn = 'padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18);border-radius:6px;cursor:pointer';
   const hdr = () => ({ ...tttHeaders(), 'Content-Type': 'application/json' });
   async function api(path, body) {
@@ -92,7 +93,7 @@
     return (g || '<div style="color:#8b95a5;font-size:13px;margin-bottom:8px">No groups yet.</div>') + form;
   }
   function autoView() {
-    const s = st.settings, au = s.automations || {}, dis = isAdmin() ? '' : 'disabled';
+    const s = st.settings, au = s.automations || {}, dis = isOwner() ? '' : 'disabled';
     const addrBlock = addr ? `<div class="card" style="padding:12px 16px;margin-top:10px"><b>Address matching</b><div style="font-size:12px;color:#9ca3af;margin:4px 0">${addr.withEmail} matched · ${addr.wpUsers} WordPress users</div>
       ${addr.ambiguous.length ? `<div style="font-size:13px;margin-top:6px"><b>Needs a decision</b> (more than one WordPress user has that name)</div>${addr.ambiguous.map(x => `<div style="font-size:12px;margin:4px 0">${E(x.name || x.zwid)} · ${E(x.zwid)} <input class="inp" style="width:220px" id="am-${E(x.zwid)}" placeholder="email" aria-label="Email for ${E(x.name || x.zwid)}"/> <button type="button" style="${btn}" onclick="mailAddress('${E(x.zwid)}')">Set</button></div>`).join('')}` : ''}
       ${addr.unmatched.length ? `<div style="font-size:13px;margin-top:6px"><b>Not found</b></div>${addr.unmatched.slice(0, 50).map(x => `<div style="font-size:12px;margin:4px 0">${E(x.name || x.zwid)} · ${E(x.zwid)} <input class="inp" style="width:220px" id="am-${E(x.zwid)}" placeholder="email" aria-label="Email for ${E(x.name || x.zwid)}"/> <button type="button" style="${btn}" onclick="mailAddress('${E(x.zwid)}')">Set</button></div>`).join('')}` : ''}</div>` : '';
@@ -106,7 +107,7 @@
       <label style="display:block;margin:6px 0;font-size:13px"><input type="checkbox" id="a-news" ${au.newsletter && au.newsletter.on ? 'checked' : ''} ${dis}/> Weekly newsletter drafted every Monday morning · <select id="a-mode" class="inp" style="width:auto" ${dis}><option value="approve" ${au.newsletter && au.newsletter.mode !== 'auto' ? 'selected' : ''}>an admin approves it</option><option value="auto" ${au.newsletter && au.newsletter.mode === 'auto' ? 'selected' : ''}>sends itself if it passes every check</option></select></label>
       <label style="display:block;margin:6px 0;font-size:13px"><input type="checkbox" id="a-welcome" ${au.welcome && au.welcome.on ? 'checked' : ''} ${dis}/> Welcome email to new members</label>
       <label style="display:block;margin:6px 0;font-size:13px"><input type="checkbox" id="a-quiet" ${au.quiet && au.quiet.on ? 'checked' : ''} ${dis}/> Gentle win-back note to quiet members (at most once every 60 days each)</label>
-      ${isAdmin() ? `<button type="button" class="btn-cyan" style="width:auto;padding:6px 16px;margin-top:8px" onclick="mailSettings()">Save settings</button> <button type="button" style="${btn}" onclick="mailAddresses()">Review addresses</button>` : '<div style="font-size:12px;color:#8b95a5">Only an administrator can change these.</div>'}</div>${addrBlock}
+      ${isOwner() ? `<button type="button" class="btn-cyan" style="width:auto;padding:6px 16px;margin-top:8px" onclick="mailSettings()">Save settings</button> <button type="button" style="${btn}" onclick="mailAddresses()">Review addresses</button>` : `<div style="font-size:12px;color:#8b95a5">Only the owner can change these.</div>${isAdmin() ? `<button type="button" style="${btn};margin-top:6px" onclick="mailAddresses()">Review addresses</button>` : ''}`}</div>${addrBlock}
       <div class="card" style="padding:12px 16px;margin-top:10px"><b style="font-size:13px">Recent activity</b>${log || '<div style="font-size:12px;color:#8b95a5">Nothing yet.</div>'}</div>`;
   }
   function render() {

@@ -154,7 +154,7 @@ let app, world, adminTok;
 before(async () => {
   world = h.createWorld(); world.members = world.members.filter(m => m.status !== 'left');
   world.wpUsers = [{ id: 1, name: 'Rick DB', email: 'rick@example.com' }, { id: 2, name: 'Rider Two', email: 'two@example.com' }];
-  app = await h.startApp(world); adminTok = await app.login('admin');
+  app = await h.startApp(world); adminTok = await app.login('owner');
 });
 after(() => app.close());
 beforeEach(() => { app.world.db = {}; world.mails = []; world.mailFail = 0; world.wpUsersStatus = 0; });

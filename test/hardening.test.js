@@ -73,8 +73,23 @@ beforeEach(() => { app.world.db = {}; });
 test('through the app: the smoke endpoint needs the shared secret and reports every check; the audit trail fills as staff act; the Stripe webhook refuses unsigned calls', async () => {
   assert.equal((await app.call('POST', '/api/smoke', {})).status, 401);
   const ok = await app.call('POST', '/api/smoke', { headers: { Authorization: 'Bearer cron-secret' } }); assert.equal(ok.status, 200); assert.ok(ok.body.ok, JSON.stringify(ok.body.checks)); assert.deepEqual(ok.body.checks.map(c => c.name), ['Storage', 'Systems', 'Monthly PDF', 'Public race data', 'Static pages']); assert.ok(ok.body.ok);
-  const tok = await app.login('admin'); await app.post('/api/mail/settings', { perHour: 40 }, { token: tok });
+  const tok = await app.login('owner'); await app.post('/api/mail/settings', { perHour: 40 }, { token: tok });
   const a = await app.get('/api/audit', { token: tok }); assert.equal(a.status, 200); assert.ok(a.body.entries.some(e => e.action === 'POST /api/mail/settings'));
   assert.equal((await app.get('/api/audit', { token: await app.login('mod') })).status, 403, 'only admins read the audit trail');
   const w = await fetch(`${app.base}/api/stripe/webhook`, { method: 'POST', body: '{}' }); assert.equal(w.status, 400);
+});
+
+test('housekeeping removes only finished, old things, runs once on a Sunday morning, and reports what it did', async () => {
+  const createHousekeeping = require('../lib/housekeeping'), { db, redis } = mem(), t = Date.parse('2026-11-15T04:00:00Z'), ago = d => new Date(t - d * 86400000).toISOString();
+  db['cg:mail:campaigns'] = { old: JSON.stringify({ status: 'sent', sentAt: ago(100) }), ancient: JSON.stringify({ status: 'sent', sentAt: ago(400) }), recent: JSON.stringify({ status: 'sent', sentAt: ago(10) }), live: JSON.stringify({ status: 'sending', createdAt: ago(200) }) };
+  for (const id of ['old', 'ancient', 'recent', 'live']) { db[`cg:mail:rcpt:${id}`] = '[]'; db[`cg:mail:prog:${id}`] = '{}'; }
+  db['cg:join'] = { a: JSON.stringify({ status: 'welcomed', at: ago(300), decidedAt: ago(250) }), b: JSON.stringify({ status: 'declined', at: ago(30), decidedAt: ago(20) }), c: JSON.stringify({ status: 'open', at: ago(400) }) };
+  db['cg:feedback'] = [JSON.stringify({ id: 'x', status: 'done', at: ago(100) }), JSON.stringify({ id: 'y', status: 'open', at: ago(100) }), JSON.stringify({ id: 'z', status: 'done', at: ago(5) })];
+  db['cg:aiops:radio'] = { oldkey: ago(130), newkey: ago(5) }; db['cg:raceweek:done'] = { '0:t1:ask': ago(130), '1:t1:ask': ago(2) }; db['cg:stripe:events'] = { evt_old: ago(90), evt_new: ago(1) };
+  const hk = createHousekeeping({ redis, now: () => t });
+  assert.deepEqual(await hk.runSchedule(Date.parse('2026-11-14T04:00:00Z')), [], 'not on a Saturday'); assert.deepEqual(await hk.runSchedule(Date.parse('2026-11-15T01:00:00Z')), [], 'not before 3 in the morning');
+  await hk.runSchedule(t); const l = await hk.last(); assert.deepEqual([l.removed.emailLists, l.removed.emailCampaigns, l.removed.joinRequests, l.removed.feedback, l.removed.radio, l.removed.raceWeek, l.removed.stripeEvents], [2, 1, 1, 1, 1, 1, 1]);
+  assert.equal(db['cg:mail:rcpt:old'], undefined); assert.equal(db['cg:mail:rcpt:recent'], '[]', 'a recent send keeps its lists'); assert.equal(db['cg:mail:rcpt:live'], '[]', 'a send in progress is never touched'); assert.deepEqual(Object.keys(db['cg:mail:campaigns']).sort(), ['live', 'old', 'recent']);
+  assert.deepEqual(Object.keys(db['cg:join']).sort(), ['b', 'c'], 'an open request stays however old'); assert.equal(db['cg:feedback'].length, 2); assert.deepEqual(Object.keys(db['cg:aiops:radio']), ['newkey']);
+  const again = await hk.runSchedule(t + 3600000); assert.deepEqual(again, []); assert.equal((await hk.last()).at, new Date(t).toISOString(), 'once a week');
 });

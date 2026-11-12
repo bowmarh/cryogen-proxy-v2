@@ -13,8 +13,8 @@ function ride({ flat = true } = {}) {
 }
 
 test('staff open a case, add a FIT file, and see the flat stretch with the ordinary explanations beside it', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL);
   await page.evaluate(() => launchApp('admin'));
   await page.locator('#nav-inv').click();
@@ -63,8 +63,8 @@ test('a member says yes to the coach, asks a question, and has a FIT ride explai
 });
 
 test('the admin sees supporters and the AI cost, and can add a supporter', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
   await page.evaluate(() => openAdmin());
   await expect(page.locator('#support-card')).toContainText('This month');
@@ -101,11 +101,11 @@ test('the coach page: ask about the club, the weekly plan for supporters, the se
 });
 
 test('staff see the weekly report, the quiet riders with a draft button, and the club story on This week', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
   await page.route('**/api/ai/report', r => r.request().method() === 'GET' ? r.fulfill({ json: { aiOn: true, report: { at: '2026-11-02T08:00:00Z', by: 'automatic', via: 'ai', text: 'A steady week. To do: place two riders.' } } }) : r.fulfill({ json: { report: { at: '2026-11-02T09:00:00Z', by: 'staff', via: 'ai', text: 'A fresh report.' } } }));
   await page.route('**/api/ai/drift', r => r.request().method() === 'GET' ? r.fulfill({ json: { aiOn: true, quiet: [{ zwid: '77', name: 'Dee Dawson', days: 70, tier: 'full' }] } }) : r.fulfill({ json: { draft: 'Hi Dee, we have missed you!' } }));
   await page.route('**/api/ai/club-story', r => r.fulfill({ json: { text: 'Our season so far…' } }));
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
   await expect(page.locator('#staff-ai')).toContainText('A steady week');
   await expect(page.locator('#staff-ai')).toContainText('Dee Dawson');
@@ -134,8 +134,8 @@ test('a rider chooses whether to be featured, and the studio lets staff read, ch
   await page.locator('#prof-feature input').check();
   await expect.poll(() => on).toBe(true);
   // Staff view.
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.evaluate(t => { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.evaluate(t => { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); }, tok);
   await page.reload(); await page.evaluate(() => launchApp('admin'));
   await page.locator('#nav-studio').click();
   await expect(page.locator('#studio-content')).toContainText('Sunday social ride');
@@ -153,8 +153,8 @@ test('a rider chooses whether to be featured, and the studio lets staff read, ch
 });
 
 async function asAdmin(page, baseURL) {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
 }
 

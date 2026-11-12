@@ -147,9 +147,9 @@ async function sharedWrite(path,payload){
 function loginStep(type){
   document.getElementById('login-step1').style.display='none';
   document.getElementById('login-step2').style.display='block';
-  ['admin','mod','user','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
+  ['owner','admin','mod','user','member'].forEach(t=>document.getElementById('login-form-'+t).style.display='none');
   document.getElementById('login-form-'+type).style.display='block';
-  setTimeout(()=>{ const el=document.getElementById(type==='admin'?'admin-pw':type==='mod'?'mod-pw':type==='user'?'user-name':'member-search'); if(el)el.focus(); },50);
+  setTimeout(()=>{ const el=document.getElementById(type==='owner'?'owner-pw':type==='admin'?'admin-pw':type==='mod'?'mod-pw':type==='user'?'user-name':'member-search'); if(el)el.focus(); },50);
 }
 function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
 function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
@@ -167,13 +167,22 @@ async function doUserLogin(){
   const username=document.getElementById('user-name').value.trim(), password=document.getElementById('user-pw').value;
   if(!username||!password){ showLoginErr('Enter your username and password.'); return; }
   let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
-  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); try{ localStorage.setItem('cgStaffName',d.name); }catch(e){} launchApp(d.role); }
+  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d.name); }catch(e){} launchApp(d.role); }
   else if(res.status===401) showLoginErr('Incorrect username or password.');
   else if(res.status===429) showLoginErr('Too many wrong attempts from this connection. Try again in 15 minutes.');
   else showLoginErr('Login is unavailable right now. Please try again later.');
 }
-function doAdminLogin(){doRoleLogin('admin','admin-pw');}
-function doModLogin(){doRoleLogin('mod','mod-pw');}
+async function doOwnerLogin(){
+  const password=document.getElementById('owner-pw').value; let res;
+  try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'owner',password})}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  if(res.ok){ const d=await res.json(); sessionStorage.setItem('token',d.token); sessionStorage.setItem('owner','1'); launchApp('admin'); }
+  else if(res.status===401) showLoginErr('Incorrect password.');
+  else if(res.status===503) showLoginErr('Owner login is not set up yet: add OWNER_PASSWORD in Vercel.');
+  else showLoginErr('Login is unavailable right now. Please try again later.');
+}
+function isOwner(){ return role==='admin' && sessionStorage.getItem('owner')==='1'; }
+function doAdminLogin(){sessionStorage.removeItem('owner');doRoleLogin('admin','admin-pw');}
+function doModLogin(){ sessionStorage.removeItem('owner'); doRoleLogin('mod','mod-pw');}
 function doMemberLogin(){
   const q=document.getElementById('member-search').value.trim();
   if(!q){showLoginErr('Please enter your name or Zwift ID.');return;}
@@ -1064,8 +1073,19 @@ function setupRole(){
   if(role==='admin'||role==='mod'){ document.getElementById('nav-week').style.display='flex'; document.getElementById('nav-comms').style.display='flex'; document.getElementById('nav-fair').style.display='flex'; document.getElementById('nav-clubstats').style.display='flex'; staffReady().catch(()=>{}); document.getElementById('nav-inv').style.display='flex'; document.getElementById('nav-studio').style.display='flex'; document.getElementById('nav-mail').style.display='flex'; document.getElementById('nav-aidesk').style.display='flex'; document.getElementById('nav-control').style.display='flex'; }
   if(role==='member'&&!isAssoc()) document.getElementById('nav-coach').style.display='flex';
   if(role==='member'&&window.captainInit) captainInit();
+  applyAccessBadge();
   if(role!=='admin'){document.getElementById('event-admin-btns').innerHTML='';}
   updateNavGroups();
+}
+
+// The header badge says the person's real level: Owner, Administrator, Moderator, Captain, Racing, Standard or Social (worked out by the server).
+const LEVEL_BADGE={Owner:['rgba(250,204,21,0.15)','#facc15'],Administrator:['rgba(239,68,68,0.15)','#f87171'],Moderator:['rgba(251,191,36,0.12)','#FBBF24'],Captain:['rgba(var(--accent-rgb),0.18)','var(--accent)'],Racing:['rgba(var(--accent-rgb),0.1)','var(--accent)'],Standard:['rgba(148,163,184,0.15)','#cbd5e1'],Social:['rgba(168,85,247,0.15)','#c084fc']};
+async function applyAccessBadge(){
+  try{
+    const r=await fetch('/api/access/me',{headers:tttHeaders()}); if(!r.ok) return; const d=await r.json(), b=LEVEL_BADGE[d.level]; if(!b) return;
+    if(d.owner) sessionStorage.setItem('owner','1'); else sessionStorage.removeItem('owner');
+    const rb=document.getElementById('role-badge'); rb.textContent=d.level+(d.type&&d.captain?' · '+d.type[0].toUpperCase()+d.type.slice(1):''); rb.style.background=b[0]; rb.style.color=b[1]; rb.title=d.typeBy?('Worked out from: '+d.typeBy):'';
+  }catch(e){ /* the plain badge stays */ }
 }
 
 // ── Navigation ─────────────────────────────────────────────

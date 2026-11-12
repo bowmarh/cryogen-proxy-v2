@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const BASE_ENV = {
   ADMIN_PASSWORD: 'admin-pw',
   MOD_PASSWORD: 'mod-pw',
+  OWNER_PASSWORD: 'owner-pw',
   KV_REST_API_URL: 'http://redis.test',
   KV_REST_API_TOKEN: 'redis-token',
   WP_API_URL: 'http://wp.test/api',
@@ -319,7 +320,7 @@ async function startApp(world, { host = 'localhost', port = 0 } = {}) {
     get: (path, opts) => app.call('GET', path, opts),
     post: (path, body, opts = {}) => app.call('POST', path, { ...opts, body: body === undefined ? {} : body }),
     async login(role) {
-      const r = await app.post('/api/login', { role, password: role === 'admin' ? BASE_ENV.ADMIN_PASSWORD : BASE_ENV.MOD_PASSWORD });
+      const r = await app.post('/api/login', { role, password: role === 'admin' ? BASE_ENV.ADMIN_PASSWORD : role === 'owner' ? BASE_ENV.OWNER_PASSWORD : BASE_ENV.MOD_PASSWORD });
       return r.body.token;
     },
     // Signs a rider in through the cryogen.team hand-off and returns their member session token.

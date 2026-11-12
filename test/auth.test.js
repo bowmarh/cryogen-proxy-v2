@@ -17,7 +17,8 @@ test('staff can log in with the right password only', async () => {
   assert.equal(mod.status, 200);
   assert.equal((await app.post('/api/login', { role: 'admin', password: 'mod-pw' })).status, 401);
   assert.equal((await app.post('/api/login', { role: 'admin', password: '' })).status, 401);
-  assert.equal((await app.post('/api/login', { role: 'owner', password: 'x' })).status, 400);
+  assert.equal((await app.post('/api/login', { role: 'root', password: 'x' })).status, 400, 'an unknown role');
+  assert.equal((await app.post('/api/login', { role: 'owner', password: 'x' })).status, 401, 'the owner needs the owner password');
 });
 
 test('login is unavailable (503) when that password is not configured', async () => {
@@ -33,12 +34,12 @@ test('login is unavailable (503) when that password is not configured', async ()
 test('admin-only routes: 401 without a login, 403 for a moderator, 200 for an admin', async () => {
   assert.equal((await app.get('/api/health')).status, 401);
   assert.equal((await app.get('/api/health', { token: await app.login('mod') })).status, 403);
-  assert.equal((await app.get('/api/health', { token: await app.login('admin') })).status, 200);
+  assert.equal((await app.get('/api/health', { token: await app.login('owner') })).status, 200);
 });
 
 test('forged, tampered and expired tokens are rejected', async () => {
   const secret = h.defaultSessionSecret();
-  const good = await app.login('admin');
+  const good = await app.login('owner');
   const [payload, sig] = good.split('.');
   const asMod = Buffer.from(JSON.stringify({ role: 'admin', exp: Date.now() + 1e6, extra: 1 })).toString('base64url');
   assert.equal((await app.get('/api/health', { token: `${asMod}.${sig}` })).status, 401, 'payload swapped, old signature');

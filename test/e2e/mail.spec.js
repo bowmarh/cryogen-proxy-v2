@@ -11,8 +11,8 @@ const STATE = { segments: [['zrl', 'Riding in ZRL this round']], settings: { ena
   provider: 'hostinger', configured: true, campaigns: [], groups: [{ id: 'g1', name: 'Captains', segments: ['zrl'], zwids: [] }], log: [], addresses: { members: 10, withEmail: 8, ambiguous: 1, unmatched: 1, wpUsers: 9, at: '2026-11-04' } };
 
 test('staff can draft, check, preview and count an email, and the page is accessible', async ({ page, baseURL }) => {
-  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
-  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.route(/\/api\/mail(\?|$)/, r => r.fulfill({ json: STATE }));
   const sent = {};

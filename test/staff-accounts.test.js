@@ -6,7 +6,7 @@ const h = require('./helpers');
 
 h.setEnv();
 let app, admin;
-before(async () => { app = await h.startApp(h.createWorld()); admin = await app.login('admin'); });
+before(async () => { app = await h.startApp(h.createWorld()); admin = await app.login('owner'); });
 after(() => app.close());
 const A = { get token() { return admin; } };
 beforeEach(() => { app.world.db = {}; });
