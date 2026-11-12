@@ -1895,6 +1895,27 @@ async function handleWpMembersChanged(req, res){
   sendJSON(res, 200, { ok: true });
 }
 
+// App -> WordPress pull for the CRYO-GEN Members admin page: club health and ZRL availability (counts only, no names or contact details).
+// WordPress signs "<method> <path> <unix seconds>" with WP_SYNC_SECRET in X-Cryogen-Signature and sends the seconds in X-Cryogen-Ts.
+function wpSignedRequest(req, pathname){
+  const secret = process.env.WP_SYNC_SECRET;
+  if (!secret) throw new HttpError(503, 'WP_SYNC_SECRET is not set');
+  const ts = Number(req.headers['x-cryogen-ts']), sig = String(req.headers['x-cryogen-signature'] || '');
+  if (!ts || Math.abs(Date.now() - ts * 1000) > WP_SYNC_MAX_SKEW_MS) throw new HttpError(401, 'stale request');
+  const expected = crypto.createHmac('sha256', secret).update(`${req.method} ${pathname} ${ts}`).digest('hex');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) throw new HttpError(401, 'bad signature');
+}
+async function handleWpAdminSummary(req, res){
+  wpSignedRequest(req, '/api/wp/admin-summary');
+  const [stats, weekly] = await Promise.allSettled([clubstats.build(), zrl.weeklyView()]);
+  sendJSON(res, 200, {
+    at: new Date().toISOString(),
+    clubstats: stats.status === 'fulfilled' ? stats.value : null,
+    zrl: weekly.status === 'fulfilled' ? weekly.value : null,
+    zrlNote: weekly.status === 'rejected' ? weekly.reason.message : undefined,
+  });
+}
+
 async function fetchRoster(){
   if (rosterCache && Date.now() - rosterCache.at < ROSTER_TTL_MS && await membersChangedAt() <= rosterCache.at) return rosterCache;
   const auth = process.env.WP_API_USER && process.env.WP_API_APP_PASSWORD
@@ -3108,6 +3129,7 @@ async function route(req, res){
 
   if (pathname === '/api/login' && req.method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/wp/members-changed' && req.method === 'POST') return handleWpMembersChanged(req, res);
+  if (pathname === '/api/wp/admin-summary' && req.method === 'GET') return handleWpAdminSummary(req, res);
   if (pathname === '/api/roster' && req.method === 'GET') return handleRoster(req, res);
   if (pathname === '/api/auth/status' && req.method === 'GET'){
     return sendJSON(res, 200, { sso: Boolean(process.env.WP_SSO_SECRET), url: WP_SSO_LOGIN_URL, requireLogin: memberLoginRequired(), staging: process.env.STAGING === '1' });

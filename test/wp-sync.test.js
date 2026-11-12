@@ -45,3 +45,17 @@ test('an associate tier saved by WordPress as "half" counts as saved (plugin 1.2
   const bulk = await app.post('/api/members/bulk', { zwids: [String(rec.zwift_id)], changes: { tier: 'associate' } }, { token });
   assert.equal(bulk.body.saved, 1, JSON.stringify(bulk.body));
 });
+
+test('the WordPress admin page can pull club stats and ZRL availability with a signed request, and nothing else can', async () => {
+  const ts = now();
+  const sig = crypto.createHmac('sha256', 'sync-secret').update(`GET /api/wp/admin-summary ${ts}`).digest('hex');
+  const ok = await app.call('GET', '/api/wp/admin-summary', { headers: { 'X-Cryogen-Ts': String(ts), 'X-Cryogen-Signature': sig } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.ok('clubstats' in ok.body && 'zrl' in ok.body);
+  assert.doesNotMatch(JSON.stringify(ok.body), /Rider \d/, 'no rider names leave the app');
+  const bad = await app.call('GET', '/api/wp/admin-summary', { headers: { 'X-Cryogen-Ts': String(ts), 'X-Cryogen-Signature': sig.replace(/^./, c => c === 'a' ? 'b' : 'a') } });
+  assert.equal(bad.status, 401);
+  assert.equal((await app.get('/api/wp/admin-summary')).status, 401);
+  const staff = await app.get('/api/wp/admin-summary', { token: await app.login('admin') });
+  assert.equal(staff.status, 401, 'a staff login is not enough: only WordPress, with the secret');
+});
