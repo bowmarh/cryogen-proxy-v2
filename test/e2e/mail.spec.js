@@ -15,7 +15,9 @@ test('staff can draft, check, preview and count an email, and the page is access
   await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.route(/\/api\/mail(\?|$)/, r => r.fulfill({ json: STATE }));
-  await page.route('**/api/mail/draft', r => r.fulfill({ json: { subject: 'Race week', body: 'Hi {first},\n\nThree races this week.' } }));
+  const sent = {};
+  await page.route('**/api/mail/draft', r => { sent.draft = r.request().postDataJSON(); r.fulfill({ json: { subject: 'Race week', body: 'Hi {first},\n\nThree races this week.' } }); });
+  await page.route('**/api/mail/settings', r => { sent.settings = r.request().postDataJSON(); r.fulfill({ json: { settings: { ...STATE.settings, enabled: sent.settings.enabled } } }); });
   await page.route('**/api/mail/save', r => r.fulfill({ json: { campaign: { id: 'c1', subject: 'Race week', body: 'Hi {first}', category: 'news', audience: { type: 'all' }, status: 'draft' } } }));
   await page.route('**/api/mail/check', r => r.fulfill({ json: { check: { ok: true, issues: [], ai: { ran: false, note: 'The AI check could not run: only the fixed rules were applied.' } } } }));
   await page.route('**/api/mail/audience', r => r.fulfill({ json: { count: 8, noEmail: 2, optedOut: 0, estimate: 'about 1 hour' } }));
@@ -26,6 +28,7 @@ test('staff can draft, check, preview and count an email, and the page is access
   await page.locator('#mail-brief').fill('Remind riders about race week');
   await page.getByRole('button', { name: /Draft with AI/ }).click();
   await expect(page.locator('#mail-subject')).toHaveValue('Race week');
+  expect(sent.draft.brief).toBe('Remind riders about race week');   // what was typed reaches the server (the page must not redraw before reading it)
   await page.getByRole('button', { name: /Check/ }).click();
   await expect(page.locator('#mail-content')).toContainText('Passed the check');
   await page.getByRole('button', { name: /Count recipients/ }).click();
@@ -35,6 +38,10 @@ test('staff can draft, check, preview and count an email, and the page is access
   await page.evaluate(AXE);
   const bad = await page.evaluate(async () => (await axe.run(document.getElementById('page-mail'), { runOnly: ['wcag2a', 'wcag2aa'], resultTypes: ['violations'] })).violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => `${v.id}: ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`));
   expect(bad).toEqual([]);
+  await page.getByRole('button', { name: /Preview/ }).click(); await expect(page.locator('#mail-subject')).toHaveValue('Race week');   // typed text survives a redraw
+  await page.getByRole('tab', { name: /Settings/ }).click();
+  await page.locator('#s-enabled').check(); await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.locator('#mail-content')).toContainText('Settings saved'); expect(sent.settings.enabled).toBe(true); await expect(page.locator('#s-enabled')).toBeChecked();
   await page.getByRole('tab', { name: /Groups/ }).click();
   await expect(page.locator('#mail-content')).toContainText('Captains');
   expect(errors).toEqual([]);

@@ -13,7 +13,11 @@
   }
   const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   const say = (m, bad) => { note = m ? `<div role="status" style="margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;background:${bad ? 'rgba(248,113,113,.12);color:#fca5a5' : 'rgba(52,211,153,.12);color:#6ee7b7'}">${E(m)}</div>` : ''; };
-  async function act(label, fn) { busy = label; render(); try { await fn(); } catch (e) { say(e.message, true); } busy = ''; render(); }
+  // The action is started before the page is redrawn: it reads the form fields in its first lines, and a redraw first would reset them.
+  async function act(label, fn) {
+    let p; try { p = fn(); } catch (e) { p = Promise.reject(e); }
+    busy = label; render(); try { await p; } catch (e) { say(e.message, true); } busy = ''; render();
+  }
   async function open() {
     const el = root(); if (!el) return;
     try { st = await api('/api/aiops'); try { round = (await api('/api/zrl')).round || null; } catch (e) { round = null; } } catch (e) { el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; return; }
