@@ -4316,16 +4316,34 @@ async function loadMyZrl(){
   }catch(e){ el.innerHTML=`<div class="card" style="padding:16px;font-size:13px;color:#f87171">Could not load your ZRL status: ${esc(e.message)}</div>`; }
 }
 
-// ── Live Results ──────────────────────────────────────────
+// ── Club results (ZwiftRacing.app, CRYO-GEN riders only; see lib/clubresults.js) ──
 async function loadResults(){
+  const el=document.getElementById('results-body'), hdr=document.getElementById('results-header');
+  if(!el) return;
   try{
-    const r=await fetch(WP_URL + '/zwift/public/results');
-    if(!r.ok) return;
-    const d=await r.json();
-    if(d.results&&d.results.length>0){ renderAutoResults(d.results); }
-    else { renderHybridResults([],d.derived||[]); }
-  } catch(e){ console.log('Results failed:',e.message); }
+    const r=await fetch('/api/results',{headers:tttHeaders()});
+    if(r.status===401){ el.innerHTML='<div style="padding:14px 18px;font-size:13px;color:#8b95a5">Sign in to see club results.</div>'; return; }
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    if(hdr) hdr.textContent='Recent results · CRYO-GEN riders';
+    const staff=role==='admin'||role==='mod';
+    const fmtT=t=>{ if(t==null) return ''; const s=Math.round(Number(t)); return Math.floor(s/3600)?`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
+    const ev=d.events.map(e=>`<div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:13px">${esc(e.title)}</b><span style="font-size:11px;color:#8b95a5">${e.time?new Date(e.time*1000).toISOString().slice(0,10):''} · ${e.riders.length} of ${e.field} ours</span></div>
+        ${e.riders.length?`<div style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px">${e.riders.map(x=>`<div style="font-size:12px"><span style="color:${catColor(x.cat)};font-weight:700">${x.catPos?('#'+x.catPos+' '+esc(x.cat||'')):x.pos?('#'+x.pos):'✓'}</span> ${esc(x.name)} <span style="color:#8b95a5">${fmtT(x.time)}</span></div>`).join('')}</div>`:'<div style="font-size:12px;color:#8b95a5;margin-top:4px">No CRYO-GEN finishers.</div>'}
+        <div style="font-size:11px;margin-top:4px"><a href="https://www.zwiftracing.app/events/${esc(e.id)}" target="_blank" rel="noopener">Full results ↗</a>${staff?` · <a href="#" onclick="resultsRemove('${esc(e.id)}');return false" style="color:#8b95a5">remove</a>`:''}</div></div>`).join('');
+    const add=staff?`<div style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.07)">
+        ${d.keySet?'':'<div style="font-size:12px;color:#f87171;margin-bottom:6px">ZWIFTRACING_API_KEY is not set in Vercel, so results cannot be fetched.</div>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="results-add" placeholder="Paste a Zwift, ZwiftPower or ZwiftRacing.app event link" style="flex:1;min-width:220px"><button class="btn" onclick="resultsAdd(this)">Add results</button></div>
+        <div id="results-msg" style="font-size:12px;color:#8b95a5;margin-top:6px">${d.queue&&d.queue.length?`Waiting for results: ${d.queue.map(q=>esc(q.id)).join(', ')} (fetched automatically).`:'Ladder and DIRT races with an event link are added by themselves after the race.'}</div>
+        ${role==='admin'?`<label style="font-size:12px;display:block;margin-top:6px"><input type="checkbox" ${d.settings&&d.settings.post?'checked':''} onchange="resultsPost(this.checked)"> Post new results to the club's Discord channel</label>`:''}</div>`:'';
+    el.innerHTML=(ev||'<div style="padding:14px 18px;font-size:13px;color:#8b95a5">No results yet.</div>')+add;
+  }catch(e){ el.innerHTML=`<div style="padding:14px 18px;font-size:13px;color:#f87171">Could not load results: ${esc(e.message)}</div>`; }
 }
+async function resultsAdd(b){ const i=document.getElementById('results-add'), m=document.getElementById('results-msg'); b.disabled=true; m.textContent='Fetching…';
+  try{ const r=await fetch('/api/results/add',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({event:i.value})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); if(d.fetched) await loadResults(); else m.textContent=d.note; }
+  catch(e){ m.textContent=e.message; } finally{ b.disabled=false; } }
+async function resultsRemove(id){ if(!confirm('Remove this event from the results?')) return; await fetch('/api/results/remove',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({event:id})}); loadResults(); }
+async function resultsPost(on){ await fetch('/api/results/settings',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({post:on})}); }
 
 function renderAutoResults(results){
   const el=document.getElementById('results-body');
