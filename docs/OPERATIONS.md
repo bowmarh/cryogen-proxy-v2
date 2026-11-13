@@ -122,3 +122,9 @@ New members (those who appear after onboarding began, for their first 60 days) s
 4. **Switching it off:** untick *Show the Get set up screen to new members* in the same card. Members already in the club when onboarding began, and associates, never see it.
 
 **Nobody is stuck behind the Get set up screen:** it has an *Ask a volunteer to help* link (the admin Discord channel hears, once a day per member), and an administrator can *Waive* it for any Zwift ID (Control room → Join requests → New-member welcome). If Discord sign-in is not set up, the Discord step is confirmed with a button like the other two, so a member can never be asked to link something they cannot link.
+
+## First-race nudge, captain weekly message, season wrap
+
+- **First-race nudge:** a week after a new member finishes the Get set up screen, if they are still on no team or sign-up, they get one friendly Discord message pointing at the weekly TTT. Once per member, within their first month; not for waived members.
+- **Captain weekly message:** Sunday evening (from 17:00 UTC) each ZRL captain with a linked Discord gets one message per team: how many riders have not answered for the coming race, who they are, and where the *Ask the unanswered* button is (My team). Nothing is sent when everyone has answered.
+- **Season wrap:** when every team has all its results, and *Also email each team its report automatically* is on (AI desk → Radio & reports), each rider who was on a team also gets a short direct message with their team's final place and how many races they were in the line-up for. Once per rider per round.

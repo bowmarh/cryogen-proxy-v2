@@ -9,7 +9,7 @@ h.setEnv();
 const ROUND = { name: 'Round 2', weeks: 4, racing: 2, teams: [{ id: 't1', name: 'Alpha', captain: '1' }, { id: 't2', name: 'Bravo', captain: '' }] };
 const SIGN = [['1', 'Ann Lee', 'A'], ['2', 'Bo Dunn', 'B'], ['3', 'Cy Ray', 'B'], ['4', 'Di Fox', 'C']].map(([zwid, name, cat]) => ({ key: 'k' + zwid, zwid, name, cat, in: true }));
 function kit({ ai = null, results = {}, lineup = {}, avail = {}, inactive = [], mailOn = true, mailEnabled = true } = {}) {
-  const db = {}, posts = [], sent = [], redis = async cmds => cmds.map(c => h.redisRun(db, c)), opt = [];
+  const dms = [], db = {}, posts = [], sent = [], redis = async cmds => cmds.map(c => h.redisRun(db, c)), opt = [];
   const HttpError = class extends Error { constructor(s, m) { super(m); this.status = s; } };
   const stubAi = ai || { enabled: () => false, available: async () => false, complete: async () => { throw new Error('off'); }, json: t => { try { return JSON.parse(t); } catch (e) { return null; } }, clip: (v, n) => String(v == null ? '' : v).trim().slice(0, n) };
   const state = { results };
@@ -18,9 +18,9 @@ function kit({ ai = null, results = {}, lineup = {}, avail = {}, inactive = [], 
   const tidy = { analyse: async () => ({ inactive }) };
   const mail = mailOn ? { routes: { 'POST /api/mail/send-one': async (req, b) => { sent.push(['one', b]); return { ok: true }; } }, optOutAddress: async (e, s) => opt.push([e, s]),
     autoSend: async b => { if (!mailEnabled) return { sent: false, why: 'off' }; sent.push(['auto', b]); return { sent: true, id: 'c1' }; } } : null;
-  const o = createAiOps({ redis, HttpError, requireRole: () => 'admin', staffNameOf: () => 'Ricks', ai: stubAi, zrl, tidy, fetchRoster: async () => ({ riders: [{ riderId: 1, name: 'Ann Lee', zpCategory: 'A', race: { current: { rating: 1800 }, finishes: 20 } }, { riderId: 2, name: 'Bo Dunn', race: { current: { rating: 1500 }, finishes: 3 } }, { riderId: 3, name: 'Cy Ray', race: { current: { rating: 1600 }, finishes: 9 } }] }),
+  const o = createAiOps({ notify: async (z, t) => { dms.push([z, t]); return true; }, redis, HttpError, requireRole: () => 'admin', staffNameOf: () => 'Ricks', ai: stubAi, zrl, tidy, fetchRoster: async () => ({ riders: [{ riderId: 1, name: 'Ann Lee', zpCategory: 'A', race: { current: { rating: 1800 }, finishes: 20 } }, { riderId: 2, name: 'Bo Dunn', race: { current: { rating: 1500 }, finishes: 3 } }, { riderId: 3, name: 'Cy Ray', race: { current: { rating: 1600 }, finishes: 9 } }] }),
     publicClub: async () => ({ podium: [] }), digest: async () => ({ needsAttention: 0 }), discord: async (ch, b) => { posts.push([ch, b.content]); return true; }, mail, siteUrl: 'https://club.test' });
-  return { o, db, posts, sent, opt, state, HttpError };
+  return { o, db, dms, posts, sent, opt, state, HttpError };
 }
 const call = (k, route, body) => k.o.routes[route]({}, body || {});
 
@@ -104,4 +104,14 @@ test('the whole-round plan shares races out fairly, leaves out anyone who said n
   assert.ok(r.weeks[1].picks.some(p => p.name === 'Bo Dunn'), 'week 2: the rider who has not raced yet comes in before someone who has');
   assert.equal(r.weeks[2].short, 1, 'only one rider can ride in week 3'); assert.ok(r.weeks.every(w => w.picks.length <= 2)); assert.equal(r.races.reduce((n, x) => n + x.races, 0), r.weeks.reduce((n, w) => n + w.picks.length, 0));
   await assert.rejects(() => call(k, 'POST /api/aiops/season-lineups', { team: 'nope' }), /does not exist/);
+});
+
+test('the season wrap: when a round completes and automatic reports are on, each rider who rode gets one thank-you with their team finish and races; once only; nothing when automatic reports are off', async () => {
+  const done = { '0:t1': { pos: 2, pts: 9 }, '1:t1': { pos: 1, pts: 10 }, '2:t1': { pos: 3, pts: 8 }, '3:t1': { pos: 1, pts: 10 }, '0:t2': { pos: 1, pts: 10 }, '1:t2': { pos: 2, pts: 9 }, '2:t2': { pos: 1, pts: 10 }, '3:t2': { pos: 1, pts: 10 } };
+  const lineup = { '0:t1': ['1', '2'], '1:t1': ['1', '3'], '2:t1': ['1'], '3:t1': ['2', '3'] };
+  const off = kit({ results: done, lineup }); await call(off, 'POST /api/aiops/settings', { radio: { on: true } }); await off.o.radioTick(); assert.equal(off.dms.length, 0, 'automatic reports are off: no direct messages');
+  const k = kit({ results: {}, lineup }); await call(k, 'POST /api/aiops/settings', { radio: { on: true }, reports: { auto: true } }); await k.o.radioTick(); k.state.results = done;
+  await k.o.radioTick(); const msgs = Object.fromEntries(k.dms.map(([z, t]) => [z, t]));
+  assert.ok(msgs['1'] && msgs['2'] && msgs['3'] && msgs['4'], 'every rider on a team'); assert.match(msgs['1'], /Alpha finished 2nd of 2 in Div 1 with 40 points/); assert.match(msgs['1'], /line-up for 3 of 4 races/); assert.match(msgs['4'], /Bravo finished 1st of 2/); assert.ok(!/line-up for/.test(msgs['4']), 'no race count for someone who was never picked');
+  const count = k.dms.length; await k.o.radioTick(); assert.equal(k.dms.length, count, 'once only');
 });
