@@ -29,7 +29,7 @@ test('the owner turns on an authenticator and then signs in with a code through 
   await page.goto(baseURL); await page.locator('#owner-btn').click(); await page.locator('#owner-pw').fill(pw); await page.getByRole('button', { name: 'Login as Owner' }).click();
   await expect(page.getByText('Enter your authenticator code')).toBeVisible();
   await page.locator('#auth-code').fill('000000'); await page.getByRole('button', { name: 'Continue' }).click(); await expect(page.locator('#auth-err')).toContainText(/code/i);
-  await page.locator('#auth-code').fill(totp.code(secret, Date.now() + 30000)); await page.getByRole('button', { name: 'Continue' }).click();
+  await page.locator('#auth-code').fill(totp.code(secret, Date.now() + 30000));   // a full 6-digit code signs in by itself: no button to press
   await expect(page.locator('#login-screen')).toBeHidden(); expect(await page.evaluate(() => sessionStorage.getItem('owner'))).toBe('1');
   // leave the shared test server as it was: the other specs sign in as the owner with the password alone
   const t2 = await page.evaluate(() => sessionStorage.getItem('token')); expect((await page.request.post('/api/auth/totp/disable', { data: { code: recovery[0] }, headers: { Authorization: 'Bearer ' + t2 } })).ok()).toBe(true);
