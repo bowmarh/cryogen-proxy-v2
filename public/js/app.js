@@ -1576,7 +1576,7 @@ function renderRacing(){
   const zra=(document.getElementById('r-zra')||{value:''}).value;
   const ph=(document.getElementById('r-ph')||{value:''}).value;
   let filtered=data.filter(m=>m.active&&
-    (!search||m.name.toLowerCase().includes(search))&&
+    personMatches(m,search)&&
     (cat==='All'||m.cat===cat)&&
     (!zra||m.zraCat===zra)&&
     (!ph||m.ph===ph)
@@ -1603,6 +1603,20 @@ function renderRacing(){
 }
 
 // ── Members ────────────────────────────────────────────────
+// Search by any of: name, Zwift ID, category, ZwiftRacing tier, phenotype, membership level, status, country. Every word typed must match something, so
+// "ann b" finds Ann in category B and "1002" finds that Zwift ID.
+function personMatches(m,q){
+  const words=String(q||'').toLowerCase().split(/\s+/).filter(Boolean); if(!words.length) return true;
+  const hay=[m.name,m.id,m.cat,m.zraCat,m.ph,(m.tier==='half'||m.tier==='associate')?'associate':'full',m.status,m.cc].join(' ').toLowerCase();
+  return words.every(w=>hay.includes(w));
+}
+// Staff: everyone matching the current search and filters (not just the page on screen) as a spreadsheet file.
+function exportMembersCsv(){
+  const rows=window.mFilteredRows||[], yes=v=>v?'yes':'no';
+  const head=['Name','Zwift ID','Level','Status','Category','ZwiftRacing tier','FTP (W)','W/kg','vELO','Phenotype','Country','On the club roster','Off-boarded: Discord','Off-boarded: Facebook','Off-boarded: ZwiftPower'];
+  const body=rows.map(m=>[m.name,m.id,(m.tier==='half'||m.tier==='associate')?'associate':'full',m.status,m.cat||'',m.zraCat||'',m.ftp||'',m.wkg||'',m.velo||'',m.ph||'',(m.cc||'').toUpperCase(),yes(!m.noZwift),yes(m.ob_discord),yes(m.ob_fb),yes(m.ob_zp)]);
+  if(window.TableFilter) TableFilter.downloadCsv(`cryogen-members-${new Date().toISOString().slice(0,10)}.csv`,[head,...body]);
+}
 function renderMembers(){
   renderOffboarding(); if(assocList||assocErr) renderAssocPanel();
   const data=[...riders,...wpOnly];
@@ -1612,7 +1626,7 @@ function renderMembers(){
   const zra=(document.getElementById('m-zra')||{value:''}).value;
   const tier=(document.getElementById('m-tier')||{value:''}).value;
   let filtered=data.filter(m=>
-    (!search||m.name.toLowerCase().includes(search))&&
+    personMatches(m,search)&&
     (cat==='All'||m.cat===cat)&&
     (!ph||m.ph===ph)&&
     (!zra||m.zraCat===zra)&&
@@ -1620,7 +1634,8 @@ function renderMembers(){
     (!mActive||m.active)
   );
   
-  mFilteredIds=filtered.map(m=>String(m.id));
+  mFilteredIds=filtered.map(m=>String(m.id)); window.mFilteredRows=filtered;
+  { const eb=document.getElementById('m-export'); if(eb) eb.style.display=(role==='admin'||role==='mod')?'':'none'; }
   const sorted=sortData(filtered,mSort);
   const PER=15, total=Math.ceil(sorted.length/PER)||1;
   if(mPage>total)mPage=1;
@@ -1772,7 +1787,7 @@ function renderEvents(){
     html+=byCat.map(({cat,r})=>`
       <div class="card" style="margin-bottom:12px">
         <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px">${catB(cat)}<span style="font-size:11px;color:#8b95a5">${r.length} rider${r.length!==1?'s':''}</span></div>
-        ${r.map(s=>`<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <div data-filterable>${r.map(s=>`<div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04)">
           <div style="display:flex;align-items:center;gap:10px">
             <span style="color:#10B981">✓</span>
             <span>${esc(s.name)}</span>
@@ -1782,7 +1797,7 @@ function renderEvents(){
             <span style="font-size:11px;color:#9aa3b2">${new Date(s.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
             ${(role==='admin'||role==='mod')?`<button data-name="${esc(s.name)}" onclick="rmSignup('${activeSeries}',this.dataset.name)" style="background:none;border:none;color:#9aa3b2;font-size:16px;padding:0">×</button>`:''}
           </div>
-        </div>`).join('')}
+        </div>`).join('')}</div>
       </div>`).join('');
   }
   document.getElementById('series-content').innerHTML=html;
@@ -3137,7 +3152,7 @@ function zrlAutoCard(d){
     body+=`<div style="font-size:12px;color:#9ca3af;margin:10px 0 6px"><b>${p.moves.length}</b> placed${p.unplaced.length?`, <span style="color:#fbbf24"><b>${p.unplaced.length}</b> could not be placed</span>`:''}. Nothing is moved until you press Apply.</div>
       <div style="max-height:320px;overflow:auto">${p.teams.filter(t=>byTeam[t.id]).map(t=>`<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px"><b>${esc(t.name)}</b> <span style="color:#8b95a5">${esc([t.division,t.grade].filter(Boolean).join(' · '))} · ${t.before} → ${t.after}/10</span>
         <div style="color:#9ca3af;margin-top:2px">${byTeam[t.id].map(m=>rn(m.name,'',m.key)+(m.cat?' ('+esc(m.cat)+')':'')+(m.captain?' ⭐ captain':'')).join(', ')}</div></div>`).join('')}</div>
-      ${p.unplaced.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24">Not placed:<ul style="margin:4px 0 0 18px">${p.unplaced.map(u=>`<li>${rn(u.name,'',u.key)}${u.cat?' ('+esc(u.cat)+')':''}: ${esc(u.reason)}</li>`).join('')}</ul></div>`:''}
+      ${p.unplaced.length?`<div style="margin-top:8px;font-size:12px;color:#fbbf24">Not placed:<ul style="margin:4px 0 0 18px" data-filterable>${p.unplaced.map(u=>`<li>${rn(u.name,'',u.key)}${u.cat?' ('+esc(u.cat)+')':''}: ${esc(u.reason)}</li>`).join('')}</ul></div>`:''}
       <div style="margin-top:10px"><button class="btn-cyan" style="width:auto;padding:6px 16px;font-size:12px" onclick="zrlAutoApply()">Apply ${p.moves.length} placements</button></div>`;
   }
   return `<div class="card" style="padding:14px 16px;margin-top:16px">${lbl}${body}<div style="font-size:11px;color:#9aa3b2;margin-top:8px">Riders go to a team in their time zone with a free place and a suitable category: full-season riders and those who named a team first. You can move anyone afterwards from the Team column in the list above.</div></div>`;
@@ -3668,7 +3683,7 @@ function zrlEvCard(){
     <div style="font-size:12px;margin-top:2px;color:${e.outsideRound?'#FBBF24':'#9ca3af'}">${e.outsideRound?`This race was on <b>${esc(e.event.date)}</b>, outside this round, so it belongs to an earlier (or later) round. This round's line-ups do not apply to it, and the teams below are your <b>current</b> teams that these riders belong to now.`:e.week!==null?`This is <b>race ${e.week+1}</b>. <button onclick="zrlResWeek=${e.week};renderZrl2()" style="padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:5px;color:#e5e7eb;cursor:pointer">Show race ${e.week+1} above</button>`:'The race number could not be read from the title (or it is outside this round), so there is no line-up to compare with.'}</div>
     ${e.teams.some(t=>t.raced.length)&&e.week!==null&&!e.outsideRound?`<div style="margin-top:8px"><button onclick="zrlScoreAll()" style="${btn}">🧮 Score all teams from this race</button></div>`:''}
     ${e.teams.length?e.teams.map(t=>`<div style="margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px"><div style="font-weight:800;font-size:13px">${esc(t.name.replace(/^CRYO-GEN\s+/,''))} <span style="font-weight:400;color:#8b95a5;font-size:11px">${esc([t.division,t.league].filter(Boolean).join(' · '))}</span>${t.named===false&&!e.outsideRound?' <span style="font-weight:400;color:#FBBF24;font-size:11px">· not the league and division named in the title</span>':''}${e.week!==null&&!e.outsideRound&&t.raced.length?` <button onclick="zrlCalcFromEvent('${esc(t.id)}')" style="margin-left:6px;padding:1px 8px;font-size:11px;background:none;border:1px solid rgba(var(--accent-rgb),0.4);border-radius:5px;color:var(--accent);cursor:pointer">🧮 Work out points</button>`:''}</div>
-      ${t.raced.map(x=>`<div style="font-size:12px;padding:1px 0">🏁 ${esc(x.name)} · <b>${x.position?ord(x.position):'—'}</b>${x.cat?' · cat '+esc(x.cat):''}${e.week!==null?(x.picked?' <span style="color:#10B981">· was picked</span>':' <span style="color:#FBBF24">· was not in the line-up</span>'):''}</div>`).join('')||'<div style="font-size:12px;color:#8b95a5">Nobody from the team is in the results.</div>'}
+      <div data-filterable>${t.raced.map(x=>`<div style="font-size:12px;padding:1px 0">🏁 ${esc(x.name)} · <b>${x.position?ord(x.position):'—'}</b>${x.cat?' · cat '+esc(x.cat):''}${e.week!==null?(x.picked?' <span style="color:#10B981">· was picked</span>':' <span style="color:#FBBF24">· was not in the line-up</span>'):''}</div>`).join('')||'<div style="font-size:12px;color:#8b95a5">Nobody from the team is in the results.</div>'}</div>
       ${t.missing.length?`<div style="font-size:12px;color:#FBBF24;margin-top:2px">Picked but not in the results: ${esc(t.missing.join(', '))}</div>`:''}</div>`).join(''):'<div style="font-size:12px;color:#9ca3af;margin-top:8px">None of our teams are in this event.</div>'}
     <div style="font-size:11px;color:#8b95a5;margin-top:6px">Positions are each rider's finish in the whole race. Team positions and points come from WTRL: enter them above.</div>`;
   return `<div class="card" style="padding:14px 16px;margin-top:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin:0 0 6px">Check a race (ZwiftRacing.app)</div>
