@@ -1114,7 +1114,7 @@ function showTab(id,btn){
   if(id==='members'){ renderMembers(); loadAssocPanel(); }
   if(id==='upgrade')loadUpgrade();
   if(id==='week')loadWeek();
-  if(id==='comms')loadComms();
+  if(id==='comms'){loadComms();if(window.DiscordRolesUI)DiscordRolesUI.load();}
   if(id==='fair')loadFair();
   if(id==='clubstats'&&window.ClubStatsUI)ClubStatsUI.load();
   if(id==='inv'&&window.invLoad)invLoad();
