@@ -458,7 +458,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <div id="backup-box" style="border-top:1px solid rgba(255,255,255,0.07);padding-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px;flex-wrap:wrap">
           <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">💾 Backups</div>
-          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupVerify()" title="Unpacks the newest daily copy and checks a restore would work; nothing is changed" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Test restore</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
+          <div style="display:flex;gap:6px"><button onclick="backupNow()" style="padding:5px 10px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;font-size:11px;font-weight:700">Back up now</button><button onclick="backupRestoreTest()" title="A real restore into temporary scratch keys, compared item for item, then removed; nothing live is touched" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18);border-radius:6px;font-size:11px;font-weight:700">Real restore test</button><button onclick="backupVerify()" title="Unpacks the newest daily copy and checks a restore would work; nothing is changed" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Test restore</button><button onclick="backupDownload()" style="padding:5px 10px;background:rgba(255,255,255,0.05);color:#e5e7eb;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:11px;font-weight:700">Download current</button></div>
         </div>
         <div id="backup-panel" style="font-size:12px;color:#8b95a5">Loading…</div>
       </div>
@@ -512,6 +512,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 <script src="/js/mailui.js"></script>
 <script src="/js/aidesk.js"></script>
 <script src="/js/authui.js"></script>
+<script src="/js/zrlpast.js"></script>
 <script src="/js/control.js"></script>
 <script src="/js/captain.js"></script>
 <script src="/js/mydetails.js"></script>
