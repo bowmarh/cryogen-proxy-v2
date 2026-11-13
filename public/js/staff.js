@@ -356,7 +356,7 @@ async function loadGoLive(){
     const res=await fetch('/api/golive',{headers:tttHeaders()});
     const d=await res.json();
     if(!res.ok) throw new Error(d.error||('HTTP '+res.status));
-    const icon={ok:'✅',todo:'⬜',off:'💤'};
+    const icon={ok:'✅',todo:'☐',off:'💤'};
     const row=i=>`<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${icon[i.state]||'•'}</div><div><div style="font-weight:700;color:#e5e7eb">${esc(i.title)}</div><div style="color:#9ca3af">${esc(i.detail||'')}</div>${i.state!=='ok'&&i.how?`<div style="color:#FBBF24;margin-top:2px">${esc(i.how)}</div>`:''}</div></div>`;
     const todo=d.items.filter(i=>i.state!=='ok'), done=d.items.filter(i=>i.state==='ok');
     el.innerHTML=(d.staging?`<div style="margin-bottom:8px"><button onclick="stagingSeed()" style="padding:6px 10px;background:rgba(251,191,36,0.12);color:#FBBF24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;font-size:11px;font-weight:700">🧪 Fill with test data</button></div>`:'')+`<div style="margin-bottom:6px;color:#9ca3af">${d.ready?'<b style="color:#10B981">Ready for race week</b>':`<b style="color:#FBBF24">${d.todo} to do</b>`} · ${done.length} of ${d.items.length} done</div>`

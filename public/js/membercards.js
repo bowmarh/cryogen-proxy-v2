@@ -16,7 +16,7 @@
     const pct = Math.round(d.done / d.total * 100), next = d.steps.find(x => x.id === d.next);
     return `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-weight:800">🚦 Your first race: ${d.done} of ${d.total} done</div><div style="font-size:12px;color:#8b95a5">Welcome to CRYO-GEN!</div></div>
       <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.08);margin:8px 0 10px" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="height:6px;border-radius:3px;width:${pct}%;background:var(--accent,#22d3ee)"></div></div>
-      ${d.steps.map(s => `<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13px;opacity:${s.done ? .65 : 1}"><span aria-hidden="true">${s.done ? '✅' : '⬜'}</span><span>${E(s.label)}</span></div>`).join('')}
+      ${d.steps.map(s => `<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13px;opacity:${s.done ? .65 : 1}"><span aria-hidden="true">${s.done ? '✅' : '☐'}</span><span>${E(s.label)}</span></div>`).join('')}
       ${next ? `<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(var(--accent-rgb,34,211,238),0.08);font-size:12px;color:#d1d5db"><b>Next:</b> ${E(next.label)}. ${E(next.hint)} ${next.ack ? `<button type="button" style="${btn};margin-left:6px" onclick="onboardAck()">I've read it</button>` : ''}${next.tab ? `<button type="button" style="${btn};margin-left:6px" onclick="showTab('${next.tab}',document.getElementById('nav-${next.tab}')||this)">Open</button>` : ''}</div>` : ''}</div>`;
   }
   async function loadOnboard() {
