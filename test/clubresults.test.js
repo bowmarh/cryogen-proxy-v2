@@ -83,3 +83,13 @@ test('the season leaderboard counts races, podiums and wins since 1 September; a
   const mine = await r.routes['GET /api/me/results']({ member: { zwid: '2' } });
   assert.deepEqual(mine.results.map(x => x.id), ['a', 'old'], 'their whole history, newest first');
 });
+
+test('the public club page shows recent results as counts and best place only, never a rider name', async () => {
+  const add = await app.post('/api/results/add', { event: '5188741' }, { token: mod });
+  assert.equal(add.body.fetched, true);
+  await app.post('/api/public/settings', { on: true }, { token: await app.login('admin') });
+  const r = await app.get('/api/public/club');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.results[0], { title: EVENT.title, date: '2026-11-03', riders: 2, podiums: 2, best: 1, bestCat: 'A' });
+  assert.doesNotMatch(JSON.stringify(r.body.results), /Rider [01]|1000|1001/);
+});
