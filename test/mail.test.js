@@ -9,7 +9,7 @@ h.setEnv({ HOSTINGER_MAIL_TOKEN: 'mail-token', HOSTINGER_MAIL_MAILBOX_ID: 'mbx_1
 // ── The module on its own, with stand-ins for everything it talks to ──
 const MEMBERS = [['1', 'Ann Lee'], ['2', 'Bo Dunn'], ['3', 'Cy Ray'], ['4', 'Di Fox'], ['5', 'Ed Pike'], ['6', 'Flo Gray'], ['7', 'Gus Hill (CRYO-GEN)'], ['8', 'Hal Roe']].map(([z, n]) => ({ zwift_id: z, name: n, status: 'active' }));
 const USERS = [['Ann Lee', 'ann@x.test'], ['Bo Dunn', 'bo@x.test'], ['Cy Ray', 'cy@x.test'], ['Di Fox', 'di@x.test'], ['Ed Pike', 'ed@x.test'], ['Flo Gray', 'flo@x.test'], ['Gus Hill', 'gus@x.test'], ['Hal Roe', 'hal1@x.test'], ['Hal Roe', 'hal2@x.test']].map(([name, email], id) => ({ id, name, email }));
-function kit({ ai = null, segments = {}, onboarding = null, lifecycle = null, configured = true } = {}) {
+function kit({ ai = null, segments = {}, onboarding = null, lifecycle = null, configured = true, links = undefined, users = USERS } = {}) {
   const db = {}, sent = [], posts = [], state = { fail: null, failFor: new Set() };
   const redis = async cmds => cmds.map(c => h.redisRun(db, c));
   const mailer = { status: () => ({ configured, provider: 'hostinger' }), send: async m => {
@@ -18,8 +18,8 @@ function kit({ ai = null, segments = {}, onboarding = null, lifecycle = null, co
     sent.push(m); return { ok: true };
   } };
   const stubAi = ai || { enabled: () => false, complete: async () => { throw new Error('off'); }, json: t => { try { return JSON.parse(t); } catch (e) { return null; } } };
-  const m = createMail({ redis, HttpError: class extends Error { constructor(s, msg) { super(msg); this.status = s; } }, requireRole() { return 'admin'; }, staffNameOf: () => 'Ricks', mailer, ai: stubAi,
-    fetchRoster: async () => ({ members: MEMBERS, riders: [] }), activeMembers: async () => MEMBERS.map(x => x.zwift_id), wpUsers: async () => USERS, segmentsOf: async n => new Set(segments[n] || []),
+  const m = createMail({ ...(links ? { links } : {}), redis, HttpError: class extends Error { constructor(s, msg) { super(msg); this.status = s; } }, requireRole() { return 'admin'; }, staffNameOf: () => 'Ricks', mailer, ai: stubAi,
+    fetchRoster: async () => ({ members: MEMBERS, riders: [] }), activeMembers: async () => MEMBERS.map(x => x.zwift_id), wpUsers: async () => users, segmentsOf: async n => new Set(segments[n] || []),
     publicClub: async () => ({ next: [{ series: 'ZRL', title: 'Round 2 · race 3', date: '2026-11-17' }], podium: [{ division: 'Div 1', top: [{ rank: 1, team: 'Alpha', points: 90 }] }] }),
     lifecycle, onboarding, discord: async (ch, b) => { posts.push([ch, b.content]); return true; }, secret: () => 'test-secret', siteUrl: 'https://club.test' });
   return { m, db, sent, posts, state };
@@ -223,4 +223,21 @@ test('the preferences page can turn everything back on after an opt-out, and off
   await k.m.unsubscribe(tok, 'all'); assert.equal((await run(k.m, 'POST /api/mail/audience', { audience: { type: 'all' }, category: 'service' })).optedOut, 1);
   assert.equal((await k.m.unsubscribe(tok, 'on')).scope, 'on'); assert.equal((await run(k.m, 'POST /api/mail/audience', { audience: { type: 'all' }, category: 'service' })).optedOut, 0, 'back on');
   assert.match(k.m.donePage('on'), /get club news and team emails again/);
+});
+
+test('the automatic welcome email asks for the ZwiftPower team, the Discord and the club in Zwift Companion, with the club\'s links', async () => {
+  const onb = { scan: async () => [{ zwid: '1', name: 'Ann Lee', days: 0 }] };
+  const k = kit({ onboarding: onb, links: async () => ({ discord: 'https://discord.gg/cryo', facebook: 'https://facebook.com/groups/cryo' }) });
+  await enable(k, { automations: { welcome: { on: true } } }); await k.m.runSchedule(NOW);
+  const mail = k.sent.find(m => m.to === 'ann@x.test' && m.subject === 'Welcome to CRYO-GEN'); assert.ok(mail, 'sent');
+  const text = mail.text || mail.body || JSON.stringify(mail);
+  assert.match(text, /discord\.gg\/cryo/); assert.match(text, /zwiftpower\.com\/team\.php\?id=2740/); assert.match(text, /Zwift Companion/); assert.match(text, /facebook\.com\/groups\/cryo/);
+});
+
+test('a new member with no email address yet is not used up: the welcome goes out on a later run once the address is known', async () => {
+  const onb = { scan: async () => [{ zwid: '1', name: 'Ann Lee', days: 0 }] }, users = [];   // no WordPress account matched yet
+  const k = kit({ onboarding: onb, users }); await enable(k, { automations: { welcome: { on: true } } });
+  await k.m.runSchedule(NOW); assert.equal(k.sent.length, 0, 'no address: nothing to send');
+  users.push({ id: 1, name: 'Ann Lee', email: 'ann@x.test' }); await k.m.directory(true);
+  await k.m.runSchedule(NOW + 3600000); assert.ok(k.sent.some(m => m.to === 'ann@x.test' && m.subject === 'Welcome to CRYO-GEN'), 'welcomed once the address appeared');
 });

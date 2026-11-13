@@ -2938,7 +2938,7 @@ const mailSegments = async name => {
   if (name.startsWith('cat:')){ const c = name.slice(4); return new Set((await fetchRoster()).riders.filter(r => r.zpCategory === c).map(r => String(r.riderId))); }
   return new Set();
 };
-const mail = require('../lib/mail')({ redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), mailer: require('../lib/mailer').createMailer(), ai, fetchRoster, activeMembers,
+const mail = require('../lib/mail')({ links: async () => (await welcome.settings()).links, redis, HttpError, requireRole, staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''), mailer: require('../lib/mailer').createMailer(), ai, fetchRoster, activeMembers,
   wpUsers: fetchWpUsers, segmentsOf: mailSegments, publicClub: now => publicClub(now), lifecycle, onboarding, discord, secret: () => tokenSecret(), siteUrl: SITE_URL });
 const zpTeam = require('../lib/zpteam')({ redis, HttpError, requireRole, fetchRoster, uniqueMembers, normTier, mail, comms, logChange: (...a) => zrl.logChange(...a) });   // members not on the ZwiftPower team, and a nudge to join
 const discordRoles = require('../lib/discordroles')({ redis, HttpError, requireRole, fetchRoster, uniqueMembers, normTier, comms, logChange: (...a) => zrl.logChange(...a), discord });   // Discord Full / Associate roles follow the membership level
