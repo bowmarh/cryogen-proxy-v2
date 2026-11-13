@@ -154,12 +154,19 @@ function loginStep(type){
 }
 function backToStep1(){document.getElementById('login-step1').style.display='block';document.getElementById('login-step2').style.display='none';document.getElementById('login-err').style.display='none';}
 function showLoginErr(msg){const el=document.getElementById('login-err');el.textContent=msg;el.style.display='block';}
+// Login requests. A dropped connection (common on a phone moving between Wi-Fi and mobile data) is retried once before giving up, and the message says what to check.
+async function loginFetch(body){
+  const go=()=>fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,trust:window.Stay&&Stay.trust()})});
+  try{ return await go(); }
+  catch(e){ await new Promise(r=>setTimeout(r,1200)); return go(); }
+}
+const loginNetErr=()=>navigator.onLine===false?'You appear to be offline. Check your Wi-Fi or mobile data and try again.':'Could not reach the login server. Check your connection and try again; if it keeps happening, close and reopen the app.';
 async function doRoleLogin(role, inputId){
   const password=document.getElementById(inputId).value;
   let res;
   try{
-    res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password,trust:window.Stay&&Stay.trust()})});
-  }catch(e){showLoginErr('Could not reach the login server.');return;}
+    res=await loginFetch({role,password});
+  }catch(e){showLoginErr(loginNetErr());return;}
   if(res.ok){const d=await res.json();authGate(d,d2=>{sessionStorage.setItem('token',d2.token);sessionStorage.setItem('justSignedIn','1');launchApp(role);});}
   else if(res.status===401){showLoginErr('Incorrect password.');}
   else if(res.status===403){ let m='That password is switched off.'; try{ m=(await res.json()).error||m; }catch(e){} showLoginErr(m); }
@@ -168,7 +175,7 @@ async function doRoleLogin(role, inputId){
 async function doUserLogin(){
   const username=document.getElementById('user-name').value.trim(), password=document.getElementById('user-pw').value;
   if(!username||!password){ showLoginErr('Enter your username and password.'); return; }
-  let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password, trust:window.Stay&&Stay.trust() })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  let res; try{ res=await loginFetch({ username, password }); }catch(e){ showLoginErr(loginNetErr()); return; }
   if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('justSignedIn','1'); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d2.name||d.name); }catch(e){} launchApp(d2.role||d.role); }); }
   else if(res.status===401) showLoginErr('Incorrect username or password.');
   else if(res.status===429) showLoginErr('Too many wrong attempts from this connection. Try again in 15 minutes.');
@@ -176,7 +183,7 @@ async function doUserLogin(){
 }
 async function doOwnerLogin(){
   const password=document.getElementById('owner-pw').value; let res;
-  try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'owner',password,trust:window.Stay&&Stay.trust()})}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  try{ res=await loginFetch({role:'owner',password}); }catch(e){ showLoginErr(loginNetErr()); return; }
   if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('justSignedIn','1'); sessionStorage.setItem('owner','1'); launchApp('admin'); }); }
   else if(res.status===401) showLoginErr('Incorrect password.');
   else if(res.status===503) showLoginErr('Owner login is not set up yet: add OWNER_PASSWORD in Vercel.');
