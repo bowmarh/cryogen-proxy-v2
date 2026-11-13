@@ -1,3 +1,4 @@
+const { zrFetch, zrKeySet } = require('../lib/zrkey');   // ZwiftRacing.app: main key with the spare as backup
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -2560,12 +2561,11 @@ async function handleCover(coverRoute, req, res){
 // One event's finishers from ZwiftRacing.app (the organizer key stays on the server). Returns { results: [{ riderId, position, ... }], time, title }.
 // The API allows one results request a minute, so callers ask once per event and treat a 404 as "not published yet".
 async function fetchZrResults(id){
-  const key = process.env.ZWIFTRACING_API_KEY;
-  if (!key) throw new HttpError(503, 'ZWIFTRACING_API_KEY is not set in Vercel yet.');
+  if (!zrKeySet()) throw new HttpError(503, 'ZWIFTRACING_API_KEY is not set in Vercel yet.');
   if (!/^\d{1,12}$/.test(String(id || ''))) throw new HttpError(400, 'The event id is a number (the end of the Zwift event link).');
   let r, data;
   try {
-    r = await fetch(`https://api.zwiftracing.app/api/public/results/${id}`, { headers: { Authorization: key }, signal: AbortSignal.timeout(8000) });
+    r = await zrFetch(`https://api.zwiftracing.app/api/public/results/${id}`, { signal: AbortSignal.timeout(8000) });
     try { data = JSON.parse(await r.text()); } catch (e) { data = null; }
   } catch (e) {
     throw new HttpError(e && e.name === 'TimeoutError' ? 504 : 502, e && e.name === 'TimeoutError' ? 'ZwiftRacing.app did not answer in time.' : 'ZwiftRacing.app could not be reached.');
