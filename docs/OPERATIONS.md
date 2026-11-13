@@ -78,3 +78,24 @@ Staying inside the storage plan: the Control room's systems list is reused for f
 - **Joining and leaving:** Control room → Join requests has *Approve: account + welcome* (creates the WordPress account if the owner switched that on, then sends the welcome email) and *A member is leaving* (preview, then one press: WordPress record set to left, club email stopped; the Discord role is the one step you do by hand).
 - **Whole-round line-ups:** Control room → Now → *Whole round* on a team proposes who rides each race week, sharing races out fairly, with *Apply* per week.
 - **Already in place:** the app is installable on phones and riders can turn on push notifications (My details / profile); race reminders use them for riders without Discord.
+
+## WordPress two-way member sync
+
+Set `WP_SYNC_SECRET` in Vercel (a long random string) and use the same value in WordPress. Then edits made on cryogen.team show in the app within seconds instead of up to five minutes, and the Control room's Systems list shows "Member sync from cryogen.team".
+
+WordPress tells the app with `POST /api/wp/members-changed`, JSON `{"event":"saved","zwift_id":"123","ts":<unix seconds>}`, header `X-Cryogen-Signature` = hex HMAC-SHA256 of the raw body with the secret. Requests older than five minutes are refused. A Code Snippets example (change `members` to the member record type your plugin uses, if it differs):
+
+```php
+add_action('save_post_members', function ($post_id) {
+    if (wp_is_post_revision($post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)) return;
+    $secret = 'PASTE_YOUR_WP_SYNC_SECRET_HERE';
+    $body = wp_json_encode(['event' => 'saved', 'ts' => time()]);
+    wp_remote_post('https://club.cryo-gen.team/api/wp/members-changed', [
+        'timeout' => 5, 'blocking' => false,
+        'headers' => ['Content-Type' => 'application/json', 'X-Cryogen-Signature' => hash_hmac('sha256', $body, $secret)],
+        'body' => $body,
+    ]);
+});
+```
+
+`GET /api/wp/admin-summary` (signed the same way, counts only) feeds the CRYO-GEN Members page in WordPress.
