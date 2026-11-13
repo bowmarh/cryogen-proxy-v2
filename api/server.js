@@ -2579,6 +2579,7 @@ async function fetchZrResults(id){
 // Club results (lib/clubresults.js): ZwiftRacing.app event results for CRYO-GEN riders, from staff-added links and the Ladder / DIRT calendar.
 const clubResults = require('../lib/clubresults')({ redis, HttpError, requireRole, roleFromRequest, memberFromRequest, fetchZrResults, discord, discordEscape, siteUrl: SITE_URL,
   clubRiders: async () => new Map((await fetchRoster()).riders.map(r => [String(r.riderId), r.name])),
+  moreEvents: () => zrl.eventLinks(),
   isCaptain: async zwid => { const { round } = await zrl.load(); return !!(round && round.teams.some(t => t.captain === String(zwid))); } });
 
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
@@ -2809,6 +2810,8 @@ async function publicClub(now = Date.now()){
     const st = await zrl.routes['GET /api/zrl/standings'](staff);
     out.podium = (st.groups || []).slice(0, 4).map(g => ({ division: g.name, top: g.teams.filter(t => t.rank <= 3 && t.total > 0).slice(0, 3).map(t => ({ rank: t.rank, team: t.name.replace(/^CRYO-GEN\s+/, ''), points: t.total })) })).filter(g => g.top.length);
   } catch (e) { /* no standings yet */ }
+  // Recent club results for the public page: the race, how many of ours finished, and the club's best place in category. No rider names.
+  try { out.results = (await clubResults.list(6)).filter(e => e.riders.length).map(e => { const best = e.riders.reduce((b, r) => { const p = r.catPos || r.pos; return p && (!b || p < b.p) ? { p, cat: r.cat } : b; }, null); return { title: e.title, date: e.time ? new Date(e.time * 1000).toISOString().slice(0, 10) : '', riders: e.riders.length, podiums: e.riders.filter(r => (r.catPos || r.pos) && (r.catPos || r.pos) <= 3).length, best: best ? best.p : null, bestCat: best ? best.cat : '' }; }); } catch (e) { out.results = []; }
   out.next = out.next.filter(x => x.at < now + 21 * 86400000).sort((a, b) => a.at - b.at).slice(0, 12).map(x => ({ ...x, date: day(x.at), at: x.dayOnly ? null : x.at }));
   return out;
 }
@@ -3091,7 +3094,7 @@ const myweek = require('../lib/myweek')({
   memberFromRequest, HttpError, loadTtt, myTttStatus, loadState, zrl, cover, ladder, drs,
   isAssociate: member => Promise.resolve(member.assoc === true && assoc.stillAssociate(member.zwid)),
 });
-const weekPush = require('../lib/weekpush')({ redis, HttpError, requireRole, myweek, comms, siteUrl: SITE_URL, rosterNames: async () => { const r = await fetchRoster(); return new Map(uniqueMembers(r.members || []).filter(m => m.status === 'active').map(m => [String(m.zwift_id), m.name])); } });   // "your week" by Discord, weekly
+const weekPush = require('../lib/weekpush')({ redis, HttpError, requireRole, myweek, comms, siteUrl: SITE_URL, recentResults: z => clubResults.mine(z), rosterNames: async () => { const r = await fetchRoster(); return new Map(uniqueMembers(r.members || []).filter(m => m.status === 'active').map(m => [String(m.zwift_id), m.name])); } });   // "your week" by Discord, weekly
 
 // The rider's private calendar feed (lib/calendar.js): their next four weeks as a subscribable .ics.
 const calendar = require('../lib/calendar')({

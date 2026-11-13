@@ -39,3 +39,16 @@ test('"your week" goes out on Monday once per rider per week, only when switched
   assert.match(sent[0].text, /Needs your answer \(1\)/); assert.match(sent[0].text, /Thu 19:00 UTC/); assert.match(sent[0].text, /club\.test/);
   assert.deepEqual(await wp.runSchedule(MON + 3600000), [], 'once a week');
 });
+
+test('"your week" leads with last week\'s results, and goes to a rider who raced even with nothing on this week', async () => {
+  const { redis } = mem(), sent = [];
+  const NOW = Date.parse('2026-11-09T09:00:00Z');
+  const wp = createWeekPush({ redis, HttpError, requireRole: () => {}, siteUrl: 'https://club.test',
+    myweek: { buildFor: async () => ({ name: 'Ann Lee', items: [] }) },
+    comms: { verifiedDiscordIds: async () => new Map([['1', 'd1']]), notify: async (z, text) => { sent.push(text); return true; } },
+    rosterNames: async () => new Map([['1', 'Ann Lee']]),
+    recentResults: async () => [{ title: 'Club Ladder', time: (NOW - 3 * 86400000) / 1000, catPos: 2, cat: 'B' }, { title: 'Old race', time: (NOW - 30 * 86400000) / 1000, catPos: 1, cat: 'B' }] });
+  await wp.routes['POST /api/weekpush/settings']({}, { on: true });
+  assert.deepEqual(await wp.runSchedule(NOW), ['Your week: sent to 1']);
+  assert.match(sent[0], /Last week/); assert.match(sent[0], /#2 in B · Club Ladder/); assert.doesNotMatch(sent[0], /Old race/);
+});
