@@ -263,6 +263,7 @@ function launchApp(r){
   setupRole();
   renderAll();
   loadLive();
+  if(role==='member'&&window.welcomeCheck) window.welcomeCheck();   // a new member's "Get set up" step
   loadShared();
   loadTttSummary();
   installBarMaybe();
