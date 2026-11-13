@@ -68,3 +68,13 @@ Automatic results accept a CSV address or a web page: if the address is a page, 
 
 ## Storage use
 Staying inside the storage plan: the Control room's systems list is reused for five minutes by an open tab (the ↻ Refresh button asks afresh), the roster refresh saves riders' weights in a handful of commands (it used to be one per rider), and the weekly housekeeping removes finished data. Control room → Usage shows storage, AI and email against their limits.
+
+## Alerts, off-site backups and sign-in checks
+
+- **Email alerts:** set `ALERT_EMAIL` in Vercel to your address. You are then emailed (as well as the admin Discord channel and staff push) when a scheduled job fails or a system goes red, and again when it is healthy. It sends through the club's own email service, so if that is the thing that is down, Discord and push still reach you.
+- **Off-site backup:** the *Off-site backup* GitHub workflow runs every night, fetches the same snapshot an administrator can download, encrypts it and keeps it for 30 days as a workflow artifact. Add two repository secrets: `CRON_SECRET` (already there) and `BACKUP_PASSPHRASE` (a long passphrase; keep a copy somewhere safe, it is the only way to open a copy). To open one: `openssl enc -d -aes-256-cbc -pbkdf2 -in cryogen-backup.json.gz.enc | gunzip > backup.json`.
+- **Sign-in check:** the post-deploy smoke test (and every Monday morning) now checks that the Administrator and Moderator sign-in work and that every stored authenticator can still be opened. If `AUTH_ENC_KEY` is ever changed, this fails at once instead of locking people out silently.
+- **Sign out everywhere:** Control room → Security. A password change, an owner reset or removing an account also ends that person's open sessions immediately.
+- **Joining and leaving:** Control room → Join requests has *Approve: account + welcome* (creates the WordPress account if the owner switched that on, then sends the welcome email) and *A member is leaving* (preview, then one press: WordPress record set to left, club email stopped; the Discord role is the one step you do by hand).
+- **Whole-round line-ups:** Control room → Now → *Whole round* on a team proposes who rides each race week, sharing races out fairly, with *Apply* per week.
+- **Already in place:** the app is installable on phones and riders can turn on push notifications (My details / profile); race reminders use them for riders without Discord.
