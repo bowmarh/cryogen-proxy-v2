@@ -264,6 +264,7 @@ async function tzLoadMine(){
     tzPref=d.zone; tzAlso=!!d.alsoUtc; try{ localStorage.setItem('cgTz',tzPref); localStorage.setItem('cgTzUtc',tzAlso?'1':'0'); }catch(e){} tzRefresh(); }catch(e){}
 }
 function launchApp(r){
+  setTimeout(()=>{ installBtnRefresh(); if(window.QuickFind) QuickFind.refresh(); },0);
   if(window.Stay&&['admin','mod','member'].includes(r)&&sessionStorage.getItem('justSignedIn')==='1'&&!sessionStorage.removeItem('justSignedIn')) setTimeout(()=>Stay.offer(sessionStorage.getItem('token'),{role:r,owner:sessionStorage.getItem('owner')==='1'}),1200);
   role=r; sessionStorage.setItem('role',r);
   document.getElementById('login-screen').style.display='none';
@@ -283,8 +284,29 @@ function launchApp(r){
 }
 // Phone install: Android and desktop Chrome offer a real Install button; iPhones get the Share > Add to Home Screen steps. Shown once, after sign-in.
 let installEvent=null;
-window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvent=e; });
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvent=e; installBtnRefresh(); });
 if('serviceWorker' in navigator) window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); });
+// "📲 Install app" in the header menu: always there while the app is not installed, so a dismissed prompt can be found again. Android and desktop Chrome get the
+// real install dialog; iPhone, iPad and other browsers get the exact steps; a browser built into another app (Discord, Facebook…) is told to open Safari or Chrome first.
+function installAvailable(){
+  if(window.matchMedia('(display-mode: standalone)').matches||navigator.standalone) return false;
+  const ua=navigator.userAgent; return !!installEvent||/iphone|ipad|ipod|android/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);
+}
+function installBtnRefresh(){ const b=document.getElementById('install-btn'); if(b) b.style.display=installAvailable()?'block':'none'; }
+window.addEventListener('appinstalled',()=>{ installEvent=null; installBtnRefresh(); });
+async function installOpen(){
+  if(typeof toggleMoreMenu==='function') toggleMoreMenu(false);
+  if(installEvent){ installEvent.prompt(); try{ await installEvent.userChoice; }catch(e){ /* closed */ } installEvent=null; installBtnRefresh(); return; }
+  const ua=navigator.userAgent, ios=/iphone|ipad|ipod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1), inApp=/FBAN|FBAV|Instagram|Line\/|Discord|Twitter|Snapchat|TikTok|; wv\)/i.test(ua), chromeIos=/CriOS/.test(ua);
+  const steps=inApp?'This browser is built into another app, so it cannot add apps to your home screen. Open <b>club.cryo-gen.team</b> in <b>Safari</b> (iPhone or iPad) or <b>Chrome</b> (Android) first, then choose Install app again.'
+    :ios?`<ol style="margin:0 0 0 18px;padding:0;line-height:1.7"><li>Tap the <b>Share</b> button (${chromeIos?'top right of Chrome':'in the bar at the bottom of Safari'}).</li><li>Scroll down and choose <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>.</li></ol>`
+    :'Open your browser menu (the ⋮ or ☰ button) and choose <b>Install app</b> or <b>Add to Home screen</b>.';
+  const old=document.getElementById('install-help'); if(old) old.remove();
+  const d=document.createElement('div'); d.id='install-help'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Install the CRYO-GEN app');
+  d.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(5,10,20,.85);display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML=`<div style="background:#0f172a;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px;max-width:360px;width:100%;color:#e5e7eb;font-size:14px"><div style="font-weight:800;font-size:16px;margin-bottom:8px">📲 Put CRYO-GEN on your home screen</div><div style="font-size:12px;color:#9ca3af;margin-bottom:10px">It then opens like an app, quicker, and still opens when your connection drops.</div><div>${steps}</div><button type="button" id="install-help-close" style="margin-top:14px;width:100%;padding:9px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#e5e7eb;font-size:14px;cursor:pointer">Got it</button></div>`;
+  document.body.appendChild(d); d.onclick=e=>{ if(e.target===d) d.remove(); }; document.getElementById('install-help-close').onclick=()=>d.remove(); document.getElementById('install-help-close').focus();
+}
 function installBarMaybe(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
   let seen=false; try{ seen=localStorage.getItem('installBarSeen')==='1'; }catch(e){}
@@ -328,6 +350,14 @@ function themeApply(){
   const m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=light?'#f5f7fb':'#060a14';
   const b=document.getElementById('theme-btn'); if(b) b.textContent=t==='auto'?'🌓 Auto':t==='light'?'☀️ Light':'🌙 Dark';
 }
+// Phones: the look, theme and time-zone buttons sit behind the "⋯" button in the header.
+function toggleMoreMenu(force){
+  const rd=document.getElementById('role-display'); if(!rd) return;
+  const open=force!==undefined?force:!rd.classList.contains('open');
+  rd.classList.toggle('open',open); const b=document.getElementById('more-btn'); if(b) b.setAttribute('aria-expanded',String(open));
+}
+document.addEventListener('click',e=>{ const rd=document.getElementById('role-display'); if(rd&&rd.classList.contains('open')&&!e.target.closest('#hdr-tools,#more-btn')) toggleMoreMenu(false); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') toggleMoreMenu(false); });
 function themeCycle(){ const next={auto:'light',light:'dark',dark:'auto'}[themePref()]; try{ localStorage.setItem('theme',next); }catch(e){} themeApply(); }
 // Gives every control a name a screen reader can say, and marks the pop-ups as dialogs. Runs again whenever the page changes.
 function a11yPass(root){
@@ -591,14 +621,14 @@ async function weekDigestSet(on){ try{ await fetch('/api/digest',{method:'POST',
 function weekNewCard(d){
   const list=(d.newMembers||[]).slice(0,12); if(!list.length) return '';
   return `<details class="card" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👋 New members <span style="font-size:12px;font-weight:600;color:#9ca3af">${d.newMembers.length} in the last month</span></summary>
-    ${list.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><b style="min-width:150px">${rn(m.name,m.zwid)}</b><span style="color:#8b95a5;min-width:70px">${m.days===0?'today':m.days+' day'+(m.days===1?'':'s')}</span>${m.steps.map(s=>`<span style="color:${s.done?'#10B981':'#FBBF24'}">${s.done?'✅':'☐'} ${esc(s.label)}</span>`).join('')}</div>`).join('')}</details>`;
+    <div data-filterable>${list.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><b style="min-width:150px">${rn(m.name,m.zwid)}</b><span style="color:#8b95a5;min-width:70px">${m.days===0?'today':m.days+' day'+(m.days===1?'':'s')}</span>${m.steps.map(s=>`<span style="color:${s.done?'#10B981':'#FBBF24'}">${s.done?'✅':'☐'} ${esc(s.label)}</span>`).join('')}</div>`).join('')}</div></details>`;
 }
 // Members who have gone quiet (45 to 180 days without a race): a friendly message goes out when automatic messages are on; stepping anyone off stays a staff decision.
 function weekQuietCard(d){
   const q=d.quiet; if(!q||!q.quiet.length) return '';
   return `<details class="card" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">😴 Gone quiet <span style="font-size:12px;font-weight:600;color:#9ca3af">${q.quiet.length} member${q.quiet.length===1?'':'s'}, ${q.from} to ${q.to} days since a race</span></summary>
     <div style="font-size:12px;color:#8b95a5;margin:6px 0">With automatic messages on, each gets one friendly message every two months (up to 20 a day). Nothing about their membership changes.</div>
-    ${q.quiet.slice(0,25).map(m=>`<div style="display:flex;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b style="flex:1">${rn(m.name,m.zwid)}</b><span style="color:#9ca3af">${m.days} days</span></div>`).join('')}${q.quiet.length>25?`<div style="font-size:12px;color:#8b95a5;margin-top:4px">…and ${q.quiet.length-25} more</div>`:''}</details>`;
+    <div data-filterable>${q.quiet.slice(0,25).map(m=>`<div style="display:flex;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><b style="flex:1">${rn(m.name,m.zwid)}</b><span style="color:#9ca3af">${m.days} days</span></div>`).join('')}</div>${q.quiet.length>25?`<div style="font-size:12px;color:#8b95a5;margin-top:4px">…and ${q.quiet.length-25} more</div>`:''}</details>`;
 }
 // Season outlook: the rest of the season if it goes like the first part (an average per race carried forward, not a prediction).
 function weekOutlookCard(d){
@@ -664,7 +694,7 @@ function weekSeriesStrip(d){
 function weekAutoCard(d){
   const list=d.auto||[]; if(!list.length) return '';
   return `<details class="card" style="padding:12px 16px"><summary style="cursor:pointer;font-weight:800;font-size:14px">🤖 What the automation did <span style="font-size:12px;font-weight:600;color:#9ca3af">${list.length}</span></summary>
-    ${list.slice(0,20).map(e=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><div style="flex:1;min-width:0"><b>${esc(e.series)}</b> · ${esc(e.summary)}<div style="color:#8b95a5">${esc(new Date(e.ts).toLocaleString(undefined,{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.by)}${e.undone?' · undone':''}</div></div>${e.undone?'':`<button onclick="weekUndo('${esc(e.id)}')" style="flex:none;padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e5e7eb;font-size:12px;cursor:pointer">Undo</button>`}</div>`).join('')}</details>`;
+    <div data-filterable>${list.slice(0,20).map(e=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:12px"><div style="flex:1;min-width:0"><b>${esc(e.series)}</b> · ${esc(e.summary)}<div style="color:#8b95a5">${esc(new Date(e.ts).toLocaleString(undefined,{timeZone:tzZone(),day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(e.by)}${e.undone?' · undone':''}</div></div>${e.undone?'':`<button onclick="weekUndo('${esc(e.id)}')" style="flex:none;padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e5e7eb;font-size:12px;cursor:pointer">Undo</button>`}</div>`).join('')}</div></details>`;
 }
 async function weekUndo(id){
   if(!confirm('Put things back as they were before this step? Anything changed by hand since then on the same riders, teams or matches will be overwritten.')) return;
@@ -3938,7 +3968,7 @@ function zrlPastCard(d){
       <button onclick="zrlPastResultsSave()" style="${btn};margin-top:8px">Save race ${zrlPastWeek+1}</button></div>
       ${s.groups.length?`<div style="margin-top:10px;font-size:12px;color:#9ca3af">Standings: ${s.groups.map(g=>esc(g.name)+': '+g.teams.map(t=>t.rank+'. '+esc(t.name.replace(/^CRYO-GEN\s+/,''))+' '+t.total).join(', ')).join(' · ')}</div>`:''}</div>`;
   }
-  return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Past rounds (staff)')}${rows||'<div style="font-size:13px;color:#8b95a5">No past rounds yet. A round is archived when the next one starts.</div>'}${detail}
+  return `<div class="card" style="padding:14px 16px;margin-top:16px">${label('Past rounds (staff)')}<div data-filterable>${rows||'<div style="font-size:13px;color:#8b95a5">No past rounds yet. A round is archived when the next one starts.</div>'}</div>${detail}
     ${admin?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><button onclick="zrlRoundDelete()" style="${btn};color:#f87171;border-color:rgba(239,68,68,0.3)">Delete the current round…</button><div style="font-size:11px;color:#9aa3b2;margin-top:4px">For a test round started by mistake. You have to type its first race date to confirm.</div></div>`:''}</div>`;
 }
 function zrlWeeksTab(){
