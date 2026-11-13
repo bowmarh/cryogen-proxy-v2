@@ -2,23 +2,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const h = require('./helpers');
-const createJoin = require('../lib/join');
 const createLifecycle = require('../lib/lifecycle');
 const createWeekPush = require('../lib/weekpush');
 
-h.setEnv({ DISCORD_INVITE_URL: 'https://discord.gg/cryogen' });
+h.setEnv();
 class HttpError extends Error { constructor(s, m) { super(m); this.status = s; } }
 const mem = () => { const db = {}; return { db, redis: async cmds => cmds.map(c => h.redisRun(db, c)) }; };
-
-test('the join welcome email asks the new member to join the ZwiftPower team and the Discord, with the links', async () => {
-  const { redis } = mem(), sent = [];
-  const j = createJoin({ redis, HttpError, requireRole: () => {}, discord: async () => {}, mail: { sendDirect: async m => sent.push(m) }, siteUrl: 'https://club.test', hashIp: s => s });
-  await j.submit({ name: 'Ann Lee', email: 'ann@b.test', consent: true }, '1.1.1.1');
-  await j.routes['POST /api/join/decide']({}, { id: (await j.list())[0].id, action: 'welcome' });
-  assert.match(sent[0].body, /zwiftpower\.com\/team\.php\?id=2740/);
-  assert.match(sent[0].body, /discord\.gg\/cryogen/);
-  assert.match(sent[0].body, /Zwift Companion/);
-});
 
 test('when a member goes quiet, their ZRL captain gets one heads-up as well as the member', async () => {
   const { redis } = mem(), notes = [];

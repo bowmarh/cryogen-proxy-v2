@@ -111,3 +111,20 @@ add_action('save_post_members', function ($post_id) {
 ## Team change requests
 
 A rider on the ZRL page opens **🔁 Ask to change team**, picks a team and sends it. The captain of the team they would join (or leave) is told by Discord DM (or the admin channel if no captain can be reached) and sees **Waiting for your decision** in the same card; staff see all of them. *Approve* moves the rider through the same assignment rules staff use (a full team is refused, not overfilled); *Decline* can give a reason the rider sees. One open request per rider; nothing changes until someone approves.
+
+## New-member welcome ("Get set up")
+
+New members (those who appear after onboarding began, for their first 60 days) see a full-screen **Get set up** step the first time they sign in, which they cannot dismiss until the club channels are done; then every racing series is put in front of them.
+
+1. **Set the three links:** Control room → Join requests → *New-member welcome*: Discord invite, ZwiftPower team page, Facebook group (full `https://` addresses). They are also used in the welcome email, which now opens with the three things to do, numbered. (`CLUB_DISCORD_URL`, `CLUB_ZWIFTPOWER_URL`, `CLUB_FACEBOOK_URL` in Vercel work as defaults.) A channel with no link set is left out.
+2. **What is checked and what is not:** Discord is verified by the app (the member's linked, verified Discord account). ZwiftPower and Facebook cannot be checked from here, so the member presses *I have asked to join*. For ZwiftPower the admin Discord channel is told and the member appears under *ZwiftPower requests to accept*: accept them on ZwiftPower, then press *Accepted on ZwiftPower* and they see they are in the team.
+3. **Then the racing:** ZRL team racing, team time trials, DIRT racing, the Ladder, social rides and all events, each with a button straight to its sign-up page. After that the screen is gone for good.
+4. **Switching it off:** untick *Show the Get set up screen to new members* in the same card. Members already in the club when onboarding began, and associates, never see it.
+
+**Nobody is stuck behind the Get set up screen:** it has an *Ask a volunteer to help* link (the admin Discord channel hears, once a day per member), and an administrator can *Waive* it for any Zwift ID (Control room → Join requests → New-member welcome). If Discord sign-in is not set up, the Discord step is confirmed with a button like the other two, so a member can never be asked to link something they cannot link.
+
+## First-race nudge, captain weekly message, season wrap
+
+- **First-race nudge:** a week after a new member finishes the Get set up screen, if they are still on no team or sign-up, they get one friendly Discord message pointing at the weekly TTT. Once per member, within their first month; not for waived members.
+- **Captain weekly message:** Sunday evening (from 17:00 UTC) each ZRL captain with a linked Discord gets one message per team: how many riders have not answered for the coming race, who they are, and where the *Ask the unanswered* button is (My team). Nothing is sent when everyone has answered.
+- **Season wrap:** when every team has all its results, and *Also email each team its report automatically* is on (AI desk → Radio & reports), each rider who was on a team also gets a short direct message with their team's final place and how many races they were in the line-up for. Once per rider per round.
