@@ -107,3 +107,7 @@ add_action('save_post_members', function ($post_id) {
 - **Past rounds:** a *Past rounds* card under the ZRL page shows each archived round's final table (team level) to any signed-in rider.
 - **Retiring the shared passwords:** Control room → Security → *Ready to retire the shared passwords?* lists who still has no authenticator, no email address or a temporary password. The owner password always works, so you cannot lock yourself out.
 - **Already in place:** the new-member checklist (Discord link, category, team, fair-play note, first race) with friendly nudges, shown to the rider for their first 60 days and to staff under Onboarding.
+
+## Team change requests
+
+A rider on the ZRL page opens **🔁 Ask to change team**, picks a team and sends it. The captain of the team they would join (or leave) is told by Discord DM (or the admin channel if no captain can be reached) and sees **Waiting for your decision** in the same card; staff see all of them. *Approve* moves the rider through the same assignment rules staff use (a full team is refused, not overfilled); *Decline* can give a reason the rider sees. One open request per rider; nothing changes until someone approves.
