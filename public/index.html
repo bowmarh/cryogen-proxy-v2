@@ -286,7 +286,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <input id="r-search" class="inp" placeholder="Search rider…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
+      <input id="r-search" class="inp" placeholder="Search name, Zwift ID, category…" style="flex:1;min-width:150px" oninput="renderRacing()"/>
       <select id="r-cat" aria-label="Category" class="inp" style="width:75px" onchange="renderRacing()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
       <select id="r-zra" class="inp" style="width:110px" onchange="renderRacing()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
       <select id="r-ph" class="inp" style="width:120px" onchange="renderRacing()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
@@ -374,11 +374,12 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
    <div id="assoc-panel"></div>
    <div id="offboarding-panel"></div>   
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <input id="m-search" class="inp" placeholder="Search name…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
+      <input id="m-search" class="inp" placeholder="Search name, Zwift ID, category, status…" style="flex:1;min-width:150px" oninput="mPage=1;renderMembers()"/>
       <select id="m-cat" aria-label="Category" class="inp" style="width:75px" onchange="mPage=1;renderMembers()"><option>All</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
       <select id="m-ph" class="inp" style="width:120px" onchange="mPage=1;renderMembers()"><option value="">All Types</option><option>all-rounder</option><option>climber</option><option>sprinter</option><option>puncheur</option><option>pursuiter</option><option>time-trialist</option></select>
       <select id="m-tier" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All tiers</option><option value="full">Full</option><option value="associate">Associate</option></select>
       <select id="m-zra" class="inp" style="width:110px" onchange="mPage=1;renderMembers()"><option value="">All Tiers</option><option>Diamond</option><option>Ruby</option><option>Emerald</option><option>Sapphire</option><option>Amethyst</option><option>Platinum</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Copper</option></select>
+      <button id="m-export" onclick="exportMembersCsv()" style="display:none;padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px" title="Download everyone matching the search and filters as a spreadsheet file">⬇ Export</button>
       <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'var(--accent)':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
     </div>
     <div id="m-bulkbar"></div>
