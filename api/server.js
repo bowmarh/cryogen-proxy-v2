@@ -2578,7 +2578,8 @@ async function fetchZrResults(id){
 
 // Club results (lib/clubresults.js): ZwiftRacing.app event results for CRYO-GEN riders, from staff-added links and the Ladder / DIRT calendar.
 const clubResults = require('../lib/clubresults')({ redis, HttpError, requireRole, roleFromRequest, memberFromRequest, fetchZrResults, discord, discordEscape, siteUrl: SITE_URL,
-  clubRiders: async () => new Map((await fetchRoster()).riders.map(r => [String(r.riderId), r.name])) });
+  clubRiders: async () => new Map((await fetchRoster()).riders.map(r => [String(r.riderId), r.name])),
+  isCaptain: async zwid => { const { round } = await zrl.load(); return !!(round && round.teams.some(t => t.captain === String(zwid))); } });
 
 // Zwift Club Ladder (lib/ladder.js): the 5v5 head-to-head ladder, roster of 15, three-rank line-ups.
 const ladder = require('../lib/ladder')({
@@ -2635,7 +2636,7 @@ const assoc = require('../lib/assoc')({
 });
 // What a signed-in associate may call: the weekly TTT and ZRL sign-up, the other race sign-ups and the social-ride RSVPs, plus what the pages
 // read and their own upgrade journey. Everything else answers "for full members".
-const ASSOCIATE_ALLOWED = new Set(['GET /api/me', 'GET /api/me/details', 'POST /api/me/prefs', 'POST /api/me/request', 'GET /api/access/me', 'POST /api/feedback', 'GET /api/me/referral', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
+const ASSOCIATE_ALLOWED = new Set(['GET /api/results', 'GET /api/results/leaderboard', 'GET /api/me/results', 'GET /api/me', 'GET /api/me/details', 'POST /api/me/prefs', 'POST /api/me/request', 'GET /api/access/me', 'POST /api/feedback', 'GET /api/me/referral', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
   'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
@@ -3115,6 +3116,8 @@ async function handleZrl(zrlRoute, req, res){
   if (req.method === 'GET') await zrl.runSchedule().catch(e => console.error('ZRL schedule:', e.message));
   const body = req.method === 'POST' ? await readJSONBody(req) : {};
   const result = await zrlRoute(req, body, parseRequestUrl(req).query);
+  // A ZRL race checked by staff also goes into the club results (fetched on the next scheduled run).
+  if (parseRequestUrl(req).pathname === '/api/zrl/event-check' && result && result.event && result.event.id) await clubResults.queue(String(result.event.id), 'ZRL').catch(() => {});
   if (req.method === 'POST') await zrl.logChange(req, parseRequestUrl(req).pathname, body).catch(e => console.error('ZRL log:', e.message));
   // Whatever changed (an import, a move, a rider ticking the star), teams with riders and no captain get their first volunteer.
   if (req.method === 'POST') await zrl.afterChange().catch(e => console.error('ZRL captains:', e.message));
