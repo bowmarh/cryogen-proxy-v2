@@ -6,6 +6,7 @@ function syncAuto(...a){ return staffReady().then(() => syncAuto(...a)); }
 function loadFair(...a){ return staffReady().then(() => loadFair(...a)); }
 function openTidy(...a){ return staffReady().then(() => openTidy(...a)); }
 function backupVerify(...a){ return staffReady().then(() => backupVerify(...a)); }
+function backupRestoreTest(...a){ return staffReady().then(() => backupRestoreTest(...a)); }
 function backupNow(...a){ return staffReady().then(() => backupNow(...a)); }
 function backupDownload(...a){ return staffReady().then(() => backupDownload(...a)); }
 function openAdmin(...a){ return staffReady().then(() => openAdmin(...a)); }

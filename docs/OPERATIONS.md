@@ -78,3 +78,11 @@ Staying inside the storage plan: the Control room's systems list is reused for f
 - **Joining and leaving:** Control room → Join requests has *Approve: account + welcome* (creates the WordPress account if the owner switched that on, then sends the welcome email) and *A member is leaving* (preview, then one press: WordPress record set to left, club email stopped; the Discord role is the one step you do by hand).
 - **Whole-round line-ups:** Control room → Now → *Whole round* on a team proposes who rides each race week, sharing races out fairly, with *Apply* per week.
 - **Already in place:** the app is installable on phones and riders can turn on push notifications (My details / profile); race reminders use them for riders without Discord.
+
+## Weekly health email, real restore test, past rounds, retiring shared passwords
+
+- **Weekly health email:** every Monday morning (UK) an email goes to `ALERT_EMAIL`: what is wrong or amber, each ZRL team's yes/maybe/no and line-up for the coming race, and how many join requests are waiting. Counts only, no rider names. Preview or send it now: `GET /api/healthdigest`, `POST /api/healthdigest/send` (administrators). It needs Email switched on.
+- **Real restore test:** monthly, and on demand with *Real restore test* beside "Back up now" on the Admin page. The newest daily copy is written into temporary scratch keys, read back and compared item for item, then removed; nothing live is touched. The Systems list shows the result and goes amber if it fails or is more than 45 days old.
+- **Past rounds:** a *Past rounds* card under the ZRL page shows each archived round's final table (team level) to any signed-in rider.
+- **Retiring the shared passwords:** Control room → Security → *Ready to retire the shared passwords?* lists who still has no authenticator, no email address or a temporary password. The owner password always works, so you cannot lock yourself out.
+- **Already in place:** the new-member checklist (Discord link, category, team, fair-play note, first race) with friendly nudges, shown to the rider for their first 60 days and to staff under Onboarding.

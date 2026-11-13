@@ -224,6 +224,7 @@ async function loadBackups(){
   }catch(e){ el.innerHTML=`<span style="color:#f87171">${esc(e.message)}</span>`; }
 }
 
+async function backupRestoreTest(){ if(!confirm('Run a real restore test? The newest copy is written into temporary scratch keys, checked, then removed. Nothing live is touched.')) return; try{ const r=await backupCall('/api/admin/backup-restore-test',{}); alert(r.ok?'Real restore test passed: '+r.items+' items in '+r.keys+' groups came back exactly. The scratch copy was removed.':'Real restore test FAILED:\n'+r.problems.join('\n')); }catch(e){ alert(e.message); } loadBackups(); }
 async function backupVerify(){ try{ const r=await backupCall('/api/admin/backup-verify',{}); alert(r.ok?'Restore test passed: the newest copy unpacks and holds '+r.backupItems+' items ('+r.liveItems+' live). Nothing was changed.':'Restore test FAILED:\n'+r.problems.join('\n')); }catch(e){ alert(e.message); } loadBackups(); }
 
 async function backupNow(){ try{ await backupCall('/api/admin/backup-now',{}); }catch(e){ alert(e.message); } loadBackups(); }
