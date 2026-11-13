@@ -3186,7 +3186,7 @@ async function route(req, res){
   if (pathname === '/api/smoke' && (req.method === 'POST' || req.method === 'GET')){
     const secret = process.env.CRON_SECRET; if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
     if (!passwordMatches((/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '', secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-    const checks = []; const check = async (name, fn) => { try { const d = await fn(); checks.push({ name, ok: true, detail: String(d || 'ok').slice(0, 480) }); } catch (e){ checks.push({ name, ok: false, detail: String(e.message || e).slice(0, 160) }); } };
+    const checks = []; const check = async (name, fn) => { try { const d = await fn(); checks.push({ name, ok: true, detail: String(d || 'ok').slice(0, 480) }); } catch (e){ checks.push({ name, ok: false, detail: String(e.message || e).slice(0, 600) }); } };
     await check('Storage', async () => { await redis([['GET', 'cg:smoke:ping']]); return 'answered'; });
     await check('Systems', async () => { const bad = (await controlRoom.systems()).filter(x => x.level === 'bad'); if (bad.length) throw new Error(bad.map(x => `${x.name}: ${x.detail}`).join('; ')); return 'none red'; });
     await check('Monthly PDF', async () => { const b = await aiops.monthlyPdf(Date.now()); if (b.subarray(0, 5).toString() !== '%PDF-') throw new Error('not a PDF'); return `${b.length} bytes`; });
