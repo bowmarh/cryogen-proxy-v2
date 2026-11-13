@@ -182,7 +182,7 @@ async function handleLogin(req, res){
     if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
     const u = typeof payload.password === 'string' ? await staff.verify(String(payload.username), payload.password) : null;
     if (u){
-      const step = await authsec.afterPassword({ id: `user:${u.username}`, role: u.role, name: u.name, user: u.username, mustChange: u.mustChange });
+      const step = await authsec.afterPassword({ id: `user:${u.username}`, role: u.role, name: u.name, user: u.username, mustChange: u.mustChange }, { trust: payload.trust });
       return sendJSON(res, 200, step.token ? { role: u.role, name: u.name, token: step.token, mustChange: u.mustChange === true } : { ...step, role: u.role, name: u.name });   // or a second step: the authenticator code (or setting one up)
     }
     await counter(failKey, LOGIN_WINDOW_SEC);
@@ -193,7 +193,7 @@ async function handleLogin(req, res){
     const failKey = `cg:rl:login:${clientIp(req)}`;
     if (await peek(failKey) >= loginMaxFails()) throw new HttpError(429, 'Too many wrong passwords from this connection. Try again in 15 minutes.');
     if (typeof payload.password === 'string' && passwordMatches(payload.password, expectedOwner)){
-      const step = await authsec.afterPassword({ id: 'owner', role: 'admin', name: 'Owner' });
+      const step = await authsec.afterPassword({ id: 'owner', role: 'admin', name: 'Owner' }, { trust: payload.trust });
       return sendJSON(res, 200, step.token ? { role: 'admin', owner: true, token: step.token } : { ...step, role: 'admin', owner: true });
     }
     await counter(failKey, LOGIN_WINDOW_SEC); return sendJSON(res, 401, { error: 'incorrect password' });

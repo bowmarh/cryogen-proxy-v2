@@ -158,9 +158,9 @@ async function doRoleLogin(role, inputId){
   const password=document.getElementById(inputId).value;
   let res;
   try{
-    res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password})});
+    res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password,trust:window.Stay&&Stay.trust()})});
   }catch(e){showLoginErr('Could not reach the login server.');return;}
-  if(res.ok){const d=await res.json();authGate(d,d2=>{sessionStorage.setItem('token',d2.token);launchApp(role);});}
+  if(res.ok){const d=await res.json();authGate(d,d2=>{sessionStorage.setItem('token',d2.token);sessionStorage.setItem('justSignedIn','1');launchApp(role);});}
   else if(res.status===401){showLoginErr('Incorrect password.');}
   else if(res.status===403){ let m='That password is switched off.'; try{ m=(await res.json()).error||m; }catch(e){} showLoginErr(m); }
   else{showLoginErr('Login is unavailable right now. Please try again later.');}
@@ -168,16 +168,16 @@ async function doRoleLogin(role, inputId){
 async function doUserLogin(){
   const username=document.getElementById('user-name').value.trim(), password=document.getElementById('user-pw').value;
   if(!username||!password){ showLoginErr('Enter your username and password.'); return; }
-  let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
-  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d2.name||d.name); }catch(e){} launchApp(d2.role||d.role); }); }
+  let res; try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ username, password, trust:window.Stay&&Stay.trust() })}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('justSignedIn','1'); sessionStorage.removeItem('owner'); try{ localStorage.setItem('cgStaffName',d2.name||d.name); }catch(e){} launchApp(d2.role||d.role); }); }
   else if(res.status===401) showLoginErr('Incorrect username or password.');
   else if(res.status===429) showLoginErr('Too many wrong attempts from this connection. Try again in 15 minutes.');
   else showLoginErr('Login is unavailable right now. Please try again later.');
 }
 async function doOwnerLogin(){
   const password=document.getElementById('owner-pw').value; let res;
-  try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'owner',password})}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
-  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('owner','1'); launchApp('admin'); }); }
+  try{ res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'owner',password,trust:window.Stay&&Stay.trust()})}); }catch(e){ showLoginErr('Could not reach the login server.'); return; }
+  if(res.ok){ const d=await res.json(); authGate(d,d2=>{ sessionStorage.setItem('token',d2.token); sessionStorage.setItem('justSignedIn','1'); sessionStorage.setItem('owner','1'); launchApp('admin'); }); }
   else if(res.status===401) showLoginErr('Incorrect password.');
   else if(res.status===503) showLoginErr('Owner login is not set up yet: add OWNER_PASSWORD in Vercel.');
   else showLoginErr('Login is unavailable right now. Please try again later.');
@@ -257,6 +257,7 @@ async function tzLoadMine(){
     tzPref=d.zone; tzAlso=!!d.alsoUtc; try{ localStorage.setItem('cgTz',tzPref); localStorage.setItem('cgTzUtc',tzAlso?'1':'0'); }catch(e){} tzRefresh(); }catch(e){}
 }
 function launchApp(r){
+  if(window.Stay&&['admin','mod','member'].includes(r)&&sessionStorage.getItem('justSignedIn')==='1'&&!sessionStorage.removeItem('justSignedIn')) setTimeout(()=>Stay.offer(sessionStorage.getItem('token'),{role:r,owner:sessionStorage.getItem('owner')==='1'}),1200);
   role=r; sessionStorage.setItem('role',r);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -294,7 +295,7 @@ function installBarMaybe(){
     const go=document.getElementById('install-go'); if(go) go.onclick=async()=>{ installEvent.prompt(); try{ await installEvent.userChoice; }catch(e){} done(); };
   },2500);
 }
-function doLogout(){sessionStorage.clear();location.reload();}
+function doLogout(){ if(window.Stay) Stay.forget(); sessionStorage.clear(); location.reload(); }
 
 // A small red / amber / green dot on the Admin button, refreshed every few minutes, so problems show without opening the panel.
 let healthDotTimer=null;
@@ -355,8 +356,8 @@ async function loginScreenSetup(err){
     if(d.requireLogin) document.getElementById('guest-btn').style.display='none';
   }catch(e){ /* guest login still works */ }
 }
-async function ssoLogin(token){
-  sessionStorage.setItem('token',token);
+async function ssoLogin(token,resumed){
+  sessionStorage.setItem('token',token); if(!resumed) sessionStorage.setItem('justSignedIn','1');
   await loadLive();
   let me;
   try{
@@ -4571,6 +4572,7 @@ const sessionExpired=sessionStorage.getItem('expired')==='1';
 if(sessionExpired) sessionStorage.removeItem('expired');
 if(ssoToken||ssoError) history.replaceState(null,'',location.pathname+location.search);
 if(ssoToken) ssoLogin(ssoToken);
+else if(!role && window.Stay && Stay.has()) Stay.resume(d=>{ sessionStorage.setItem('token',d.token); if(d.role==='member'){ ssoLogin(d.token,true); return; } sessionStorage.setItem('role',d.role); if(d.owner) sessionStorage.setItem('owner','1'); else sessionStorage.removeItem('owner'); location.reload(); }).then(ok=>{ if(!ok) loginScreenSetup(''); });
 else if(!role) loginScreenSetup(ssoError||(sessionExpired?'Your session has expired. Please log in again.':''));
 if(!role && !ssoToken) loadLive();
 if(role && !ssoToken){
