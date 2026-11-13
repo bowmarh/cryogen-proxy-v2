@@ -66,7 +66,7 @@ beforeEach(() => { app.world.db = {}; });
 
 test('through the app: the launch plan and the fix list are staff pages, and the Control room reuses its systems list unless asked to refresh', async () => {
   const mod = await app.login('mod'), rider = await app.memberSession('1002'); assert.equal((await app.get('/api/launch', { token: rider })).status, 401);
-  const l = await app.get('/api/launch', { token: mod }); assert.equal(l.status, 200); assert.equal(l.body.plan.total, 8); assert.ok(l.body.plan.steps.every(s => ['done', 'ready', 'blocked'].includes(s.status))); assert.ok(Array.isArray(l.body.issues));
+  const l = await app.get('/api/launch', { token: mod }); assert.equal(l.status, 200); assert.equal(l.body.plan.total, 12); assert.ok(l.body.plan.steps.every(s => ['done', 'ready', 'blocked'].includes(s.status))); assert.ok(Array.isArray(l.body.issues));
   const a = await app.get('/api/control', { token: mod }), b = await app.get('/api/control?fresh=1', { token: mod }); assert.deepEqual(a.body.systems.map(s => s.name), b.body.systems.map(s => s.name));
   assert.equal((await app.get('/api/wpprobe', { token: mod })).status, 403, 'the plugin inspection is for administrators'); assert.equal((await app.get('/api/wpprobe', { token: await app.login('admin') })).status, 200);
 });

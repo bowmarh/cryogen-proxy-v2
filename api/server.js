@@ -2995,11 +2995,16 @@ const authsec = require('../lib/authsec')({ redis, HttpError, requireRole, sessi
 const seasonPlan = require('../lib/seasonplan')({ redis, HttpError, memberFromRequest, fetchRoster, notify: (...a) => comms.notify(...a) });   // season-long plans from the rider's FTP
 const wpSync = require('../lib/wpsync')({ redis, HttpError, requireRole, join, wpSite, wpAuth, discord });   // create a WordPress account for a join request (owner switch)
 const offboard = require('../lib/offboard')({ HttpError, requireRole, setMemberStatus: wpSetMemberStatus, mail, privacy, discord, siteUrl: SITE_URL });   // mark a member as left in one action
-const healthDigest = require('../lib/healthdigest')({ redis, HttpError, requireRole, overview: f => controlRoom.overview(f), to: () => String(process.env.ALERT_EMAIL || '').trim(), send: m => mail.sendDirect({ ...m, name: 'CRYO-GEN admin' }), siteUrl: SITE_URL });   // the weekly email to the owner
+const healthDigest = require('../lib/healthdigest')({ redis, HttpError, requireRole, overview: f => controlRoom.overview(f), extra: async () => {   // the error budget: jobs that are failing now, and the pages that threw errors for riders and staff
+  const out = [], [raw] = await redis([['HGETALL', CRON_FAILING_KEY]]); for (let i = 0; i < (raw || []).length; i += 2) out.push(`The ${raw[i]} job has been failing since ${String(raw[i + 1]).slice(0, 10)}.`);
+  const errs = (await clientErrors.routes['GET /api/staff/client-errors'](syncReq())).errors || [], week = errs.filter(e => Date.now() - Date.parse(e.last) < 7 * 86400000);
+  if (week.length) out.push(`${week.length} kind${week.length === 1 ? '' : 's'} of browser error ${week.length === 1 ? 'was' : 'were'} seen this week (${week.reduce((n, e) => n + (e.count || 1), 0)} times). Most recent: ${String(week[0].message || '').slice(0, 90)}.`);
+  return out.length ? out : ['None: no failing jobs and no browser errors this week.'];
+}, to: () => String(process.env.ALERT_EMAIL || '').trim(), send: m => mail.sendDirect({ ...m, name: 'CRYO-GEN admin' }), siteUrl: SITE_URL });   // the weekly email to the owner
 const wpProbe = require('../lib/wpprobe')({ redis, HttpError, requireRole, wpApi: WP_API, wpAuth });   // read-only look at what the member plugin offers
 const siteFeed = require('../lib/sitefeed')({ redis, HttpError, requireRole, zrl, wpPost: wpPublishPost, discord, siteUrl: SITE_URL });   // standings posted to the website
 const launch = require('../lib/launch')({ redis, requireRole, discord, siteUrl: SITE_URL, state: {   // the launch plan and the weekly "what needs fixing"
-  ownerSet: () => !!process.env.OWNER_PASSWORD, wpConnected: () => !!wpAuth(), checks: () => liveCheck.results(), radio: async () => (await aiops.settings()).radio,
+  ownerSet: () => !!process.env.OWNER_PASSWORD, security: () => authsec.status(), wpConnected: () => !!wpAuth(), checks: () => liveCheck.results(), radio: async () => (await aiops.settings()).radio,
   autoresults: () => autoResults.settings(), raceweek: () => raceWeek.settings(), sitefeed: () => siteFeed.settings(), wpsync: () => wpSync.settings(),
   joinsSeen: async () => (await join.list()).length > 0, systems: () => controlRoom.systemsCached(), feedback: () => feedback.list(),
   errors: async () => (await clientErrors.routes['GET /api/staff/client-errors'](syncReq())).errors, requests: async () => (await selfService.routes['GET /api/requests'](syncReq())).requests,
@@ -3181,7 +3186,7 @@ async function route(req, res){
   if (pathname === '/api/smoke' && (req.method === 'POST' || req.method === 'GET')){
     const secret = process.env.CRON_SECRET; if (!secret) return sendJSON(res, 503, { error: 'CRON_SECRET is not set' });
     if (!passwordMatches((/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1] || '', secret)) return sendJSON(res, 401, { error: 'unauthorized' });
-    const checks = []; const check = async (name, fn) => { try { const d = await fn(); checks.push({ name, ok: true, detail: String(d || 'ok').slice(0, 160) }); } catch (e){ checks.push({ name, ok: false, detail: String(e.message || e).slice(0, 160) }); } };
+    const checks = []; const check = async (name, fn) => { try { const d = await fn(); checks.push({ name, ok: true, detail: String(d || 'ok').slice(0, 480) }); } catch (e){ checks.push({ name, ok: false, detail: String(e.message || e).slice(0, 160) }); } };
     await check('Storage', async () => { await redis([['GET', 'cg:smoke:ping']]); return 'answered'; });
     await check('Systems', async () => { const bad = (await controlRoom.systems()).filter(x => x.level === 'bad'); if (bad.length) throw new Error(bad.map(x => `${x.name}: ${x.detail}`).join('; ')); return 'none red'; });
     await check('Monthly PDF', async () => { const b = await aiops.monthlyPdf(Date.now()); if (b.subarray(0, 5).toString() !== '%PDF-') throw new Error('not a PDF'); return `${b.length} bytes`; });
