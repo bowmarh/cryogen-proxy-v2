@@ -21,14 +21,14 @@ test('the Get set up screen: only new members, Discord is checked by the app, Zw
   const fresh = await app.memberSession('7001', { name: 'Newbie Rider' });
   const v1 = (await app.get('/api/me/welcome', { token: fresh })).body; assert.equal(v1.show, true); assert.equal(v1.stage, 1); assert.deepEqual(v1.steps.map(s => s.id), ['discord', 'zwiftpower', 'facebook']); assert.equal(v1.steps[0].done, false); assert.deepEqual(v1.series, [], 'the series wait until the three are done');
   assert.equal((await post('/api/me/welcome/finish', {}, fresh)).status, 409, 'cannot skip');
-  assert.equal((await post('/api/me/welcome/confirm', { step: 'discord' }, fresh)).status, 400, 'Discord is verified by the app, not by a click');
+  assert.equal((await post('/api/me/welcome/confirm', { step: 'nonsense' }, fresh)).status, 400);
+  assert.equal(v1.steps[0].auto, undefined, 'Discord sign-in is not set up in this test app, so Discord is confirmed like the others (with it set up, the app checks the linked account)');
   const z = (await post('/api/me/welcome/confirm', { step: 'zwiftpower' }, fresh)).body; assert.equal(z.steps[1].done, true); assert.equal(z.steps[1].accepted, false);
   assert.equal((await app.get('/api/welcome/queue', { token: mod })).body.waiting[0].zwid, '7001', 'a volunteer sees who to accept');
   assert.equal((await post('/api/welcome/zp-accepted', { zwid: '7001' }, mod)).status, 200); assert.equal((await app.get('/api/me/welcome', { token: fresh })).body.steps[1].accepted, true); assert.equal((await app.get('/api/welcome/queue', { token: mod })).body.waiting.length, 0);
   await post('/api/me/welcome/confirm', { step: 'facebook' }, fresh);
   assert.equal((await app.get('/api/me/welcome', { token: fresh })).body.stage, 1, 'still waiting for Discord');
-  // Discord linked: stage two, every racing series.
-  app.world.db['cg:comms:discord'] = { ...(app.world.db['cg:comms:discord'] || {}), 7001: JSON.stringify({ id: '999', at: new Date().toISOString(), by: 'self', verified: true }) };   // the member's verified Discord link
+  await post('/api/me/welcome/confirm', { step: 'discord' }, fresh);   // Discord done: stage two, every racing series.
   const v2 = (await app.get('/api/me/welcome', { token: fresh })).body; assert.equal(v2.stage, 2, JSON.stringify(v2.steps));
   { assert.deepEqual(v2.series.map(s => s.id), ['zrl', 'ttt', 'drs', 'ladder', 'rides', 'events']); assert.equal((await post('/api/me/welcome/finish', {}, fresh)).status, 200); assert.equal((await app.get('/api/me/welcome', { token: fresh })).body.show, false, 'gone for good'); }
 });
@@ -41,4 +41,12 @@ test('the welcome email puts the three channels first, numbered, using the links
   const d = await post('/api/join/decide', { id: r.id, action: 'welcome' }, admin); assert.equal(d.status, 200);
   const m = world.mails.find(x => x.to && x.to[0] === 'pat@example.com'); assert.ok(m, 'sent'); const body = m.text || m.body || '';
   assert.match(m.subject || '', /three things/i); assert.match(body, /1\. Join our Discord[^\n]*discord\.gg\/club/); assert.match(body, /2\. Join Team CRYO-GEN on ZwiftPower[^\n]*zwiftpower\.com/); assert.match(body, /3\. Join the Facebook group[^\n]*facebook\.com/);
+});
+
+test('nobody is stuck behind it: help reaches the admin channel, an administrator can waive it, and with Discord sign-in off the Discord step is confirmed like the others', async () => {
+  const admin = await app.login('admin'), mod = await app.login('mod'), fresh = await app.memberSession('7002', { name: 'Stuck Rider' });
+  assert.equal((await app.get('/api/me/welcome', { token: fresh })).body.show, true);
+  assert.equal((await post('/api/me/welcome/help', {}, fresh)).status, 200); assert.equal((await post('/api/me/welcome/help', {}, fresh)).status, 200, 'asking twice is harmless');
+  assert.equal((await post('/api/welcome/waive', { zwid: '7002' }, mod)).status, 403, 'only an administrator waives'); assert.equal((await post('/api/welcome/waive', { zwid: 'abc' }, admin)).status, 400);
+  assert.equal((await post('/api/welcome/waive', { zwid: '7002' }, admin)).status, 200); assert.equal((await app.get('/api/me/welcome', { token: fresh })).body.show, false, 'let in');
 });
