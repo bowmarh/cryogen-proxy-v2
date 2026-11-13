@@ -21,7 +21,14 @@
     const el = document.getElementById('droles-content'); if (!el) return;
     try { el.innerHTML = html(await call('/api/discord/roles')); } catch (e) { el.innerHTML = `<div class="card" style="padding:14px 16px;margin:14px 0;color:#f87171">Discord roles: ${E(e.message)}</div>`; }
   }
-  window.dRolesApply = async b => { if (!confirm('Apply these Discord role changes now?')) return; b.disabled = true; try { const r = await call('/api/discord/roles/apply', {}); await load(); const m = document.querySelector('#droles-content .dr-msg'); if (m) m.textContent = `${r.done} updated${r.failed.length ? `, ${r.failed.length} failed` : ''}${r.left ? `; ${r.left} more on the next run` : ''}.`; } catch (e) { alert(e.message); b.disabled = false; } };
-  window.dRolesAuto = async on => { try { await call('/api/discord/roles/settings', { auto: on }); } catch (e) { alert(e.message); } load(); };
-  window.DiscordRolesUI = { load };
+  async function loadWeek() {
+    const el = document.getElementById('droles-content'); if (!el) return;
+    try { const d = await call('/api/weekpush');
+      el.insertAdjacentHTML('beforeend', `<div class="card" style="padding:14px 16px;margin:14px 0"><div class="lbl">"Your week" by Discord</div><p style="font-size:12px;color:#8b95a5;margin:4px 0 8px">Every Monday, each rider with a verified Discord link gets their own next seven days (TTT, ZRL and social rides), with what still needs their answer first. Riders can switch it off in My Profile.</p>${admin() ? `<label style="font-size:12px"><input type="checkbox" ${d.settings.on ? 'checked' : ''} onchange="weekPushSet(this.checked)"> Send "Your week" every Monday</label>` : `<p style="font-size:12px">${d.settings.on ? 'On' : 'Off'} (an administrator changes this).</p>`}</div>`);
+    } catch (e) { /* the roles card still shows */ }
+  }
+  window.weekPushSet = async on => { try { await call('/api/weekpush/settings', { on }); } catch (e) { alert(e.message); } };
+  window.dRolesApply = async b => { if (!confirm('Apply these Discord role changes now?')) return; b.disabled = true; try { const r = await call('/api/discord/roles/apply', {}); await window.DiscordRolesUI.load(); const m = document.querySelector('#droles-content .dr-msg'); if (m) m.textContent = `${r.done} updated${r.failed.length ? `, ${r.failed.length} failed` : ''}${r.left ? `; ${r.left} more on the next run` : ''}.`; } catch (e) { alert(e.message); b.disabled = false; } };
+  window.dRolesAuto = async on => { try { await call('/api/discord/roles/settings', { auto: on }); } catch (e) { alert(e.message); } window.DiscordRolesUI.load(); };
+  window.DiscordRolesUI = { load: async () => { await load(); await loadWeek(); } };
 })();
