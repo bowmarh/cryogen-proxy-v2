@@ -275,6 +275,8 @@ function installFetch(world) {
         const start = after === '0' ? 0 : all.findIndex(m => m.user.id === after) + 1;
         return json(all.slice(start, start + Number(u.searchParams.get('limit') || 1000)));
       }
+      const role = /\/guilds\/\d+\/members\/(\d+)\/roles\/(\d+)$/.exec(u.pathname);   // adding or removing one role: world.roleCalls records them; world.roleDenied answers 403
+      if (role) { if (world.roleDenied) return json({ code: 50013 }, 403); (world.roleCalls = world.roleCalls || []).push([opts.method, role[1], role[2]]); const gm = (world.guildMembers || []).find(x => x.user.id === role[1]); if (gm) { gm.roles = (gm.roles || []).filter(r => r !== role[2]); if (opts.method === 'PUT') gm.roles.push(role[2]); } return new Response(null, { status: 204 }); }
       if (u.pathname.endsWith('/oauth2/token')) { (world.oauthCalls = world.oauthCalls || []).push(String(opts.body)); return world.oauthFail ? json({ error: 'invalid_grant' }, 400) : json({ access_token: 'user-token' }); }   // "Sign in with Discord"
       if (/^\/api\/v10\/applications\/[^/]+\/commands$/.test(u.pathname) && opts.method === 'PUT') { if (world.commandsRefused) return json({ message: '401: Unauthorized' }, 401); world.slashCommands = JSON.parse(opts.body); return json(world.slashCommands); }   // registering slash commands
       if (u.pathname === '/api/v10/users/@me' && /^Bot /.test((opts.headers || {}).Authorization || '')) return world.botBad ? json({}, 401) : json({ id: 'bot' });
