@@ -28,6 +28,26 @@
   }
   window.zrlHelperRemind = async b => { const m = b.parentElement.querySelector('.zh-msg'); b.disabled = true; m.textContent = 'Asking…'; try { const r = await fetch('/api/staff/zrl-helper/remind', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: '{}' }); const d = await r.json(); if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status)); m.textContent = d.note; } catch (e) { m.textContent = e.message; b.disabled = false; } };
   window.clientErrClear = async sig => { try { await fetch('/api/staff/client-errors/clear', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ sig }) }); load(); } catch (e) { alert(e.message); } };
+  // ZwiftPower team: active members not on Team CRYO-GEN on ZwiftPower, with their profile and a nudge (email and/or Discord, once every 14 days).
+  function zpHtml(d) {
+    if (!d || !Array.isArray(d.missing)) return '';
+    const rows = d.missing.slice(0, 200).map(m => `<tr><td><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="zp-pick" value="${E(m.zwid)}" ${m.canNudge ? '' : 'disabled'}>${E(m.name)}</label></td><td>${E(m.tier || '')}</td><td><a href="${E(m.profile)}" target="_blank" rel="noopener">ZwiftPower profile ↗</a></td><td style="font-size:12px">${m.lastNudge ? `Nudged ${E(m.lastNudge.slice(0, 10))} (${m.nudges}×)` : 'Not nudged yet'}</td></tr>`).join('');
+    return `<div class="card" id="zp-card" style="padding:14px 16px;margin-bottom:14px"><div class="lbl">ZwiftPower team: members not on Team CRYO-GEN</div>
+      <p style="font-size:12px;color:#8b95a5;margin:4px 0 8px">${d.missing.length} active member${d.missing.length === 1 ? ' is' : 's are'} not on the <a href="${E(d.teamUrl)}" target="_blank" rel="noopener">ZwiftPower team</a> (${d.onTeam} are). ${E(d.note)}${d.stale ? ' The club roster is a little old right now.' : ''}</p>
+      ${d.missing.length ? `<div style="overflow-x:auto;max-height:420px"><table><thead><tr><th><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" onclick="document.querySelectorAll('.zp-pick:not(:disabled)').forEach(c=>c.checked=this.checked)">Member</label></th><th>Tier</th><th>Profile</th><th>Nudge</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><label style="font-size:12px"><input type="checkbox" id="zp-email" checked> Email</label><label style="font-size:12px"><input type="checkbox" id="zp-discord" checked> Discord</label>
+      <button style="${mini}" onclick="zpNudge(this)">Ask the selected to join the ZwiftPower team</button><span class="zp-msg" style="font-size:12px;color:#8b95a5"></span></div>` : '<p style="font-size:13px">Everyone with a Zwift ID is on the team. 🎉</p>'}</div>`;
+  }
+  window.zpNudge = async b => {
+    const m = b.parentElement.querySelector('.zp-msg'), zwids = [...document.querySelectorAll('.zp-pick:checked')].map(c => c.value);
+    const via = [document.getElementById('zp-email').checked && 'email', document.getElementById('zp-discord').checked && 'discord'].filter(Boolean);
+    if (!zwids.length) { m.textContent = 'Tick at least one member.'; return; }
+    if (!confirm(`Send ${zwids.length} member${zwids.length === 1 ? '' : 's'} a message asking them to join Team CRYO-GEN on ZwiftPower?`)) return;
+    b.disabled = true; m.textContent = 'Sending…';
+    try { const r = await fetch('/api/zpteam/nudge', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ zwids, via }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      const bad = d.results.filter(x => !x.ok); const msg = `Sent to ${d.sent}.${bad.length ? ' Not sent: ' + bad.map(x => `${x.name || x.zwid} (${x.error})`).join('; ') : ''}`; await loadZp(); const nm = document.querySelector('#zp-card .zp-msg'); if (nm) nm.textContent = msg; }
+    catch (e) { m.textContent = e.message; } finally { b.disabled = false; }
+  };
   async function load() {
     const el = document.getElementById('clubstats-content'); if (!el) return;
     if (!el.innerHTML) el.innerHTML = '<div style="color:#8b95a5;padding:20px">Loading…</div>';
@@ -35,5 +55,7 @@
       try { const zr = await fetch('/api/staff/zrl-helper', { headers: tttHeaders() }); if (zr.ok) { const first = el.querySelector('.card'); const h = zrlHtml(await zr.json()); if (first) first.insertAdjacentHTML('afterend', h); else el.insertAdjacentHTML('beforeend', h); } } catch (e) { /* ditto */ } }
     catch (e) { el.innerHTML = `<div class="card" style="padding:20px;color:#f87171">${E(e.message)}</div>`; }
   }
-  window.ClubStatsUI = { load };
+  async function loadZp() { const el = document.getElementById('clubstats-content'); if (!el) return; try { const r = await fetch('/api/zpteam', { headers: tttHeaders() }); if (!r.ok) return; const h = zpHtml(await r.json()); const old = document.getElementById('zp-card'); if (old) old.outerHTML = h; else el.insertAdjacentHTML('beforeend', h); } catch (e) { /* the rest of the page still works */ } }
+  const loadAll = async () => { await load(); await loadZp(); };
+  window.ClubStatsUI = { load: loadAll };
 })();
