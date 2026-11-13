@@ -111,3 +111,12 @@ add_action('save_post_members', function ($post_id) {
 ## Team change requests
 
 A rider on the ZRL page opens **🔁 Ask to change team**, picks a team and sends it. The captain of the team they would join (or leave) is told by Discord DM (or the admin channel if no captain can be reached) and sees **Waiting for your decision** in the same card; staff see all of them. *Approve* moves the rider through the same assignment rules staff use (a full team is refused, not overfilled); *Decline* can give a reason the rider sees. One open request per rider; nothing changes until someone approves.
+
+## New-member welcome ("Get set up")
+
+New members (those who appear after onboarding began, for their first 60 days) see a full-screen **Get set up** step the first time they sign in, which they cannot dismiss until the club channels are done; then every racing series is put in front of them.
+
+1. **Set the three links:** Control room → Join requests → *New-member welcome*: Discord invite, ZwiftPower team page, Facebook group (full `https://` addresses). They are also used in the welcome email, which now opens with the three things to do, numbered. (`CLUB_DISCORD_URL`, `CLUB_ZWIFTPOWER_URL`, `CLUB_FACEBOOK_URL` in Vercel work as defaults.) A channel with no link set is left out.
+2. **What is checked and what is not:** Discord is verified by the app (the member's linked, verified Discord account). ZwiftPower and Facebook cannot be checked from here, so the member presses *I have asked to join*. For ZwiftPower the admin Discord channel is told and the member appears under *ZwiftPower requests to accept*: accept them on ZwiftPower, then press *Accepted on ZwiftPower* and they see they are in the team.
+3. **Then the racing:** ZRL team racing, team time trials, DIRT racing, the Ladder, social rides and all events, each with a button straight to its sign-up page. After that the screen is gone for good.
+4. **Switching it off:** untick *Show the Get set up screen to new members* in the same card. Members already in the club when onboarding began, and associates, never see it.
