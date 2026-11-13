@@ -1,8 +1,8 @@
 // The club dashboard as an installable app. It keeps the page and its scripts so the app opens when the network is down, and still fetches them
 // fresh first whenever the network is up, so a new deploy shows straight away. Nothing from /api/ is ever kept: a rider's data is not stored by the worker.
-const CACHE = 'cryogen-shell-v9';
+const CACHE = 'cryogen-shell-v10';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/logo.png', '/js/app.js', '/js/staff.js', '/js/errors.js', '/js/ui.js', '/js/fit.js', '/js/coach.js', '/js/support.js', '/js/aistaff.js', '/js/studio.js', '/js/mailui.js', '/js/aidesk.js', '/js/control.js', '/js/captain.js', '/js/mydetails.js', '/js/planui.js', '/js/referral.js', '/js/feedback.js',
-  '/js/investigate.js', '/js/pairfit.js', '/js/pairui.js', '/js/caselogui.js', '/js/privacyui.js', '/js/membercards.js', '/js/clubstatsui.js', '/js/calendar-settings.js', '/js/authui.js', '/js/zrlpast.js', '/js/myseason.js'];
+  '/js/investigate.js', '/js/pairfit.js', '/js/pairui.js', '/js/caselogui.js', '/js/privacyui.js', '/js/membercards.js', '/js/clubstatsui.js', '/js/calendar-settings.js', '/js/authui.js', '/js/zrlpast.js', '/js/myseason.js', '/js/teamchange.js'];
 
 self.addEventListener('install', e => {
   // One missing file must not stop the worker installing, so each is added on its own.
