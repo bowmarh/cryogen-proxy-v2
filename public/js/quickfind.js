@@ -33,6 +33,7 @@
       out.push({ kind: 'page', id: m[1], label, group, words: norm(label + ' ' + (KEYWORDS[m[1]] || '')), el: b });
     }
     const ad = document.getElementById('nav-admin-btn'); if (ad && ad.style.display !== 'none') out.push({ kind: 'page', id: 'admin', label: '⚙️ Admin', group: 'Staff tools', words: norm('admin ' + KEYWORDS.admin), el: ad });
+    out.push({ kind: 'page', id: 'tour', label: '🎬 Quick tour', group: 'Help', words: norm('quick tour help guide how to use the app walkthrough'), el: { click: () => { if (window.Tour) Tour.start(); } } });
     return out;
   }
   const findPages = q => { const w = norm(q).split(/\s+/).filter(Boolean); return pages().filter(p => w.every(x => p.words.includes(x))); };

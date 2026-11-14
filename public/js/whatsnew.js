@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-16', title: "What's new", all: ['Every page now has a "What is this page?" box at the top that says what it is for and explains words like vELO and FTP.', 'New one-minute tour: open Go to (the 🔎 button or the / key) and pick Quick tour.', 'Column headings explain themselves when you hover over them.'],
+      staff: ['The Discord member list can be downloaded as a CSV from Comms → Import Discord IDs.'] },
     { id: '2026-11-15', title: "What's new", all: ['Easier menu: pages are grouped (Me, Racing, Rides, Club). Dashboard is now called Home.', 'Press / (or tap the 🔎 button) and type a page name to jump straight to it.', 'On a phone the menu is now a bar at the bottom, with More for everything else.'],
       staff: ['Staff pages are together under "Staff tools".', 'Download the Discord member list as a CSV from Comms → Import Discord IDs.'] },
     { id: '2026-11-14', title: "What's new", all: ['Quicker sign-in: stay signed in with a passcode or Face ID / fingerprint.', 'Search boxes on most lists: type a name, a Zwift ID or a category.'],
@@ -23,6 +25,7 @@
     const d = document.createElement('div'); d.id = 'whatsnew'; d.setAttribute('role', 'status');
     d.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;max-width:440px;width:calc(100% - 32px);background:#0f1a2e;border:1px solid rgba(0,212,255,.35);border-radius:12px;padding:12px 14px;color:#e5e7eb;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5)';
     d.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>✨ ${E(title)}</b><button type="button" id="whatsnew-x" aria-label="Dismiss" style="background:none;border:0;color:#9ca3af;font-size:18px;cursor:pointer">×</button></div><ul style="margin:8px 0 0 18px;padding:0;line-height:1.5">${items.map(i => `<li>${E(i)}</li>`).join('')}</ul>`;
+    if (first && window.Tour) { const tb = document.createElement('button'); tb.type = 'button'; tb.textContent = '🎬 Take the one-minute tour'; tb.className = 'btn-cyan'; tb.style.cssText = 'width:auto;margin-top:10px;padding:7px 14px'; tb.onclick = () => { d.remove(); Tour.start(); }; d.appendChild(tb); }
     (host === document.body ? host : document.body).appendChild(d);
     document.getElementById('whatsnew-x').onclick = () => { mark(n.id); d.remove(); };
   }
