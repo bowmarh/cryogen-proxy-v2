@@ -1,5 +1,5 @@
 // @ts-check
-// Staff quick find: a name or Zwift ID finds the rider and opens their profile; riders do not get it.
+// Go to / quick find: everyone can jump to a page by typing its name; staff can also find a rider by name or Zwift ID.
 const { test, expect } = require('@playwright/test');
 const h = require('../helpers');
 h.setEnv();
@@ -15,7 +15,7 @@ test('staff find a rider by name or Zwift ID with the button or the / key, and o
   const q = page.locator('#qf-q'); await expect(q).toBeFocused();
   await q.fill('rider two'); await expect(page.locator('#qf-r [data-i]').first()).toContainText('Rider Two');
   await q.fill('1003'); await expect(page.locator('#qf-r [data-i]')).toHaveCount(1); await expect(page.locator('#qf-r')).toContainText('ID 1003');
-  await q.fill('zzzz'); await expect(page.locator('#qf-r')).toContainText('No rider matches');
+  await q.fill('zzzz'); await expect(page.locator('#qf-r')).toContainText('Nothing matches that');
   await page.keyboard.press('Escape'); await expect(page.locator('#qf')).toHaveCount(0);
   await page.locator('body').click({ position: { x: 5, y: 300 } }); await page.keyboard.press('/'); await expect(page.locator('#qf')).toHaveCount(1);
   await page.locator('#qf-q').fill('1002'); await page.keyboard.press('Enter');
@@ -23,8 +23,15 @@ test('staff find a rider by name or Zwift ID with the button or the / key, and o
   expect(errors).toEqual([]);
 });
 
-test('a rider does not see the quick find', async ({ page, baseURL }) => {
+test('a rider can jump to any page they can see by typing, but cannot look up other riders', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
   await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('#find-btn')).toBeHidden(); await page.keyboard.press('/'); await expect(page.locator('#qf')).toHaveCount(0);
+  await expect(page.locator('#find-btn')).toBeVisible(); await page.locator('#find-btn').click();
+  const q = page.locator('#qf-q'); await expect(q).toBeFocused();
+  expect(await page.locator('#qf-r [data-i]').count()).toBeGreaterThan(5);   // nothing typed: every page they can open
+  await expect(page.locator('#qf-r')).not.toContainText('Control room');   // staff pages are not offered
+  await q.fill('zrl'); await expect(page.locator('#qf-r [data-i]').first()).toContainText('ZRL');
+  await page.keyboard.press('Enter'); await expect(page.locator('#qf')).toHaveCount(0); await expect(page.locator('#page-zrl')).toHaveClass(/active/);
+  await page.locator('body').click({ position: { x: 5, y: 300 } }); await page.keyboard.press('/'); await expect(page.locator('#qf')).toHaveCount(1);
+  await page.locator('#qf-q').fill('1003'); await expect(page.locator('#qf-r')).toContainText('Nothing matches');   // no rider look-up for riders
 });
