@@ -8,13 +8,12 @@ h.setEnv();
 const rider = async (page, baseURL) => { await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`); await expect(page.locator('#app')).toBeVisible({ timeout: 15000 }); };
 const active = page => page.evaluate(() => (document.querySelector('.page.active') || {}).id);
 
-test('a rider: Home offers what they do, and every page says where you are and what it is for', async ({ page, baseURL }) => {
+test('a rider: Home offers what they do, and every page shows a breadcrumb', async ({ page, baseURL }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await rider(page, baseURL);
   const home = page.locator('#home-launch'); await expect(home).toContainText('What would you like to do?'); await expect(home).toContainText('Sign up for a race or ride'); await expect(home).not.toContainText('Race day and club health');   // staff tiles are not shown to a rider
   await home.getByRole('button', { name: /ZRL team racing/ }).click(); expect(await active(page)).toBe('page-zrl');
-  const strip = page.locator('#page-help'); await expect(strip).toContainText('Home'); await expect(strip).toContainText('ZRL'); await expect(strip).toContainText('Zwift Racing League');
-  await strip.getByRole('button', { name: /Got it/ }).click(); await expect(strip).not.toContainText('Zwift Racing League');   // dismissed, the where-you-are line stays
+  const strip = page.locator('#page-help'); await expect(strip).toContainText('Home'); await expect(strip).toContainText('Racing'); await expect(strip).toContainText('ZRL');
   await strip.getByRole('link', { name: /Home/ }).click(); expect(await active(page)).toBe('page-dashboard');
   expect(errors).toEqual([]);
 });

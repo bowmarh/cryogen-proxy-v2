@@ -1,7 +1,7 @@
 'use strict';
 // Getting around, part two. The grouped menu, "Go to" (the 🔎 button or "/") and the phone bottom bar are in quickfind.js and tabbar.js; this adds what they do not:
 //  - "What would you like to do?": big buttons on Home for the things this person actually does (members and staff see different ones).
-//  - "You are here": a slim strip on every page with where you are and, in a sentence, what the page is for (each can be dismissed).
+//  - "You are here": a slim breadcrumb on every page (Home › group › page). What each page is for is in pagehelp.js.
 //  - The browser's Back button (and a phone's Back gesture) goes to the previous page inside the app; the tab title shows the page.
 // Everything is built from the menu that is already on the page, so a page the person cannot see is never offered.
 (function () {
@@ -56,19 +56,19 @@
   }
   const go = id => { const m = menu().find(x => x.id === id); if (m && typeof showTab === 'function') { showTab(id, m.btn); const main = document.getElementById('main'); if (main) { main.scrollTop = 0; main.focus({ preventScroll: true }); } } };
   window.navGo = go;
+  // A Home button was tapped: count it (page name only, nothing about who) and go. The count must never get in the way, so a failure is ignored.
+  window.navTile = id => { try { const t = sessionStorage.getItem('token'); fetch('/api/usage/nav', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) }, body: JSON.stringify({ id }) }).catch(() => {}); } catch (e) { /* ignore */ } go(id); };
 
   // ── "You are here" strip ──
-  const dismissed = () => { try { return JSON.parse(localStorage.getItem('cgHelpOff') || '{}'); } catch (e) { return {}; } };
+  // The sentence about what a page is for lives in pagehelp.js ("What is this page?"); this strip is only the breadcrumb, so a person always knows where they are.
   function here(id) {
     let el = document.getElementById('page-help'); const mainBox = document.querySelector('#main > div'); if (!mainBox) return;
-    if (!el) { el = document.createElement('div'); el.id = 'page-help'; el.setAttribute('role', 'note'); mainBox.insertBefore(el, mainBox.firstChild); }
+    if (!el) { el = document.createElement('nav'); el.id = 'page-help'; el.setAttribute('aria-label', 'You are here'); mainBox.insertBefore(el, mainBox.firstChild); }
     const m = menu().find(x => x.id === id);
     if (!m || id === 'dashboard') { el.style.display = 'none'; return; }
-    const off = dismissed()[id];
-    el.style.cssText = 'display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin:0 0 14px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);font-size:12px;color:#9ca3af';
-    el.innerHTML = `<nav aria-label="You are here" style="white-space:nowrap"><a href="#" onclick="navGo('dashboard');return false" style="color:var(--accent)">🏠 Home</a> › ${m.group !== 'Home' ? E(m.group) + ' › ' : ''}<b style="color:#e5e7eb">${E(m.label)}</b></nav>${off || !m.desc ? '' : `<span style="flex:1;min-width:180px">${E(m.desc)}</span><button type="button" onclick="navHelpOff('${E(id)}')" title="Hide this hint" style="background:none;border:none;color:#8b95a5;font-size:12px;padding:0 4px">Got it ✕</button>`}`;
+    el.style.cssText = 'display:block;margin:0 0 10px;font-size:12px;color:#9ca3af';
+    el.innerHTML = `<a href="#" onclick="navGo('dashboard');return false" style="color:var(--accent)">🏠 Home</a> › ${m.group !== 'Home' ? E(m.group) + ' › ' : ''}<b style="color:#e5e7eb">${E(m.label)}</b>`;
   }
-  window.navHelpOff = id => { const d = dismissed(); d[id] = 1; try { localStorage.setItem('cgHelpOff', JSON.stringify(d)); } catch (e) { /* the hint just comes back next time */ } here(id); };
 
   // ── "What would you like to do?" on Home ──
   const TILES_MEMBER = [['events', 'Sign up for a race or ride'], ['week', 'See my week'], ['zrl', 'ZRL team racing'], ['ttt', 'This week\'s team time trial'], ['drs', 'DIRT racing'], ['rides', 'Social rides'], ['captain', 'Look after my team'], ['profile', 'My profile and stats'], ['mydetails', 'My details and emails'], ['plan', 'My training plan'], ['upgrade', 'Become a full member']];
@@ -79,11 +79,11 @@
     const all = menu(), want = (isStaff() ? TILES_STAFF : TILES_MEMBER), tiles = want.map(([id, hint]) => [all.find(m => m.id === id), hint]).filter(([m]) => m).slice(0, 8);
     if (!tiles.length) { el.innerHTML = ''; return; }
     const open = (() => { try { return localStorage.getItem('cgHomeOpen') !== '0'; } catch (e) { return true; } })();
-    el.innerHTML = `<details ${open ? 'open' : ''} class="card" style="padding:12px 14px;margin-bottom:14px" ontoggle="try{localStorage.setItem('cgHomeOpen',this.open?'1':'0')}catch(e){}"><summary style="cursor:pointer;font-weight:800;font-size:15px">What would you like to do?</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">${tiles.map(([m, hint]) => `<button type="button" onclick="navGo('${E(m.id)}')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e5e7eb"><span aria-hidden="true" style="font-size:22px">${E(m.icon)}</span><b style="font-size:13px">${E(hint)}</b></button>`).join('')}</div><div style="font-size:11px;color:#8b95a5;margin-top:8px">Looking for something else? Press <b>/</b> or tap the <b>🔎</b> button and type a page name.</div></details>`;
+    el.innerHTML = `<details ${open ? 'open' : ''} class="card" style="padding:12px 14px;margin-bottom:14px" ontoggle="try{localStorage.setItem('cgHomeOpen',this.open?'1':'0')}catch(e){}"><summary style="cursor:pointer;font-weight:800;font-size:15px">What would you like to do?</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">${tiles.map(([m, hint]) => `<button type="button" onclick="navTile('${E(m.id)}')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e5e7eb"><span aria-hidden="true" style="font-size:22px">${E(m.icon)}</span><b style="font-size:13px">${E(hint)}</b></button>`).join('')}</div><div style="font-size:11px;color:#8b95a5;margin-top:8px">Looking for something else? Press <b>/</b> or tap the <b>🔎</b> button and type a page name.</div></details>`;
   }
 
   // ── Tooltips, header button, wiring ──
-  function decorate() { for (const m of menu()) { m.btn.title = m.desc || ''; } }
+  function decorate() { /* menu tooltips are set elsewhere */ }
   function refresh() { try { decorate(); launcher(); const cur = (document.querySelector('.page.active') || {}).id || ''; here(cur.replace(/^page-/, '')); } catch (e) { /* navigation helpers must never stop the app */ } }
   let fromBack = false;
   window.addEventListener('popstate', e => { const id = e.state && e.state.tab; if (!id) return; const m = menu().find(x => x.id === id); if (m) { fromBack = true; try { showTab(id, m.btn); } finally { fromBack = false; } } });
