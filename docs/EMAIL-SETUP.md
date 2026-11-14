@@ -103,3 +103,7 @@ To have replies arrive automatically, set `MAIL_INBOUND_SECRET` in Vercel and po
 - **Engagement** (Control room → Engagement): racing activity bands, a monthly trend (saved automatically on the first run of each month), ZRL line-ups filled race by race, and the members most at risk. The active percentage is approximate.
 - **Go-live check** (Control room → Go-live check): one real test per feature (email, admin Discord, a DM, the availability link, preferences page, join form, race page, PDF, AI, systems, radio) with a pass/fail and the time. Use it once after every setup change.
 - **WordPress embed:** in a Custom HTML block on cryogen.team paste `<div data-cryogen="race"></div>` and/or `<div data-cryogen="join"></div>` followed by `<script src="https://club.cryo-gen.team/embed.js" async></script>`. The race table follows the public on/off switch.
+
+## Testing without confusion
+
+A member whose address is the same as the sending mailbox (for example `rick@cryogen.team` when the app sends from `rick@cryogen.team`) receives the message in that mailbox's own inbox, not in a personal one. To test with a real inbox, give the test member a personal address, or create a separate sending mailbox such as `club@cryogen.team` in hPanel and point `HOSTINGER_MAIL_MAILBOX_ID` at it.
