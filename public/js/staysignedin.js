@@ -10,7 +10,7 @@
   const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
   const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))), unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-  const post = async (path, body, tok) => { const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(d.error || ('HTTP ' + r.status)), { status: r.status }); return d; };
+  const post = async (path, body, tok) => { const r = await fetch(path, { keepalive: true, method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body || {}) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(d.error || ('HTTP ' + r.status)), { status: r.status }); return d; };
   const subtle = window.crypto && window.crypto.subtle;
 
   // ── keys ──
