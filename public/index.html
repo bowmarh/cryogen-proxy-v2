@@ -382,6 +382,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <button id="m-export" onclick="exportMembersCsv()" style="display:none;padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:12px" title="Download everyone matching the search and filters as a spreadsheet file">⬇ Export</button>
       <button id="m-active-btn" onclick="mActive=!mActive;mPage=1;this.style.color=mActive?'var(--accent)':'#9ca3af';renderMembers()" style="padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:13px">Active only</button>
     </div>
+    <div id="m-quick" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0" role="group" aria-label="Quick views"></div>
     <div id="m-bulkbar"></div>
     <div class="card"><div style="overflow-x:auto"><table><thead><tr id="members-table-head">
       </tr></thead><tbody id="members-body"></tbody></table></div>
