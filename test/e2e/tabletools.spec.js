@@ -131,3 +131,13 @@ test('staff views are kept on the server and come back on a device that has none
   await page.reload(); await page.evaluate(() => launchApp('admin')); await page.waitForTimeout(600); await fixture(page); await page.waitForTimeout(300);
   await expect(page.locator('#c1 .tf-views')).toContainText('Five');
 });
+
+test('column filters: "score>20", "name:rider score<10"; a word that names no column is an ordinary word', async ({ page, baseURL }) => {
+  await open(page, baseURL); await fixture(page);
+  const q = page.locator('#c1 .tf-input');
+  await q.fill('score>20'); expect((await names(page)).sort()).toEqual(['Rider 10', 'Rider 4', 'Rider 6']);
+  await q.fill('name:rider score<10'); expect((await names(page)).sort()).toEqual(['Rider 1', 'Rider 5', 'Rider 7', 'Rider 8']);
+  await q.fill('seen:2026-11-09'); expect(await names(page)).toEqual(['Rider 8']);
+  await q.fill('nosuchcolumn:x'); await expect(page.locator('#t1 tbody tr:visible')).toHaveCount(0);
+  await q.fill(''); await expect(page.locator('#t1 tbody tr:visible')).toHaveCount(10);
+});

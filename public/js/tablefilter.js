@@ -16,7 +16,7 @@
     const box = document.createElement('div'); box.className = 'tf-box'; box.dataset.sig = sig;
     box.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px';
     const tb = 'padding:6px 10px;font-size:12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:#cbd5e1;cursor:pointer';
-    box.innerHTML = `<input type="search" class="inp tf-input" aria-label="Filter this ${kind}" placeholder="🔎 Filter: name, Zwift ID, anything…" autocomplete="off" style="width:100%;max-width:320px;font-size:13px"><span class="tf-count" aria-live="polite" style="font-size:11px;color:#8b95a5"></span>
+    box.innerHTML = `<input type="search" class="inp tf-input" aria-label="Filter this ${kind}" placeholder="🔎 Filter: name, Zwift ID, anything…" title="Tip: type score&gt;10 or name:ann to filter one column" autocomplete="off" style="width:100%;max-width:320px;font-size:13px"><span class="tf-count" aria-live="polite" style="font-size:11px;color:#8b95a5"></span>
       <select class="inp tf-views" aria-label="Saved views" style="width:auto;max-width:170px;font-size:12px"></select><button type="button" class="tf-save" style="${tb}" title="Save the current filter and sort as a view on this device">💾 Save view</button><button type="button" class="tf-del" style="${tb};display:none" aria-label="Delete this saved view">🗑</button>${isStaff() ? `<button type="button" class="tf-csv" style="${tb}" title="Download what is shown as a spreadsheet file">⬇ CSV</button>` : ''}`;
     return box;
   }
@@ -100,13 +100,21 @@
 
   function apply(box) {
     const t = box.__target; if (!t || !t.isConnected) return;
-    const q = norm(box.querySelector('input').value).split(/\s+/).filter(Boolean), rows = items(t); let shown = 0, last = true;
+    const all = norm(box.querySelector('input').value).split(/\s+/).filter(Boolean), rows = items(t); let shown = 0, last = true;
+    // Column filters on tables: "cat:b", "ftp>250", "wkg<3.5". The heading only has to start with the letters typed; anything that names no column is an ordinary word.
+    const heads = t.tagName === 'TABLE' ? [...t.querySelectorAll('thead th')].map(th => norm(th.textContent).replace(/[^a-z0-9]/g, '')) : [];
+    const colTests = [], q = [];
+    for (const w of all) {
+      const m = /^([a-z0-9]+)(:|>|<)(.+)$/.exec(w), ci = m && heads.findIndex(h => h && h.startsWith(m[1]));
+      if (m && ci >= 0) colTests.push({ ci, op: m[2], v: m[3] }); else q.push(w);
+    }
+    const colOk = r => colTests.every(({ ci, op, v }) => { const txt = norm(cellKey(r, ci)); if (op === ':') return txt.includes(v); const a = num(txt), b = num(v); return !isNaN(a) && !isNaN(b) && (op === '>' ? a > b : a < b); });
     for (const r of rows) {
       const detail = t.tagName === 'TABLE' && r.cells.length === 1 && (r.cells[0].colSpan || 1) > 1;   // an expanding detail row follows its parent row
-      const ok = detail ? last : q.every(w => hay(r).includes(w));
+      const ok = detail ? last : colOk(r) && q.every(w => hay(r).includes(w));
       r.hidden = !ok; if (!detail) { last = ok; if (ok) shown++; }
     }
-    box.querySelector('.tf-count').textContent = q.length ? `${shown} of ${rows.filter(r => !(t.tagName === 'TABLE' && r.cells.length === 1 && (r.cells[0].colSpan || 1) > 1)).length}` : '';
+    box.querySelector('.tf-count').textContent = all.length ? `${shown} of ${rows.filter(r => !(t.tagName === 'TABLE' && r.cells.length === 1 && (r.cells[0].colSpan || 1) > 1)).length}` : '';
     kept.set(box.dataset.sig, box.querySelector('input').value);
   }
   function attach(target, kind) {
