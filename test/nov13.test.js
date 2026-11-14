@@ -55,3 +55,12 @@ test('the launch plan now walks through the sign-in hardening: alert email, owne
   assert.equal(byId.alert.status, 'done', 'ALERT_EMAIL is set in this test'); assert.ok(byId.owner2fa && byId.staffaccounts && byId.retire);
   assert.equal(byId.retire.status, 'blocked'); assert.match(byId.retire.blockedBy[0], /personal login/);
 });
+
+test('what people tap first: an anonymous tally of Home buttons, signed-in only, fixed list of pages, staff read it', async () => {
+  assert.equal((await app.post('/api/usage/nav', { id: 'zrl' })).status, 401);
+  const rider = await app.memberSession('1002'), admin = await app.login('admin');
+  assert.equal((await post('/api/usage/nav', { id: 'zrl' }, rider)).status, 200); assert.equal((await post('/api/usage/nav', { id: 'zrl' }, rider)).status, 200); assert.equal((await post('/api/usage/nav', { id: 'events' }, rider)).status, 200);
+  assert.equal((await post('/api/usage/nav', { id: 'not-a-page' }, rider)).status, 400, 'only the fixed list of pages'); assert.equal((await post('/api/usage/nav', { id: '__proto__' }, rider)).status, 400);
+  assert.ok([401, 403].includes((await app.get('/api/usage/nav', { token: rider })).status), 'riders cannot read it');
+  const r = (await app.get('/api/usage/nav', { token: admin })).body; assert.equal(r.months[0].total, 3); assert.deepEqual(r.months[0].pages[0], { id: 'zrl', taps: 2 }); assert.ok(!JSON.stringify(r).includes('1002'), 'nothing about who');
+});

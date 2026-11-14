@@ -2,7 +2,7 @@
 // fresh first whenever the network is up, so a new deploy shows straight away. Nothing from /api/ is ever kept: a rider's data is not stored by the worker.
 const CACHE = 'cryogen-shell-v24';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/logo.png', '/js/app.js', '/js/staff.js', '/js/errors.js', '/js/ui.js', '/js/fit.js', '/js/coach.js', '/js/support.js', '/js/aistaff.js', '/js/studio.js', '/js/mailui.js', '/js/aidesk.js', '/js/control.js', '/js/captain.js', '/js/mydetails.js', '/js/planui.js', '/js/referral.js', '/js/feedback.js',
-  '/js/investigate.js', '/js/whatsnew.js', '/js/tabbar.js', '/js/pagehelp.js', '/js/tour.js', '/js/pairfit.js', '/js/pairui.js', '/js/caselogui.js', '/js/privacyui.js', '/js/membercards.js', '/js/clubstatsui.js', '/js/calendar-settings.js', '/js/authui.js', '/js/staysignedin.js', '/js/tablefilter.js', '/js/quickfind.js', '/js/zrlpast.js', '/js/myseason.js', '/js/teamchange.js', '/js/welcome.js'];
+  '/js/investigate.js', '/js/whatsnew.js', '/js/tabbar.js', '/js/pagehelp.js', '/js/tour.js', '/js/pairfit.js', '/js/pairui.js', '/js/caselogui.js', '/js/privacyui.js', '/js/membercards.js', '/js/clubstatsui.js', '/js/calendar-settings.js', '/js/authui.js', '/js/staysignedin.js', '/js/tablefilter.js', '/js/quickfind.js', '/js/zrlpast.js', '/js/myseason.js', '/js/teamchange.js', '/js/welcome.js', '/js/navhelp.js'];
 
 self.addEventListener('install', e => {
   // One missing file must not stop the worker installing, so each is added on its own.
