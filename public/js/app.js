@@ -29,6 +29,9 @@ const SERIES = [
 const toFlag = cc=>(cc||"").toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt()));
 const catB   = cat=>{const c=CAT_COLOR[cat]||"#888";return`<span class="cat" style="background:${c}22;color:${c};border:1px solid ${c}44">${cat}</span>`;};
 const phClean= v=>(v||"all-rounder").toLowerCase().replace(/\s+/g,"-");
+// The club roster gives each rider's five phenotype scores but not always the named type: take the strongest score. No scores: say nothing rather than call everyone an all-rounder.
+const PH_KEYS={sprinter:'sprinter',puncheur:'puncheur',pursuiter:'pursuiter',climber:'climber',tt:'time-trialist'};
+function phFrom(p){ if(!p) return ''; if(p.value) return phClean(p.value); const e=Object.entries(p.scores||{}).filter(([k,v])=>PH_KEYS[k]&&Number(v)>0).sort((a,b)=>b[1]-a[1]); return e.length?PH_KEYS[e[0][0]]:''; }
 const ccClean= cc=>(cc||"gb").split("-")[0];
 const fmt    = n=>n?.toLocaleString()||"—";
 
@@ -324,7 +327,13 @@ function installBarMaybe(){
     const go=document.getElementById('install-go'); if(go) go.onclick=async()=>{ installEvent.prompt(); try{ await installEvent.userChoice; }catch(e){} done(); };
   },2500);
 }
-function doLogout(){ if(window.Stay) Stay.forget(); sessionStorage.clear(); location.reload(); }
+// Signing out: end the remembered sign-in on this device (and on the server), forget the trusted-device mark, clear this tab, and show a plain "signed out" screen.
+// cryogen.team has its own sign-in: a rider who is still signed in there will be offered one tap to come back, so the screen says so and links to its sign-out.
+function doLogout(){
+  try{ if(window.Stay){ Stay.forgetDevice(); } }catch(e){}
+  try{ ['cg:stay','cg:stay:ask','cg:trust'].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  sessionStorage.clear(); sessionStorage.setItem('signedout','1'); location.reload();
+}
 
 // A small red / amber / green dot on the Admin button, refreshed every few minutes, so problems show without opening the panel.
 let healthDotTimer=null;
@@ -386,6 +395,12 @@ function a11yPass(root){
 // ── Sign in with cryogen.team ──────────────────────────────
 function showSsoError(msg){const el=document.getElementById('sso-err');el.textContent=msg;el.style.display='block';}
 async function loginScreenSetup(err){
+  if(sessionStorage.getItem('signedout')){   // just signed out: say so, and say what cryogen.team will do
+    sessionStorage.removeItem('signedout');
+    const el=document.getElementById('sso-err');
+    el.style.display='block'; el.style.color='#6ee7b7';
+    el.innerHTML='✓ You are signed out of the club app. If you are still signed in on cryogen.team, its button below signs you straight back in. <a href="https://cryogen.team/wp-login.php?action=logout" style="color:#93c5fd">Sign out of cryogen.team too</a> if this is a shared device.';
+  }
   if(err) showSsoError(err);
   try{
     const d=await (await fetch('/api/auth/status')).json();
@@ -1110,6 +1125,7 @@ function updateNavGroups(){
   const close=()=>{ if(label) label.style.display=shown?'':'none'; };
   for(const el of nav.children){
     if(el.classList.contains('navgroup')){ close(); label=el; shown=0; }
+    else if(el.id==='pinned-nav') continue;   // the pinned box has its own heading and does not belong to the group above it
     else if(el.style.display!=='none') shown++;
   }
   close();
@@ -1218,7 +1234,7 @@ async function loadLive() {
         wkg: r.power ? Math.round((r.power.wkg1200 || 0) * 100) / 100 : 0,
         velo: r.race?.current?.rating ? Math.round(r.race.current.rating) : 0,
         zraCat: r.race?.current?.mixed?.category || '',
-        ph: phClean(r.phenotype?.value),
+        ph: phFrom(r.phenotype),
         active: status === 'active',
         tier: dbRecord.tier || 'full',   // on the club roster with no member record: treated as a member, as the server does
         status,
@@ -1606,10 +1622,12 @@ function renderRacing(){
   document.getElementById('r-badge').textContent=riders.length?`${filtered.length} of ${riders.length}${rosterMeta?.stale?' · cached':' · live ✓'}`:'Live roster unavailable';
   document.getElementById('r-badge').style.color=riders.length?(rosterMeta?.stale?'#FBBF24':'#10B981'):'#F87171';
   updateSortArrows('r',rSort);
+  // The # is the rider's place in the club by vELO (equal ratings share a place), so it stays put when the table is sorted or filtered.
+  const place=new Map(); { const all=riders.filter(m=>m.active).sort((x,y)=>y.velo-x.velo); let pos=0,last=null; all.forEach((m,i)=>{ if(m.velo!==last){ pos=i+1; last=m.velo; } place.set(m.id,pos); }); }
   document.getElementById('racing-body').innerHTML=sorted.map((m,i)=>{
     const barW=Math.min(m.velo/3500*100,100);
     return`<tr>
-      <td style="color:#9aa3b2;font-family:monospace;font-size:11px">${i+1}</td>
+      <td style="color:#9aa3b2;font-family:monospace;font-size:11px">${place.get(m.id)||"–"}</td>
       <td style="white-space:nowrap">${toFlag(m.cc)} ${role==='member'&&memberRider&&m.id===memberRider.id?`<strong style="color:var(--accent)">${riderLinks(m)} ★</strong>`:riderLinks(m)}</td>
       <td>${catB(m.cat)} ${m.zraCat?`<span style="font-size:10px;color:${ZRA_COLOR[m.zraCat]||'#9ca3af'};font-weight:700;margin-left:4px">${m.zraCat}</span>`:''}</td>
       <td style="font-family:monospace;font-size:12px;color:#8b95a5">${m.ftp}w</td>
@@ -1618,7 +1636,7 @@ function renderRacing(){
         <div style="width:56px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px"><div style="width:${barW}%;height:100%;background:var(--accent);border-radius:2px"></div></div>
         <span style="font-family:monospace;font-size:12px;color:#9ca3af">${m.velo}</span>
       </div></td>
-      <td style="font-size:12px;color:#8b95a5">${PH_EMOJI[m.ph]||'⭐'} ${m.ph}</td>
+      <td style="font-size:12px;color:#8b95a5">${m.ph?(PH_EMOJI[m.ph]||'⭐')+' '+m.ph:'—'}</td>
     </tr>`;
   }).join('');
 }
@@ -1721,7 +1739,7 @@ function renderMembers(){
       <td style="font-family:monospace;font-size:12px;color:#8b95a5">${m.noZwift?'—':m.ftp+'w'}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:700">${m.noZwift?'—':m.wkg}</td>
       <td style="font-family:monospace;font-size:12px;color:#9ca3af">${m.noZwift?'—':m.velo}</td>
-      <td style="font-size:12px;color:#8b95a5">${m.noZwift?'—':(PH_EMOJI[m.ph]||'⭐')+' '+m.ph}</td>
+      <td style="font-size:12px;color:#8b95a5">${m.noZwift||!m.ph?'—':(PH_EMOJI[m.ph]||'⭐')+' '+m.ph}</td>
       <td style="font-size:11px;max-width:160px">${m.noZwift?'<div style="color:#FBBF24;font-weight:600">Not in the Zwift club</div><div style="color:#9aa3b2;font-size:10px;margin-top:2px">Member record in WordPress</div>':(()=>{
         const log = affiliationLog['r'+m.id];
         const club = m.raw?.club?.name || log?.club || 'CRYO-GEN';

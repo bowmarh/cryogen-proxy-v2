@@ -15,13 +15,12 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
 @media(max-width:768px) and (orientation:portrait){
   #app{height:100dvh!important;overflow:hidden!important}
   #app-inner{flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
-  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
   main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
 }
-/* Phone bottom bar (see js/tabbar.js): shown on phones held upright, in place of the scrolling top strip. */
+/* Phone bottom bar (see js/tabbar.js): shown on phones held upright. */
 #tabbar{display:none}
+#menu-btn,#menu-scrim{display:none}
 @media(max-width:768px) and (orientation:portrait){
-  #sidebar{display:none!important}
   #tabbar{display:flex;flex-shrink:0;background:#070b17;border-top:1px solid rgba(255,255,255,0.1);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
   #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;color:#9aa3b2;font-size:11px;padding:6px 2px;min-height:48px;border-radius:10px;cursor:pointer}
   #tabbar button span:first-child{font-size:19px;line-height:1}
@@ -30,16 +29,15 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   #fb-btn{bottom:calc(68px + env(safe-area-inset-bottom))!important;right:10px!important}
   #whatsnew{bottom:calc(74px + env(safe-area-inset-bottom))!important}
 }
-@media(max-width:900px) and (orientation:landscape){
-  #app-inner{flex-direction:column!important}
-  #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:44px!important;min-height:44px!important;max-height:44px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
-  main{padding:12px!important;overflow:auto!important}
-}
 @media(max-width:900px){
-  #sidebar>div:first-child,#sidebar>div:last-child{display:none!important}
-  .navgroup{display:none!important}
-  #sidebar nav{display:flex!important;flex-direction:row!important;padding:4px 8px!important;gap:2px!important;flex:1!important;overflow-x:auto!important;align-items:center!important;height:100%!important}
-  .navbtn{width:auto!important;min-width:fit-content!important;padding:6px 12px!important;font-size:12px!important;white-space:nowrap!important;margin-bottom:0!important;flex-direction:row!important;height:36px!important}
+  #app-inner{flex-direction:column!important}
+  main{padding:12px!important;overflow:auto!important}
+  /* On narrow windows the side menu does not vanish: it becomes a drawer that the ☰ button opens, with every page in it. */
+  #menu-btn{display:inline-flex!important;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-size:20px;cursor:pointer;padding:0}
+  #sidebar{position:fixed!important;top:0;bottom:0;left:0;width:min(280px,86vw)!important;height:auto!important;min-height:0!important;max-height:none!important;z-index:300;flex-direction:column!important;overflow-y:auto!important;overflow-x:hidden!important;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s;border-right:1px solid rgba(255,255,255,0.1)!important;border-bottom:none!important}
+  #sidebar.open{transform:none;visibility:visible;box-shadow:0 0 40px rgba(0,0,0,.6)}
+  #menu-scrim.open{display:block;position:fixed;inset:0;background:rgba(5,10,20,.6);z-index:299}
+  body.menu-open{overflow:hidden}
   .stat4{grid-template-columns:1fr 1fr!important;gap:8px!important}
   .grid2{grid-template-columns:1fr!important}
   .brand-bar{padding:8px 12px!important;flex-shrink:0!important}
@@ -201,11 +199,14 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 <div id="app" style="display:none;min-height:100vh;flex-direction:column">
 
   <div class="brand-bar">
-    <img src="/logo.png" alt="CRYO-GEN" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
+    <button type="button" id="menu-btn" onclick="toggleMenu()" aria-label="Open the menu" aria-expanded="false" aria-controls="sidebar">☰</button>
+    <a href="#" id="brand-home" onclick="goHome();return false" aria-label="Team CRYO-GEN: go to the home page" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;color:inherit;text-decoration:none">
+    <img src="/logo.png" alt="" style="width:44px;height:44px;object-fit:contain;flex-shrink:0"/>
     <div style="flex:1;min-width:0">
       <div style="font-size:15px;font-weight:900;white-space:nowrap;background:linear-gradient(90deg,var(--accent),#60B0FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.04em">TEAM CRYO-GEN</div>
       <div style="font-size:10px;color:#9aa3b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cycling Club · Member Portal</div>
     </div>
+    </a>
     <div id="role-display" style="display:flex;align-items:center;gap:10px">
       <span id="role-badge" class="role-badge"></span>
       <button id="find-btn" onclick="QuickFind.open()" aria-label="Go to a page or find a rider (press /)" title="Go to a page, or find a rider (press /)" style="display:none;padding:5px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#cbd5e1;font-size:13px;line-height:1">🔎</button>
@@ -220,6 +221,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     </div>
   </div>
 
+  <div id="menu-scrim" onclick="closeMenu()"></div>
   <div style="display:flex;flex:1" id="app-inner">
 
   <aside id="sidebar" style="width:210px;background:#070b17;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
