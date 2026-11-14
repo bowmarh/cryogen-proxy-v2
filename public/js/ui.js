@@ -323,7 +323,7 @@
   function pins() {
     const nav = document.getElementById('main-nav'); if (!nav) return;
     let box = document.getElementById('pinned-nav');
-    if (!box) { box = document.createElement('div'); box.id = 'pinned-nav'; nav.prepend(box); }
+    if (!box) { box = document.createElement('div'); box.id = 'pinned-nav'; const racing = [...nav.children].find(e => e.classList.contains('navgroup') && e.textContent.trim() === 'Racing'); racing ? nav.insertBefore(box, racing) : nav.prepend(box); }   // Home, This week and the Me pages stay on top; pinned pages come right after them
     const wanted = prefs().pins, real = navButtons();
     const btns = wanted.map(id => real.find(b => tabOf(b) === id)).filter(Boolean);
     box.innerHTML = btns.length ? '<div class="navgroup">Pinned</div>' : '';

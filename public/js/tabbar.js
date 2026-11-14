@@ -28,5 +28,21 @@
   // The app switches pages and shows or hides menu items in many places; watching the page and menu classes and styles keeps the bar right without touching each one.
   function watch() { const app = document.getElementById('app'); if (app) new MutationObserver(recs => { const bar = document.getElementById('tabbar'); if (recs.some(r => !bar || !bar.contains(r.target))) later(); }).observe(app, { attributes: true, subtree: true, attributeFilter: ['class', 'style'] }); }
   window.addEventListener('load', () => { wrap(); build(); watch(); setTimeout(() => { build(); sync(); }, 800); });
+
+  // The side menu as a drawer on narrow windows (CSS shows the ☰ button and hides the menu until it is opened).
+  function menuEls() { return [document.getElementById('sidebar'), document.getElementById('menu-scrim'), document.getElementById('menu-btn')]; }
+  function setMenu(open) {
+    const [sb, sc, btn] = menuEls(); if (!sb) return;
+    sb.classList.toggle('open', open); if (sc) sc.classList.toggle('open', open); document.body.classList.toggle('menu-open', open);
+    if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.setAttribute('aria-label', open ? 'Close the menu' : 'Open the menu'); }
+    if (open) { const f = sb.querySelector('.navbtn:not([style*="display: none"])'); if (f) setTimeout(() => f.focus(), 60); } else if (btn && document.activeElement && sb.contains(document.activeElement)) btn.focus();
+  }
+  window.toggleMenu = () => { const sb = document.getElementById('sidebar'); setMenu(!(sb && sb.classList.contains('open'))); };
+  window.closeMenu = () => setMenu(false);
+  // The logo and the title take you home, as people expect.
+  window.goHome = () => { const b = btnFor('dashboard'); if (b) b.click(); closeMenu(); };
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#main-nav .navbtn')) setMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { const sb = document.getElementById('sidebar'); if (sb && sb.classList.contains('open')) setMenu(false); } });
+  window.addEventListener('resize', () => { if (window.innerWidth > 900) setMenu(false); });
   window.TabBar = { build, sync };
 })();

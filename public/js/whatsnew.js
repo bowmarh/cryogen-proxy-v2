@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-18', title: "What's new", all: ['Click the logo or "Team CRYO-GEN" at the top to go to the home page.', 'On a narrow window the menu no longer disappears: tap the ☰ button to open it.', 'Pinned pages now sit below Home and your own pages.', 'Racing: the # is now each rider\'s real place by vELO, and each rider shows their own phenotype.', 'Sign out now clears this device properly and tells you when it is done.'],
+      staff: [] },
     { id: '2026-11-17', title: "What's new", all: [],
       staff: ['Discord matching is smarter (joined-up names, tags, typos, a Zwift ID in the name).', 'Comms → Import Discord IDs: one click writes an email to everyone who has not linked their Discord yet, so they link themselves.', 'The Discord CSV now keeps the full ID numbers in Excel.'] },
     { id: '2026-11-16', title: "What's new", all: ['Every page now has a "What is this page?" box at the top that says what it is for and explains words like vELO and FTP.', 'New one-minute tour: open Go to (the 🔎 button or the / key) and pick Quick tour.', 'Column headings explain themselves when you hover over them.'],
