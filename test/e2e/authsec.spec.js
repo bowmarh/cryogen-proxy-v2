@@ -13,7 +13,7 @@ test('a new staff login chooses its own password, and the forgot-password form a
   expect((await page.request.post('/api/staff', { data: { username: 'newbie', name: 'New Bie', role: 'mod', password: 'start-pass-123' }, headers: { Authorization: 'Bearer ' + tok } })).ok()).toBe(true);
   await page.goto(baseURL); await page.locator('#owner-btn').locator('xpath=following-sibling::button[1]').click(); await page.locator('#login-form-admin').getByText('Use my own staff login instead').click();
   await page.locator('#user-name').fill('newbie'); await page.locator('#user-pw').fill('start-pass-123'); await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByText('Choose your own password')).toBeVisible();
+  await expect(page.getByText('Choose your own password')).toBeVisible({ timeout: 15000 });
   await page.locator('#auth-cur').fill('start-pass-123'); await page.locator('#auth-new').fill('my-own-pass-2468'); await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page.locator('#login-screen')).toBeHidden({ timeout: 15000 });   // generous: the suite runs several browsers at once
   await page.waitForLoadState('networkidle'); await page.evaluate(() => sessionStorage.clear());

@@ -24,6 +24,17 @@
   // ── Saved views: a filter text and a sort, by name, per list, kept in this browser ──
   const loadViews = () => { try { return JSON.parse(localStorage.getItem(VIEWS_KEY) || '{}') || {}; } catch (e) { return {}; } };
   const saveViews = v => { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v)); } catch (e) { /* private mode: not kept */ } };
+  // Staff also keep their views on the server, so they follow them between devices; this browser copy still works offline or if the call fails.
+  let pulled = false;
+  const syncPush = sig => { if (!isStaff() || typeof tttHeaders !== 'function') return; try { fetch('/api/tableviews', { method: 'POST', headers: { ...tttHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ sig, views: loadViews()[sig] || [] }) }).catch(() => {}); } catch (e) { /* offline: the local copy stays */ } };
+  function syncPull() {
+    if (pulled || !isStaff() || typeof tttHeaders !== 'function') return; pulled = true;
+    fetch('/api/tableviews', { headers: tttHeaders() }).then(r => r.ok ? r.json() : null).then(d => {
+      if (!d || !d.views) return; const all = loadViews(); let changed = false;
+      for (const sig of Object.keys(d.views)) { if (JSON.stringify(all[sig]) !== JSON.stringify(d.views[sig])) { all[sig] = d.views[sig]; changed = true; } }
+      if (changed) { saveViews(all); document.querySelectorAll('.tf-box').forEach(b => fillViews(b, null)); }
+    }).catch(() => { pulled = false; });
+  }
   function fillViews(box, selected) {
     const sel = box.querySelector('.tf-views'), list = loadViews()[box.dataset.sig] || [];
     sel.innerHTML = `<option value="">⭐ Views${list.length ? ` (${list.length})` : ''}</option>` + list.map((v, i) => `<option value="${i}">${v.name.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</option>`).join('');
@@ -115,18 +126,19 @@
       box.querySelector('.tf-save').addEventListener('click', () => {
         const cur = currentView(box); if (!cur.q.trim() && !cur.sort) { alert('Type a filter or sort a column first, then save it as a view.'); return; }
         const name = (prompt('Name this view:', cur.q.trim().slice(0, 30)) || '').trim().slice(0, 40); if (!name) return;
-        const all = loadViews(), list = (all[box.dataset.sig] || []).filter(v => v.name !== name); list.push({ name, ...cur }); all[box.dataset.sig] = list.slice(-12); saveViews(all);
+        const all = loadViews(), list = (all[box.dataset.sig] || []).filter(v => v.name !== name); list.push({ name, ...cur }); all[box.dataset.sig] = list.slice(-12); saveViews(all); syncPush(box.dataset.sig);
         fillViews(box, all[box.dataset.sig].findIndex(v => v.name === name));
       });
       box.querySelector('.tf-del').addEventListener('click', () => {
         const sel = box.querySelector('.tf-views'), all = loadViews(), list = all[box.dataset.sig] || [], v = list[Number(sel.value)]; if (!v || !confirm(`Delete the view "${v.name}"?`)) return;
-        list.splice(Number(sel.value), 1); all[box.dataset.sig] = list; saveViews(all); fillViews(box, null);
+        list.splice(Number(sel.value), 1); all[box.dataset.sig] = list; saveViews(all); syncPush(box.dataset.sig); fillViews(box, null);
       });
       const csv = box.querySelector('.tf-csv'); if (csv) csv.addEventListener('click', () => exportBox(box));
     }
     box.__target = target; target.dataset.tf = '1'; if (target.tagName === 'TABLE') enableSort(target, sig); apply(box);
   }
   function scan() {
+    syncPull();
     for (const t of document.querySelectorAll('table:not([data-tf])')) {
       if (t.closest('[data-nofilter],[role=dialog],.modal,#login-screen,.tf-box')) continue;
       if (items(t).length < MIN) continue;
