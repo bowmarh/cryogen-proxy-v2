@@ -48,6 +48,20 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   .navbtn{padding:6px 8px!important;font-size:11px!important}
   main{padding:10px!important}
 }
+/* ── Getting around (public/js/navhelp.js) ── */
+#bottom-bar{display:none}
+#go-btn:focus-visible,#bottom-bar button:focus-visible,#home-launch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:900px){
+  body.in-app #bottom-bar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;background:#0b1224;border-top:1px solid rgba(255,255,255,.12);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  #bottom-bar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;background:none;border:none;color:#9ca3af;font-size:11px;font-weight:600;min-height:48px}
+  #bottom-bar button:active{color:var(--accent)}
+  #home-launch button{padding:9px!important}
+  #home-launch button span[aria-hidden]{font-size:18px!important}
+  #home-launch button b{font-size:12px!important}
+  body.in-app #sidebar{display:none!important}
+  body.in-app main{padding-bottom:84px!important}
+  #go-btn{display:none!important}
+}
 .card{background:#0f1623;border:1px solid rgba(255,255,255,0.08);border-radius:12px}
 .inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;color:white;font-size:13px}
 .inp:focus{border-color:rgba(var(--accent-rgb),0.4)}
@@ -211,11 +225,16 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center">
       <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
     </div>
-    <nav style="flex:1;padding:8px" id="main-nav">
-      <button class="navbtn" id="nav-week" style="display:none" onclick="showTab('week',this)">📌 This week <span id="week-badge" style="display:none;font-size:10px;font-weight:700;margin-left:4px;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.2);color:#FBBF24"></span></button>
-      <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+    <nav style="flex:1;padding:8px" id="main-nav" aria-label="Main menu">
+      <button class="navbtn active" onclick="showTab('dashboard',this)">🏠 Home</button>
       <button class="navbtn" id="nav-upgrade" style="display:none" onclick="showTab('upgrade',this)">⬆️ Become a member</button>
+      <div class="navgroup">Me</div>
+      <button class="navbtn" id="nav-week" style="display:none" onclick="showTab('week',this)">📌 This week <span id="week-badge" style="display:none;font-size:10px;font-weight:700;margin-left:4px;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.2);color:#FBBF24"></span></button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
+      <button class="navbtn" id="nav-mydetails" style="display:none" onclick="showTab('mydetails',this)">📝 My details</button>
+      <button class="navbtn" id="nav-plan" style="display:none" onclick="showTab('plan',this)">🎯 My plan</button>
+      <button class="navbtn" id="nav-captain" style="display:none" onclick="showTab('captain',this)">🧢 My team</button>
+      <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
       <div class="navgroup">Racing</div>
       <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
       <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
@@ -228,19 +247,16 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <div class="navgroup">Club</div>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
-      <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
       <button class="navbtn" id="nav-standard" onclick="showTab('standard',this)">🤝 Fair play</button>
+      <div class="navgroup">Staff tools</div>
+      <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
       <button class="navbtn" id="nav-fair" style="display:none" onclick="showTab('fair',this)">🔎 Fair play flags</button>
       <button class="navbtn" id="nav-clubstats" style="display:none" onclick="showTab('clubstats',this)">📊 Club health</button>
- <button class="navbtn" id="nav-studio" style="display:none" onclick="showTab('studio',this)">📣 Studio</button>
- <button class="navbtn" id="nav-control" style="display:none" onclick="showTab('control',this)">🛰️ Control room</button>
- <button class="navbtn" id="nav-aidesk" style="display:none" onclick="showTab('aidesk',this)">🤖 AI desk</button>
- <button class="navbtn" id="nav-mail" style="display:none" onclick="showTab('mail',this)">✉️ Email</button>
+      <button class="navbtn" id="nav-studio" style="display:none" onclick="showTab('studio',this)">📣 Studio</button>
+      <button class="navbtn" id="nav-control" style="display:none" onclick="showTab('control',this)">🛰️ Control room</button>
+      <button class="navbtn" id="nav-aidesk" style="display:none" onclick="showTab('aidesk',this)">🤖 AI desk</button>
+      <button class="navbtn" id="nav-mail" style="display:none" onclick="showTab('mail',this)">✉️ Email</button>
       <button class="navbtn" id="nav-inv" style="display:none" onclick="showTab('inv',this)">🕵️ Investigations</button>
-      <button class="navbtn" id="nav-mydetails" style="display:none" onclick="showTab('mydetails',this)">🙋 My details</button>
- <button class="navbtn" id="nav-plan" style="display:none" onclick="showTab('plan',this)">📅 My plan</button>
- <button class="navbtn" id="nav-captain" style="display:none" onclick="showTab('captain',this)">🧢 My team</button>
- <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
       <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="openAdmin()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
@@ -536,6 +552,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 <script src="/js/myseason.js"></script>
 <script src="/js/teamchange.js"></script>
 <script src="/js/welcome.js"></script>
+<script src="/js/navhelp.js"></script>
 <script src="/js/control.js"></script>
 <script src="/js/captain.js"></script>
 <script src="/js/mydetails.js"></script>

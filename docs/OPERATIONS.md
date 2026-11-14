@@ -128,3 +128,13 @@ New members (those who appear after onboarding began, for their first 60 days) s
 - **First-race nudge:** a week after a new member finishes the Get set up screen, if they are still on no team or sign-up, they get one friendly Discord message pointing at the weekly TTT. Once per member, within their first month; not for waived members.
 - **Captain weekly message:** Sunday evening (from 17:00 UTC) each ZRL captain with a linked Discord gets one message per team: how many riders have not answered for the coming race, who they are, and where the *Ask the unanswered* button is (My team). Nothing is sent when everyone has answered.
 - **Season wrap:** when every team has all its results, and *Also email each team its report automatically* is on (AI desk → Radio & reports), each rider who was on a team also gets a short direct message with their team's final place and how many races they were in the line-up for. Once per rider per round.
+
+## Getting around the app
+
+- **Home → "What would you like to do?"**: big buttons for what this person does (members: sign up, my week, ZRL, TTT, DIRT, rides, profile; staff: Control room, members, email, AI helpers…). Only pages they are allowed to see are offered.
+- **Go to:** the 🧭 button in the header, or press **G** (Ctrl/Cmd+K for riders; staff keep Ctrl/Cmd+K and "/" for rider search). Type plain words such as "sign up", "emails" or "race day"; arrow keys and Enter choose.
+- **You are here:** a slim strip on every page: Home › group › page, with one sentence on what the page is for (press *Got it* to hide the sentence for that page).
+- **Menu groups:** Me · Racing · Rides · Club · Staff tools (staff only). The Control room's tabs are grouped Today · Set up · Numbers.
+- **Phones:** a bottom bar (Home, Races, Me, Staff for staff, Go to) opens short lists instead of a strip of small buttons.
+- **Back button:** the browser's Back button and a phone's Back gesture return to the previous page inside the app; the tab title shows the page.
+- Page descriptions and search words live in one list at the top of `public/js/navhelp.js`: add a line there when a page is added.

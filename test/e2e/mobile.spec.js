@@ -24,7 +24,8 @@ async function overflowing(page) {
 async function visitAll(page, label) {
   const ids = await page.evaluate(() => [...document.querySelectorAll('.navbtn')].map(b => b.id).filter(Boolean)), problems = [];
   for (const id of ids) {
-    const btn = page.locator('#' + id); if (!(await btn.isVisible().catch(() => false))) continue;
+    // On a phone the menu strip is replaced by the bottom bar, so "offered to this person" means not hidden by the app, rather than visible on screen.
+    if (!(await page.evaluate(i => { const b = document.getElementById(i); return !!b && b.style.display !== 'none' && /showTab\(/.test(b.getAttribute('onclick') || ''); }, id))) continue;
     await page.evaluate(i => { const b = document.getElementById(i); if (b) b.click(); }, id); await page.waitForTimeout(400); await page.waitForLoadState('networkidle').catch(() => {});
     const bad = await overflowing(page); if (bad.length) problems.push(`${label} ${id}: ${bad.join('; ')}`);
   }
@@ -32,6 +33,7 @@ async function visitAll(page, label) {
 }
 
 test('every owner page fits a phone without sideways scrolling', async ({ page, baseURL }) => {
+  test.setTimeout(120000);   // every page is opened, and the Control room, Email and AI desk tabs after them
   const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
   await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
