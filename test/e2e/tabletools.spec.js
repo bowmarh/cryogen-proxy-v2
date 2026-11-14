@@ -154,7 +154,22 @@ test('Discord import: the list of Discord members downloads as a CSV with names,
   expect(dl.suggestedFilename()).toMatch(/^cryogen-discord-members-\d{4}-\d{2}-\d{2}\.csv$/);
   const lines = fs.readFileSync(await dl.path(), 'utf8').slice(1).trim().split('\r\n');
   expect(lines[0]).toBe('Discord name,Discord ID,Status,Suggested or chosen rider,Zwift ID');
-  expect(lines[1]).toBe('Ann B,111111111111111111,matched,Ann Brown,9001');
-  expect(lines[2]).toBe("'=SUM(1),222222222222222222,no match,,");   // a name that starts with = is defused
-  expect(lines[3]).toBe('Cy,333333333333333333,already linked,,9003');
+  expect(lines[1]).toBe('Ann B,"=""111111111111111111""",matched,Ann Brown,9001');   // the long ID is written as text so Excel keeps every digit
+  expect(lines[2]).toBe("'=SUM(1),\"=\"\"222222222222222222\"\"\",no match,,");   // a name that starts with = is defused
+  expect(lines[3]).toBe('Cy,"=""333333333333333333""",already linked,,9003');
+});
+
+test('the Discord CSV can be uploaded straight back: IDs written as text are read as the plain numbers', async ({ page, baseURL }) => {
+  await open(page, baseURL);
+  const out = await page.evaluate(() => commsImpParse('Discord name,Discord ID,Status\r\nAnn B,"=""111111111111111111""",matched\r\nCy,222222222222222222,no match'));
+  expect(out).toEqual([{ id: '111111111111111111', name: 'Ann B' }, { id: '222222222222222222', name: 'Cy' }]);
+});
+
+test('"Write that email now" opens a ready email to everyone not linked to Discord yet', async ({ page, baseURL }) => {
+  await open(page, baseURL);
+  await page.evaluate(() => mailPrefillUnlinked());
+  await expect(page.locator('#page-mail')).toHaveClass(/active/);
+  await expect(page.locator('#mail-subject')).toHaveValue(/Link your Discord/, { timeout: 15000 });
+  await expect(page.locator('#mail-body')).toHaveValue(/Connect with Discord/);
+  await expect(page.locator('#mail-aud option:checked')).toContainText('Not linked to Discord');   // the audience is the "not linked" group
 });

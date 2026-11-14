@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-17', title: "What's new", all: [],
+      staff: ['Discord matching is smarter (joined-up names, tags, typos, a Zwift ID in the name).', 'Comms → Import Discord IDs: one click writes an email to everyone who has not linked their Discord yet, so they link themselves.', 'The Discord CSV now keeps the full ID numbers in Excel.'] },
     { id: '2026-11-16', title: "What's new", all: ['Every page now has a "What is this page?" box at the top that says what it is for and explains words like vELO and FTP.', 'New one-minute tour: open Go to (the 🔎 button or the / key) and pick Quick tour.', 'Column headings explain themselves when you hover over them.'],
       staff: ['The Discord member list can be downloaded as a CSV from Comms → Import Discord IDs.'] },
     { id: '2026-11-15', title: "What's new", all: ['Easier menu: pages are grouped (Me, Racing, Rides, Club). Dashboard is now called Home.', 'Press / (or tap the 🔎 button) and type a page name to jump straight to it.', 'On a phone the menu is now a bar at the bottom, with More for everything else.'],
@@ -21,6 +23,7 @@
     const first = seen() === '';   // a brand-new device: no change list; a rider gets a few first-visit tips instead, once
     if (first) { mark(n.id); if (staff()) return; }
     const items = first ? TIPS : [...n.all, ...(staff() ? n.staff : [])], title = first ? 'Quick tips' : n.title;
+    if (!items.length) { mark(n.id); return; }   // nothing in this release for this person
     const host = document.querySelector('.page.active') || document.body;
     const d = document.createElement('div'); d.id = 'whatsnew'; d.setAttribute('role', 'status');
     d.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;max-width:440px;width:calc(100% - 32px);background:#0f1a2e;border:1px solid rgba(0,212,255,.35);border-radius:12px;padding:12px 14px;color:#e5e7eb;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5)';

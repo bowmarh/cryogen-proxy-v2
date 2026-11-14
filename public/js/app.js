@@ -845,11 +845,12 @@ function commsImportHtml(d){
     <div id="comms-imp">${commsImportBody()}</div></div>`;
 }
 function commsImportBody(){
+  const easy=`<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(88,101,242,0.1);border:1px solid rgba(88,101,242,0.35);font-size:12px;line-height:1.5"><b>Easiest way: let members link themselves.</b> Matching names by hand is slow because Discord names rarely match Zwift names, and many Discord members are not riders at all. Instead, email the members who are not linked yet: they tap <i>Connect with Discord</i> once, and the link is verified. <div style="margin-top:8px"><button type="button" onclick="mailPrefillUnlinked()" style="padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(88,101,242,0.18);color:#a5b4fc;border:1px solid rgba(88,101,242,0.5)">✉️ Write that email now</button></div></div>`;
   const c=commsImp, b='padding:7px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(var(--accent-rgb),0.12);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.4)';
   const start=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button onclick="commsImpFetch()" style="${b}">Fetch from the Discord server</button><label style="${b};display:inline-block">Upload a CSV file<input type="file" accept=".csv,.txt,text/csv" onchange="commsImpFile(this.files[0])" style="display:none"/></label>
     <span style="font-size:11px;color:#8b95a5">A CSV needs a column of Discord user IDs (17 to 19 digits) and, ideally, a name column.</span></div>`;
-  if(!c) return start;
-  if(c.loading) return start+'<div style="font-size:12px;color:#9ca3af;margin-top:10px">Asking Discord…</div>';
+  if(!c) return easy+start;
+  if(c.loading) return easy+start+'<div style="font-size:12px;color:#9ca3af;margin-top:10px">Asking Discord…</div>';
   if(c.error&&!c.rows) return start+`<div style="font-size:12px;color:#f87171;margin-top:10px">${esc(c.error)}</div>`;
   if(c.done) return start+`<div style="font-size:13px;margin-top:10px;color:#10B981">✓ Saved ${c.done.saved} link${c.done.saved===1?'':'s'}.${c.done.skipped.length?` <span style="color:#FBBF24">${c.done.skipped.length} not saved: ${esc(c.done.skipped.slice(0,4).map(x=>x.reason).join('; '))}${c.done.skipped.length>4?'…':''}</span>`:''}</div>`;
   const rows=c.rows.filter(r=>c.filter==='all'||r.status===c.filter||(c.filter==='linked'&&r.alreadyLinkedTo)||(c.filter==='conflict'&&r.conflict));
@@ -876,7 +877,7 @@ function commsImpCsv(){
   const state=r=>r.alreadyLinkedTo?'already linked':r.status==='exact'?'matched':r.status==='near'?'close match':'no match';
   const out=[['Discord name','Discord ID','Status','Suggested or chosen rider','Zwift ID']];
   for(const r of rows){ const z=r.alreadyLinkedTo||c.pick[r.discordId]||''; out.push([r.discordName,r.discordId,state(r),z?(nameOf(z)||(r.matches.find(m=>String(m.zwid)===String(z))||{}).name||''):'',z]); }
-  window.TableFilter.downloadCsv('cryogen-discord-members-'+new Date().toISOString().slice(0,10)+'.csv',out);
+  window.TableFilter.downloadCsv('cryogen-discord-members-'+new Date().toISOString().slice(0,10)+'.csv',out,[1]);
 }
 function commsImpLoaded(d){
   const pick=Object.fromEntries(d.rows.map(r=>[r.discordId,r.alreadyLinkedTo?'':r.pick]));
@@ -893,7 +894,7 @@ async function commsImpFetch(){
 // Reads a CSV: finds the column of 17 to 19 digit IDs and a name column (a header such as name, nickname, display name or username, else the first text column).
 function commsImpParse(textIn){
   const rows=[]; for(const line of String(textIn).replace(/^﻿/,'').split(/\r?\n/)){ if(!line.trim()) continue; const cells=[]; let cur='', q=false; const sep=line.includes('\t')?'\t':line.includes(';')&&!line.includes(',')?';':',';
-    for(const ch of line){ if(ch==='"') q=!q; else if(ch===sep&&!q){ cells.push(cur.trim()); cur=''; } else cur+=ch; } cells.push(cur.trim()); rows.push(cells); }
+    for(const ch of line){ if(ch==='"') q=!q; else if(ch===sep&&!q){ cells.push(cur.trim()); cur=''; } else cur+=ch; } cells.push(cur.trim()); rows.push(cells.map(c=>c.replace(/^="?(\d+)"?$/,'$1'))); }
   if(!rows.length) return [];
   const idCol=(()=>{ const n=Math.max(...rows.map(r=>r.length)); let best=-1,cnt=0; for(let i=0;i<n;i++){ const c=rows.filter(r=>/^\d{15,25}$/.test(r[i]||'')).length; if(c>cnt){ cnt=c; best=i; } } return best; })();
   if(idCol<0) return [];
