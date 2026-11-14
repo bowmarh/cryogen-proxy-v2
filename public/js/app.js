@@ -1678,13 +1678,13 @@ function renderMembers(){
   document.getElementById('members-table-head').innerHTML = `
       ${staffM?`<th style="width:28px"><input type="checkbox" title="Select everyone who matches the filters" ${mFilteredIds.length&&mFilteredIds.every(id=>mSel.has(id))?'checked':''} onchange="mSelectAll(this.checked)"/></th>`:''}
       <th onclick="mSortBy('name')">Rider<span class="sortarrow" id="msa-name"></span></th>
-      <th onclick="mSortBy('cc')">🌍<span class="sortarrow" id="msa-cc"></span></th>
-      <th onclick="mSortBy('cat')">Cat<span class="sortarrow" id="msa-cat"></span></th>
-      <th onclick="mSortBy('zraCat')">ZRA Tier<span class="sortarrow" id="msa-zraCat"></span></th>
-      <th onclick="mSortBy('ftp')">FTP<span class="sortarrow" id="msa-ftp"></span></th>
-      <th onclick="mSortBy('wkg')">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
-      <th onclick="mSortBy('velo')">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
-      <th onclick="mSortBy('ph')">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
+      <th onclick="mSortBy('cc')" title="Country">🌍<span class="sortarrow" id="msa-cc"></span></th>
+      <th onclick="mSortBy('cat')" title="Race category: A+ is strongest, D is entry level">Cat<span class="sortarrow" id="msa-cat"></span></th>
+      <th onclick="mSortBy('zraCat')" title="Rating tier: the named band your vELO rating falls in">Rating tier<span class="sortarrow" id="msa-zraCat"></span></th>
+      <th onclick="mSortBy('ftp')" title="FTP: about the most power you can hold for an hour, in watts">FTP<span class="sortarrow" id="msa-ftp"></span></th>
+      <th onclick="mSortBy('wkg')" title="Watts per kilogram: power divided by weight">W/kg<span class="sortarrow" id="msa-wkg"></span></th>
+      <th onclick="mSortBy('velo')" title="vELO: the ZwiftRacing.app rating, which rises when you beat higher-rated riders">vELO<span class="sortarrow active" id="msa-velo">↓</span></th>
+      <th onclick="mSortBy('ph')" title="Phenotype: the kind of rider the numbers say you are">Phenotype<span class="sortarrow" id="msa-ph"></span></th>
       <th>ZRA Club</th>
       <th>Status</th>
       ${(role === 'admin' || role === 'mod') ? '<th>Actions</th>' : ''}
