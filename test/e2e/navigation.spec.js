@@ -23,8 +23,10 @@ test('staff see staff tiles on Home, and the Control room tabs are grouped Today
   const tok = (await (await page.request.post('/api/login', { data: { role: 'owner', password: h.BASE_ENV.OWNER_PASSWORD } })).json()).token;
   await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); sessionStorage.setItem('owner', '1'); } }, tok);
   await page.goto(baseURL); await page.evaluate(() => launchApp('admin'));
+  await page.evaluate(() => navGo('dashboard'));   // staff open on This week
   await expect(page.locator('#home-launch')).toContainText('Race day and club health'); await expect(page.locator('#home-launch')).toContainText('Send an email');
   await page.locator('#home-launch').getByRole('button', { name: /Race day and club health/ }).click(); expect(await active(page)).toBe('page-control');
+  await page.locator('#control-content [role=tablist]').waitFor({ timeout: 15000 });
   const labels = await page.evaluate(() => [...document.querySelectorAll('#control-content [role=tablist] > *')].map(e => e.getAttribute('role') === 'presentation' ? '#' + e.textContent.trim() : e.textContent.trim().replace(/\s*\(\d+\)$/, '')));
   expect(labels.filter(l => l.startsWith('#'))).toEqual(['#Today', '#Set up', '#Numbers']);
   expect(labels.indexOf('🏁 Now')).toBeLessThan(labels.indexOf('#Set up')); expect(labels.indexOf('🛡️ Security')).toBeGreaterThan(labels.indexOf('#Set up')); expect(labels.indexOf('📈 Engagement')).toBeGreaterThan(labels.indexOf('#Numbers'));
