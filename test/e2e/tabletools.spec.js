@@ -114,3 +114,20 @@ test('Members quick views: one click narrows the list, a second click clears it'
   await page.locator('#m-quick button', { hasText: 'Associates' }).click();
   await expect(page.locator('#members-sub')).toContainText(`Showing ${all} of ${all}`);
 });
+
+test('staff views are kept on the server and come back on a device that has none', async ({ page, baseURL }) => {
+  let stored = {}; const posts = [];
+  await page.route('**/api/tableviews', async route => {
+    const req = route.request();
+    if (req.method() === 'POST') { const b = req.postDataJSON(); posts.push(b); if (b.views.length) stored[b.sig] = b.views; else delete stored[b.sig]; }
+    await route.fulfill({ json: { views: stored } });
+  });
+  await open(page, baseURL); await fixture(page);
+  await page.evaluate(() => localStorage.removeItem('cg:tf:views:v1'));
+  await page.locator('#c1 .tf-input').fill('rider 5');
+  page.once('dialog', d => d.accept('Five')); await page.locator('#c1 .tf-save').click();
+  await expect.poll(() => posts.length).toBe(1); expect(posts[0].views[0].name).toBe('Five'); expect(posts[0].views[0].q).toBe('rider 5');
+  await page.evaluate(() => localStorage.removeItem('cg:tf:views:v1'));   // a different device: nothing saved locally
+  await page.reload(); await page.evaluate(() => launchApp('admin')); await page.waitForTimeout(600); await fixture(page); await page.waitForTimeout(300);
+  await expect(page.locator('#c1 .tf-views')).toContainText('Five');
+});
