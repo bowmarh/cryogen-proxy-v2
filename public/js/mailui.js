@@ -147,7 +147,7 @@
   window.mailCheck = () => act('check', async () => { await saveDraft(); check = (await api('/api/mail/check', { id: cur.id })).check; say(check.ok ? 'Passed the check.' : 'The check found problems.', !check.ok); });
   window.mailAudience = () => act('aud', async () => { aud = await api('/api/mail/audience', { audience: audFromForm(), category: val('mail-cat') || 'news' }); });
   window.mailPreview = () => act('prev', async () => { prev = await api('/api/mail/preview', { subject: val('mail-subject'), body: val('mail-body'), category: val('mail-cat') || 'news', audience: audFromForm() }); });
-  window.mailTest = () => { const to = prompt('Send a test to which address?'); if (!to) return; act('test', async () => { await api('/api/mail/test', { to, subject: val('mail-subject'), body: val('mail-body') }); say('Test sent to ' + to + '.'); }); };
+  window.mailTest = () => { let last = ''; try { last = localStorage.getItem('cg:mail:testto') || ''; } catch (e) { /* not kept */ } const to = (prompt('Send a test to which address? (use a personal inbox, not the club sending mailbox)', last) || '').trim(); if (!to) return; act('test', async () => { await api('/api/mail/test', { to, subject: val('mail-subject'), body: val('mail-body') }); try { localStorage.setItem('cg:mail:testto', to); } catch (e) { /* not kept */ } say('Test sent to ' + to + '.'); }); };
   window.mailApprove = () => act('approve', async () => {
     await saveDraft(); check = (await api('/api/mail/check', { id: cur.id })).check; if (!check.ok) { say('Fix the problems first.', true); return; }
     aud = await api('/api/mail/audience', { audience: cur.audience, category: cur.category });

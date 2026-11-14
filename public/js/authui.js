@@ -16,7 +16,7 @@
     ['owner', 'admin', 'mod', 'user', 'member'].forEach(t => { const e = document.getElementById('login-form-' + t); if (e) e.style.display = 'none'; });
     const b = box(); b.style.display = 'block'; b.innerHTML = html + '<div id="auth-err" role="alert" style="margin-top:10px;font-size:12px;color:#f87171;display:none"></div>';
     const le = document.getElementById('login-err'); if (le) le.style.display = 'none';
-    const f = b.querySelector('input'); if (f) setTimeout(() => f.focus(), 30);
+    const f = b.querySelector('input'); if (f) setTimeout(() => { if (!b.contains(document.activeElement)) f.focus(); }, 30);   // never pull the cursor back if the person (or their password manager) is already in a box
   }
   const lbl = t => `<label class="lbl">${t}</label>`, inp = (id, extra) => `<input id="${id}" class="inp" style="margin-bottom:10px" ${extra || ''}/>`;
   const done = (d, finish) => { window.authGate(d, finish); };
