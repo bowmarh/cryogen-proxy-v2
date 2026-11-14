@@ -141,3 +141,20 @@ test('column filters: "score>20", "name:rider score<10"; a word that names no co
   await q.fill('nosuchcolumn:x'); await expect(page.locator('#t1 tbody tr:visible')).toHaveCount(0);
   await q.fill(''); await expect(page.locator('#t1 tbody tr:visible')).toHaveCount(10);
 });
+
+test('Discord import: the list of Discord members downloads as a CSV with names, IDs, status and the chosen Zwift ID', async ({ page, baseURL }) => {
+  await open(page, baseURL);
+  await page.evaluate(() => {
+    commsImp = { total: 3, filter: 'all', pick: { '111111111111111111': '9001' }, counts: {}, rows: [
+      { discordId: '111111111111111111', discordName: 'Ann B', status: 'exact', matches: [{ zwid: '9001', name: 'Ann Brown', score: 100 }] },
+      { discordId: '222222222222222222', discordName: '=SUM(1)', status: 'none', matches: [] },
+      { discordId: '333333333333333333', discordName: 'Cy', status: 'none', alreadyLinkedTo: '9003', matches: [] }] };
+  });
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => commsImpCsv())]);
+  expect(dl.suggestedFilename()).toMatch(/^cryogen-discord-members-\d{4}-\d{2}-\d{2}\.csv$/);
+  const lines = fs.readFileSync(await dl.path(), 'utf8').slice(1).trim().split('\r\n');
+  expect(lines[0]).toBe('Discord name,Discord ID,Status,Suggested or chosen rider,Zwift ID');
+  expect(lines[1]).toBe('Ann B,111111111111111111,matched,Ann Brown,9001');
+  expect(lines[2]).toBe("'=SUM(1),222222222222222222,no match,,");   // a name that starts with = is defused
+  expect(lines[3]).toBe('Cy,333333333333333333,already linked,,9003');
+});

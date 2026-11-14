@@ -867,7 +867,16 @@ function commsImportBody(){
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chip('all','All',c.rows.length)}${chip('exact','Matched',c.counts.exact)}${chip('near','Close',c.counts.near)}${chip('none','No match',c.counts.none)}${c.counts.linked?chip('linked','Linked',c.counts.linked):''}${c.conflicts?chip('conflict','⚠ Same rider twice',c.conflicts):''}</div>${c.saveError?`<div style="font-size:12px;color:#f87171;margin-bottom:8px">${esc(c.saveError)}</div>`:''}
     <datalist id="comms-imp-riders">${ridersList.slice(0,3000).map(x=>`<option value="${esc(x.name)} (${esc(String(x.id))})"></option>`).join('')}</datalist>
     <div style="max-height:340px;overflow:auto"><table style="width:100%;border-collapse:collapse">${rows.slice(0,400).map(row).join('')||'<tr><td style="padding:10px;color:#8b95a5;font-size:12px">Nothing in this view.</td></tr>'}</table>${rows.length>400?`<div style="font-size:11px;color:#8b95a5;padding:6px">Showing the first 400 of ${rows.length}: use the filters.</div>`:''}</div>
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 18px" onclick="commsImpSave()" ${chosen()&&!c.saving?'':'disabled'}>${c.saving?'Saving…':'Save '+chosen()+' link'+(chosen()===1?'':'s')}</button><button onclick="commsImp=null;commsImpShow()" style="padding:7px 14px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">Cancel</button></div>`;
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="btn-cyan" style="width:auto;padding:8px 18px" onclick="commsImpSave()" ${chosen()&&!c.saving?'':'disabled'}>${c.saving?'Saving…':'Save '+chosen()+' link'+(chosen()===1?'':'s')}</button><button onclick="commsImpCsv()" title="Download the Discord members in this view (names and IDs) as a spreadsheet file" style="padding:8px 14px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.12)">⬇ Download this list (CSV)</button><button onclick="commsImp=null;commsImpShow()" style="padding:7px 14px;font-size:12px;border-radius:8px;cursor:pointer;background:none;color:#9ca3af;border:1px solid rgba(255,255,255,0.15)">Cancel</button></div>`;
+}
+function commsImpCsv(){
+  const c=commsImp; if(!c||!c.rows||!window.TableFilter) return;
+  const rows=c.rows.filter(r=>c.filter==='all'||r.status===c.filter||(c.filter==='linked'&&r.alreadyLinkedTo)||(c.filter==='conflict'&&r.conflict));
+  const ridersList=(typeof riders!=='undefined'?riders:[]), nameOf=z=>{ const r=ridersList.find(x=>String(x.id)===String(z)); return r?r.name:''; };
+  const state=r=>r.alreadyLinkedTo?'already linked':r.status==='exact'?'matched':r.status==='near'?'close match':'no match';
+  const out=[['Discord name','Discord ID','Status','Suggested or chosen rider','Zwift ID']];
+  for(const r of rows){ const z=r.alreadyLinkedTo||c.pick[r.discordId]||''; out.push([r.discordName,r.discordId,state(r),z?(nameOf(z)||(r.matches.find(m=>String(m.zwid)===String(z))||{}).name||''):'',z]); }
+  window.TableFilter.downloadCsv('cryogen-discord-members-'+new Date().toISOString().slice(0,10)+'.csv',out);
 }
 function commsImpLoaded(d){
   const pick=Object.fromEntries(d.rows.map(r=>[r.discordId,r.alreadyLinkedTo?'':r.pick]));
