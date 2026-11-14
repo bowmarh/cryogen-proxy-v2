@@ -37,3 +37,21 @@ test('on a wide screen the bottom bar is hidden and the side menu is used', asyn
   await admin(page, baseURL); await page.waitForTimeout(1200);
   await expect(page.locator('#tabbar')).toBeHidden(); await expect(page.locator('#sidebar')).toBeVisible();
 });
+
+test('a TTT invitation in My week can be answered "Not this week" (and "I\'m riding"), not just left to nag', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await admin(page, baseURL);
+  const posts = [];
+  await page.route('**/api/ttt/signup', async route => { posts.push(route.request().postDataJSON()); await route.fulfill({ json: { ok: true } }); });
+  await page.route('**/api/ttt/repeat', async route => { posts.push({ repeat: true }); await route.fulfill({ status: 200, json: { ok: true } }); });
+  await page.evaluate(() => {
+    showTab('dashboard', document.querySelector('#main-nav button[onclick*="dashboard"]'));
+    myWeek = { windowDays: 7, todo: 1, generated: new Date().toISOString(), name: 'T', items: [{ kind: 'TTT', title: 'Weekly TTT', state: 'todo', note: 'Sign-ups are open. Are you riding?', atMs: Date.now() + 86400000, date: new Date(Date.now() + 86400000).toISOString().slice(0, 10), timed: false, link: 'ttt' }] };
+    renderMyWeek();
+  });
+  const card = page.locator('#myweek-card');
+  await expect(card.getByRole('button', { name: /Not this week/ })).toBeVisible();
+  await card.getByRole('button', { name: /Not this week/ }).click(); await expect.poll(() => posts.length).toBe(1); expect(posts[0]).toEqual({ available: false });
+  await page.evaluate(() => renderMyWeek());
+  await card.getByRole('button', { name: /I'm riding/ }).click(); await expect.poll(() => posts.length).toBe(2); expect(posts[1]).toEqual({ repeat: true });
+});

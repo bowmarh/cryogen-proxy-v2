@@ -45,3 +45,16 @@ test('the quick tour: opens from Go to, walks the steps with a spotlight, and cl
   while (await page.locator('#tour').count() && guard++ < 10) await page.locator('#tour-next').click();   // Next ... Done
   await expect(page.locator('#tour')).toHaveCount(0);
 });
+
+test('ZRL page: an administrator adds the league links and they show as buttons for everyone', async ({ page, baseURL }) => {
+  await admin(page, baseURL);
+  await page.evaluate(() => showTab('zrl', document.querySelector('#main-nav button[onclick*="zrl"]')));
+  const box = page.locator('#zrl-links'); await expect(box).toBeVisible({ timeout: 15000 });
+  await expect(box).toContainText('No links yet');
+  await box.getByRole('button', { name: /Add links/ }).click();
+  await page.locator('#zl-rp').fill('https://example.com/racepass'); await page.locator('#zl-res').fill('https://example.com/results'); await page.locator('#zl-st').fill('javascript:alert(1)');
+  await box.getByRole('button', { name: 'Save' }).click(); await expect(page.locator('#zl-err')).toContainText('https://');   // a bad link is refused
+  await page.locator('#zl-st').fill('https://example.com/standings'); await box.getByRole('button', { name: 'Save' }).click();
+  await expect(box.getByRole('link', { name: /RacePass/ })).toHaveAttribute('href', 'https://example.com/racepass');
+  await expect(box.getByRole('link', { name: /League standings/ })).toHaveAttribute('target', '_blank');
+});
