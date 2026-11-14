@@ -44,8 +44,10 @@
 
   // ── CSV of what is shown (hidden rows left out, in the order on screen) ──
   const csvCell = v => { v = String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); if (/^[=+\-@\t\r]/.test(v) && !/^[-+]?\d+(\.\d+)?$/.test(v)) v = "'" + v; return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-  function downloadCsv(name, rows) {
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  // textCols: columns of long ID numbers. Spreadsheets turn 18-digit numbers into 1.7E+17 and lose digits, so these are written as ="123..." which every spreadsheet shows as the exact text.
+  function downloadCsv(name, rows, textCols = []) {
+    const cell = (v, ci, ri) => (ri > 0 && textCols.includes(ci) && /^\d{10,}$/.test(String(v)) ? '"=""' + v + '"""' : csvCell(v));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map((r, ri) => r.map((v, ci) => cell(v, ci, ri)).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   function exportBox(box) {

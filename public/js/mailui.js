@@ -137,6 +137,18 @@
     for (const z of ids.filter(x => !names[x] && /^\d{2,}$/.test(x))) { try { const m = (await api('/api/mail/find?q=' + z)).matches.find(x => x.zwid === z); if (m) names[z] = m.name; } catch (e) { /* the ID shows on its own */ } }
     if (el()) el().innerHTML = chosenText(val('mail-people').split(/[\s,;]+/).filter(Boolean));
   };
+  // Opens the Write tab with a ready email to everyone who has not linked their Discord yet (an administrator makes the group the first time).
+  window.mailPrefillUnlinked = async () => {
+    try {
+      const nav = document.getElementById('nav-mail'); if (typeof showTab === 'function' && nav) showTab('mail', nav);
+      await open();
+      let g = ((st && st.groups) || []).find(x => x.name === 'Not linked to Discord');
+      if (!g) { g = (await api('/api/mail/group', { name: 'Not linked to Discord', segments: ['nodiscord'], zwids: [] })).group; st.groups = [...(st.groups || []), g]; }
+      cur = { status: 'draft', category: 'news', audience: { type: 'group', group: g.id }, subject: 'Link your Discord to the club app (30 seconds)',
+        body: "Hi {first},\n\nThe club sends race reminders, line-ups and results by Discord, but we can only message you once your Discord is linked to the club app.\n\nIt takes about 30 seconds:\n1. Open https://club.cryo-gen.team and sign in.\n2. Find the Discord box on your Home or My Profile page and tap Connect with Discord.\n3. Approve it in Discord. That is all.\n\nThanks,\nTeam CRYO-GEN" };
+      check = null; aud = null; view = 'write'; say('Draft ready: read it, check it, then approve it. It goes to everyone who is not linked yet.'); render();
+    } catch (e) { alert('Could not set that up: ' + e.message + ' (only an administrator can create the group).'); }
+  };
   window.mailNew = () => { cur = null; prev = null; check = null; aud = null; say(''); render(); };
   window.mailOpen = async id => { try { cur = (await api('/api/mail/campaign?id=' + encodeURIComponent(id))).campaign; check = cur.check || null; aud = null; view = 'write'; say(''); render(); } catch (e) { say(e.message, true); render(); } };
   window.mailDraft = () => act('draft', async () => {
