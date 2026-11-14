@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-15', title: "What's new", all: ['Easier menu: pages are grouped (Me, Racing, Rides, Club). Dashboard is now called Home.', 'Press / (or tap the 🔎 button) and type a page name to jump straight to it.', 'On a phone the menu is now a bar at the bottom, with More for everything else.'],
+      staff: ['Staff pages are together under "Staff tools".', 'Download the Discord member list as a CSV from Comms → Import Discord IDs.'] },
     { id: '2026-11-14', title: "What's new", all: ['Quicker sign-in: stay signed in with a passcode or Face ID / fingerprint.', 'Search boxes on most lists: type a name, a Zwift ID or a category.'],
       staff: ['Click a column heading to sort. Staff can also download any list as a spreadsheet file.', 'Type name:ann or score>20 in a list filter to filter one column.', 'Quick views on Members (for example Associates, Not on ZwiftPower). Saved views follow you between devices.'] },
   ];

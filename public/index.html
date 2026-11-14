@@ -18,6 +18,18 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
   main{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:14px!important}
 }
+/* Phone bottom bar (see js/tabbar.js): shown on phones held upright, in place of the scrolling top strip. */
+#tabbar{display:none}
+@media(max-width:768px) and (orientation:portrait){
+  #sidebar{display:none!important}
+  #tabbar{display:flex;flex-shrink:0;background:#070b17;border-top:1px solid rgba(255,255,255,0.1);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;color:#9aa3b2;font-size:11px;padding:6px 2px;min-height:48px;border-radius:10px;cursor:pointer}
+  #tabbar button span:first-child{font-size:19px;line-height:1}
+  #tabbar button.on{color:var(--accent);background:rgba(var(--accent-rgb),0.12);font-weight:700}
+  /* floating things that sat in the bottom corner now sit above the bar, not on top of it */
+  #fb-btn{bottom:calc(68px + env(safe-area-inset-bottom))!important;right:10px!important}
+  #whatsnew{bottom:calc(74px + env(safe-area-inset-bottom))!important}
+}
 @media(max-width:900px) and (orientation:landscape){
   #app-inner{flex-direction:column!important}
   #sidebar{width:100%!important;flex-direction:row!important;overflow-x:auto!important;overflow-y:hidden!important;height:44px!important;min-height:44px!important;max-height:44px!important;flex-shrink:0!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.1)!important}
@@ -193,7 +205,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     </div>
     <div id="role-display" style="display:flex;align-items:center;gap:10px">
       <span id="role-badge" class="role-badge"></span>
-      <button id="find-btn" onclick="QuickFind.open()" aria-label="Find a rider (press /)" title="Find a rider: name or Zwift ID (press /)" style="display:none;padding:5px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#cbd5e1;font-size:13px;line-height:1">🔎</button>
+      <button id="find-btn" onclick="QuickFind.open()" aria-label="Go to a page or find a rider (press /)" title="Go to a page, or find a rider (press /)" style="display:none;padding:5px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#cbd5e1;font-size:13px;line-height:1">🔎</button>
       <div id="hdr-tools" role="group" aria-label="Appearance, time zone and install" style="display:flex;align-items:center;gap:10px">
       <button id="ui-btn" onclick="toggleMoreMenu(false);uiOpen()" aria-label="Customise the look" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:11px">🎨 Look</button>
       <button id="theme-btn" onclick="themeCycle()" aria-label="Colour theme" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:11px"></button>
@@ -212,10 +224,15 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <img src="/logo.png" alt="CRYO-GEN" style="width:80px;height:80px;object-fit:contain"/>
     </div>
     <nav style="flex:1;padding:8px" id="main-nav">
+      <button class="navbtn active" onclick="showTab('dashboard',this)">🏠 Home</button>
       <button class="navbtn" id="nav-week" style="display:none" onclick="showTab('week',this)">📌 This week <span id="week-badge" style="display:none;font-size:10px;font-weight:700;margin-left:4px;padding:1px 6px;border-radius:99px;background:rgba(251,191,36,0.2);color:#FBBF24"></span></button>
-      <button class="navbtn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+      <div class="navgroup">Me</div>
       <button class="navbtn" id="nav-upgrade" style="display:none" onclick="showTab('upgrade',this)">⬆️ Become a member</button>
       <button class="navbtn" id="nav-profile" style="display:none" onclick="showTab('profile',this)">🙋 My Profile</button>
+      <button class="navbtn" id="nav-mydetails" style="display:none" onclick="showTab('mydetails',this)">🙋 My details</button>
+      <button class="navbtn" id="nav-plan" style="display:none" onclick="showTab('plan',this)">📅 My plan</button>
+      <button class="navbtn" id="nav-captain" style="display:none" onclick="showTab('captain',this)">🧢 My team</button>
+      <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
       <div class="navgroup">Racing</div>
       <button class="navbtn" onclick="showTab('racing',this)">🏆 Racing</button>
       <button class="navbtn" onclick="showTab('zrl',this)">🚀 ZRL</button>
@@ -228,19 +245,16 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
       <button class="navbtn" onclick="showTab('rides',this)">🚴 Social Rides</button>
       <div class="navgroup">Club</div>
       <button class="navbtn" id="nav-members" onclick="showTab('members',this)">👥 Members</button>
-      <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
       <button class="navbtn" id="nav-standard" onclick="showTab('standard',this)">🤝 Fair play</button>
-      <button class="navbtn" id="nav-fair" style="display:none" onclick="showTab('fair',this)">🔎 Fair play flags</button>
+      <div class="navgroup">Staff tools</div>
+      <button class="navbtn" id="nav-comms" style="display:none" onclick="showTab('comms',this)">💬 Comms</button>
+      <button class="navbtn" id="nav-mail" style="display:none" onclick="showTab('mail',this)">✉️ Email</button>
+      <button class="navbtn" id="nav-studio" style="display:none" onclick="showTab('studio',this)">📣 Studio</button>
+      <button class="navbtn" id="nav-control" style="display:none" onclick="showTab('control',this)">🛰️ Control room</button>
+      <button class="navbtn" id="nav-aidesk" style="display:none" onclick="showTab('aidesk',this)">🤖 AI desk</button>
       <button class="navbtn" id="nav-clubstats" style="display:none" onclick="showTab('clubstats',this)">📊 Club health</button>
- <button class="navbtn" id="nav-studio" style="display:none" onclick="showTab('studio',this)">📣 Studio</button>
- <button class="navbtn" id="nav-control" style="display:none" onclick="showTab('control',this)">🛰️ Control room</button>
- <button class="navbtn" id="nav-aidesk" style="display:none" onclick="showTab('aidesk',this)">🤖 AI desk</button>
- <button class="navbtn" id="nav-mail" style="display:none" onclick="showTab('mail',this)">✉️ Email</button>
+      <button class="navbtn" id="nav-fair" style="display:none" onclick="showTab('fair',this)">🔎 Fair play flags</button>
       <button class="navbtn" id="nav-inv" style="display:none" onclick="showTab('inv',this)">🕵️ Investigations</button>
-      <button class="navbtn" id="nav-mydetails" style="display:none" onclick="showTab('mydetails',this)">🙋 My details</button>
- <button class="navbtn" id="nav-plan" style="display:none" onclick="showTab('plan',this)">📅 My plan</button>
- <button class="navbtn" id="nav-captain" style="display:none" onclick="showTab('captain',this)">🧢 My team</button>
- <button class="navbtn" id="nav-coach" style="display:none" onclick="showTab('coach',this)">🧠 AI Coach</button>
     </nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,0.06)">
       <button class="navbtn" id="nav-admin-btn" style="display:none" onclick="openAdmin()">⚙️ Admin <span id="health-dot" title="Checking…" style="display:none;width:9px;height:9px;border-radius:50%;margin-left:6px;vertical-align:middle"></span></button>
@@ -516,6 +530,7 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
 <script src="/js/tablefilter.js"></script>
 <script src="/js/quickfind.js"></script>
 <script src="/js/whatsnew.js"></script>
+<script src="/js/tabbar.js"></script>
 <script src="/js/fit.js"></script>
 <script src="/js/pairfit.js"></script>
 <script src="/js/pairui.js"></script>
