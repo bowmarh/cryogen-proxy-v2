@@ -23,7 +23,7 @@ test('the theme button cycles Auto, Light, Dark and the choice is kept', async (
 
 test('the rider pages pass the basic accessibility checks', async ({ page, baseURL }) => {
   await signInAsRider(page, baseURL);
-  const tabs = [/Dashboard|Overview/, /TTT Week/, /My Profile/];
+  const tabs = [/Home|Dashboard|Overview/, /TTT Week/, /My Profile/];
   for (const name of tabs) {
     const b = page.getByRole('button', { name }).first();
     if (await b.count()) await b.click();

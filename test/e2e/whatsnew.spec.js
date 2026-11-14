@@ -13,7 +13,7 @@ async function open(page, baseURL, seen, role = 'admin') {
 test('a device that saw an older release gets the card once; dismissing it keeps it away', async ({ page, baseURL }) => {
   await open(page, baseURL, '2026-01-01');
   const card = page.locator('#whatsnew'); await expect(card).toBeVisible({ timeout: 15000 });
-  await expect(card).toContainText('Click a column heading to sort');   // staff see the staff notes too
+  await expect(card).toContainText('Staff pages are together');   // staff see the staff notes too
   await page.locator('#whatsnew-x').click(); await expect(card).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('cg:whatsnew:seen'))).toBe(await page.evaluate(() => window.WhatsNew.NOTES[0].id));
 });

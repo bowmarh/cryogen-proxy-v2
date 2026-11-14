@@ -1,9 +1,8 @@
 'use strict';
-// Getting around: one place that makes the app easy to navigate for everyone, without changing what any page does.
+// Getting around, part two. The grouped menu, "Go to" (the 🔎 button or "/") and the phone bottom bar are in quickfind.js and tabbar.js; this adds what they do not:
 //  - "What would you like to do?": big buttons on Home for the things this person actually does (members and staff see different ones).
-//  - "Go to": type what you want ("sign up", "emails", "my team") and jump there. Button in the header, or press G (or Ctrl/Cmd+K for riders; staff keep Ctrl/Cmd+K for rider search).
 //  - "You are here": a slim strip on every page with where you are and, in a sentence, what the page is for (each can be dismissed).
-//  - Phones: a bottom bar (Home, Races, Me, Go to, Staff) that opens short lists, instead of a strip of 25 small buttons.
+//  - The browser's Back button (and a phone's Back gesture) goes to the previous page inside the app; the tab title shows the page.
 // Everything is built from the menu that is already on the page, so a page the person cannot see is never offered.
 (function () {
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -55,52 +54,8 @@
     }
     return out;
   }
-  const go = id => { const m = menu().find(x => x.id === id); if (m && typeof showTab === 'function') { closeAll(); showTab(id, m.btn); const main = document.getElementById('main'); if (main) { main.scrollTop = 0; main.focus({ preventScroll: true }); } } };
+  const go = id => { const m = menu().find(x => x.id === id); if (m && typeof showTab === 'function') { showTab(id, m.btn); const main = document.getElementById('main'); if (main) { main.scrollTop = 0; main.focus({ preventScroll: true }); } } };
   window.navGo = go;
-
-  // ── "Go to" ──
-  function closeAll() { for (const id of ['go-box', 'sheet-box']) { const d = document.getElementById(id); if (d) d.remove(); } }
-  function openGo() {
-    closeAll();
-    const d = document.createElement('div'); d.id = 'go-box'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-label', 'Go to a page');
-    d.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(5,10,20,.82);display:flex;align-items:flex-start;justify-content:center;padding:10vh 12px 12px';
-    d.innerHTML = `<div style="background:#0f172a;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px;max-width:520px;width:100%;color:#e5e7eb"><label for="go-q" style="font-weight:800;font-size:15px">Where would you like to go?</label><input id="go-q" type="search" class="inp" placeholder="e.g. sign up, my team, emails, results" autocomplete="off" style="margin:8px 0" aria-controls="go-list"/><div id="go-list" role="listbox" aria-label="Pages" style="max-height:55vh;overflow:auto"></div><div style="font-size:11px;color:#8b95a5;margin-top:8px">↑ ↓ to choose, Enter to go, Esc to close</div></div>`;
-    document.body.appendChild(d); d.onclick = e => { if (e.target === d) closeAll(); };
-    const q = document.getElementById('go-q'), list = document.getElementById('go-list'); let rows = [], at = 0;
-    const draw = () => {
-      const words = norm(q.value).split(/\s+/).filter(Boolean), all = menu();
-      const stem = w => (w.length > 3 ? w.replace(/(ing|es|s)$/, '') : w);   // "emails" finds "email", "line-ups" finds "line-up"
-      rows = all.filter(m => { const hay = norm(`${m.label} ${m.desc} ${m.words} ${m.group}`); return words.every(w => hay.includes(w) || hay.includes(stem(w))); });
-      if (!words.length) rows = all;
-      at = Math.min(at, Math.max(0, rows.length - 1));
-      list.innerHTML = rows.length ? rows.map((m, i) => `<div role="option" id="go-${i}" aria-selected="${i === at}" data-id="${E(m.id)}" style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:8px;cursor:pointer;${i === at ? 'background:rgba(var(--accent-rgb),.14)' : ''}"><span aria-hidden="true" style="font-size:18px">${E(m.icon)}</span><span><b>${E(m.label)}</b> <span style="font-size:11px;color:#8b95a5">${E(m.group)}</span><div style="font-size:12px;color:#9ca3af">${E(m.desc)}</div></span></div>`).join('') : '<div style="padding:10px;font-size:13px;color:#8b95a5">Nothing matches that. Try a simpler word, like "race", "email" or "profile".</div>';
-      q.setAttribute('aria-activedescendant', rows.length ? `go-${at}` : '');
-    };
-    q.oninput = () => { at = 0; draw(); };
-    q.onkeydown = e => { if (e.key === 'ArrowDown') { at = Math.min(rows.length - 1, at + 1); draw(); e.preventDefault(); } else if (e.key === 'ArrowUp') { at = Math.max(0, at - 1); draw(); e.preventDefault(); } else if (e.key === 'Enter' && rows[at]) go(rows[at].id); else if (e.key === 'Escape') closeAll(); };
-    list.onclick = e => { const r = e.target.closest('[data-id]'); if (r) go(r.dataset.id); };
-    draw(); q.focus();
-  }
-  window.navOpenGo = openGo;
-
-  // ── Phone bottom bar and its lists ──
-  function sheet(title, groups) {
-    closeAll();
-    const d = document.createElement('div'); d.id = 'sheet-box'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-label', title);
-    d.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(5,10,20,.7);display:flex;align-items:flex-end;justify-content:center';
-    const all = menu(), sel = groups.map(g => [g, all.filter(m => m.group === g)]).filter(([, l]) => l.length);
-    d.innerHTML = `<div style="background:#0f172a;border-top:1px solid rgba(255,255,255,.14);border-radius:16px 16px 0 0;padding:14px 14px 18px;width:100%;max-height:75vh;overflow:auto;color:#e5e7eb"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="font-size:16px">${E(title)}</b><button type="button" id="sheet-x" aria-label="Close" style="background:none;border:none;color:#9ca3af;font-size:22px;padding:4px 8px">×</button></div>${sel.map(([g, l]) => `${groups.length > 1 ? `<div class="navgroup" style="padding:8px 0 2px">${E(g)}</div>` : ''}${l.map(m => `<button type="button" data-id="${E(m.id)}" style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:11px 8px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.06);color:#e5e7eb"><span aria-hidden="true" style="font-size:20px;width:26px">${E(m.icon)}</span><span><b style="font-size:14px">${E(m.label)}</b><span style="display:block;font-size:12px;color:#9ca3af">${E(m.desc)}</span></span></button>`).join('')}`).join('') || '<div style="padding:10px;color:#8b95a5;font-size:13px">Nothing here for you yet.</div>'}</div>`;
-    document.body.appendChild(d); d.onclick = e => { if (e.target === d || e.target.id === 'sheet-x') return closeAll(); const b = e.target.closest('[data-id]'); if (b) go(b.dataset.id); };
-    d.onkeydown = e => { if (e.key === 'Escape') closeAll(); }; const x = document.getElementById('sheet-x'); if (x) x.focus();
-  }
-  function buildBar() {
-    if (document.getElementById('bottom-bar')) return;
-    const b = document.createElement('nav'); b.id = 'bottom-bar'; b.setAttribute('aria-label', 'Quick menu');
-    const item = (id, icon, label, fn) => `<button type="button" id="bb-${id}" onclick="${fn}"><span aria-hidden="true" style="font-size:20px;line-height:1">${icon}</span><span>${label}</span></button>`;
-    b.innerHTML = item('home', '🏠', 'Home', "navGo('dashboard')") + item('races', '🏁', 'Races', "navSheet('races')") + item('me', '🙋', 'Me', "navSheet('me')") + item('staff', '🛠️', 'Staff', "navSheet('staff')") + item('go', '🧭', 'Go to', 'navOpenGo()');
-    document.body.appendChild(b);
-  }
-  window.navSheet = which => sheet({ races: 'Races and rides', me: 'Me', staff: 'Staff tools' }[which], { races: ['Racing', 'Rides'], me: ['Me', 'Club'], staff: ['Staff tools'] }[which]);
 
   // ── "You are here" strip ──
   const dismissed = () => { try { return JSON.parse(localStorage.getItem('cgHelpOff') || '{}'); } catch (e) { return {}; } };
@@ -124,25 +79,12 @@
     const all = menu(), want = (isStaff() ? TILES_STAFF : TILES_MEMBER), tiles = want.map(([id, hint]) => [all.find(m => m.id === id), hint]).filter(([m]) => m).slice(0, 8);
     if (!tiles.length) { el.innerHTML = ''; return; }
     const open = (() => { try { return localStorage.getItem('cgHomeOpen') !== '0'; } catch (e) { return true; } })();
-    el.innerHTML = `<details ${open ? 'open' : ''} class="card" style="padding:12px 14px;margin-bottom:14px" ontoggle="try{localStorage.setItem('cgHomeOpen',this.open?'1':'0')}catch(e){}"><summary style="cursor:pointer;font-weight:800;font-size:15px">What would you like to do?</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">${tiles.map(([m, hint]) => `<button type="button" onclick="navGo('${E(m.id)}')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e5e7eb"><span aria-hidden="true" style="font-size:22px">${E(m.icon)}</span><b style="font-size:13px">${E(hint)}</b></button>`).join('')}</div><div style="font-size:11px;color:#8b95a5;margin-top:8px">Looking for something else? Press <b>G</b> or use <b>🧭 Go to</b> and type what you want.</div></details>`;
+    el.innerHTML = `<details ${open ? 'open' : ''} class="card" style="padding:12px 14px;margin-bottom:14px" ontoggle="try{localStorage.setItem('cgHomeOpen',this.open?'1':'0')}catch(e){}"><summary style="cursor:pointer;font-weight:800;font-size:15px">What would you like to do?</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">${tiles.map(([m, hint]) => `<button type="button" onclick="navGo('${E(m.id)}')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;text-align:left;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e5e7eb"><span aria-hidden="true" style="font-size:22px">${E(m.icon)}</span><b style="font-size:13px">${E(hint)}</b></button>`).join('')}</div><div style="font-size:11px;color:#8b95a5;margin-top:8px">Looking for something else? Press <b>/</b> or tap the <b>🔎</b> button and type a page name.</div></details>`;
   }
 
   // ── Tooltips, header button, wiring ──
-  function decorate() {
-    for (const m of menu()) { m.btn.title = m.desc || ''; }
-    const hdr = document.getElementById('role-display');
-    if (hdr && !document.getElementById('go-btn')) { const b = document.createElement('button'); b.id = 'go-btn'; b.type = 'button'; b.onclick = openGo; b.setAttribute('aria-label', 'Go to a page (press G)'); b.title = 'Go to a page (press G)'; b.textContent = '🧭 Go to'; b.style.cssText = 'padding:5px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af;font-size:11px'; hdr.insertBefore(b, document.getElementById('badge-wrap') || hdr.children[1] || null); }
-    const staffBtn = document.getElementById('bb-staff'); if (staffBtn) staffBtn.style.display = menu().some(m => m.group === 'Staff tools') ? '' : 'none';
-  }
-  function refresh() { try { const app = document.getElementById('app'); document.body.classList.toggle('in-app', !!app && getComputedStyle(app).display !== 'none'); decorate(); launcher(); const cur = (document.querySelector('.page.active') || {}).id || ''; here(cur.replace(/^page-/, '')); } catch (e) { /* navigation helpers must never stop the app */ } }
-  document.addEventListener('keydown', e => {
-    const t = e.target, typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
-    if (document.getElementById('app') && getComputedStyle(document.getElementById('app')).display === 'none') return;
-    if (document.getElementById('welcome-gate')) return;
-    if (!typing && e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); openGo(); }
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !isStaff()) { e.preventDefault(); openGo(); }
-    else if (e.key === 'Escape') closeAll();
-  });
+  function decorate() { for (const m of menu()) { m.btn.title = m.desc || ''; } }
+  function refresh() { try { decorate(); launcher(); const cur = (document.querySelector('.page.active') || {}).id || ''; here(cur.replace(/^page-/, '')); } catch (e) { /* navigation helpers must never stop the app */ } }
   let fromBack = false;
   window.addEventListener('popstate', e => { const id = e.state && e.state.tab; if (!id) return; const m = menu().find(x => x.id === id); if (m) { fromBack = true; try { showTab(id, m.btn); } finally { fromBack = false; } } });
   function wrap() {
@@ -157,5 +99,5 @@
     }
     if (typeof window.launchApp === 'function' && !window.launchApp.__nav) { const orig = window.launchApp; window.launchApp = function () { const r = orig.apply(this, arguments); setTimeout(refresh, 0); setTimeout(refresh, 1200); return r; }; window.launchApp.__nav = 1; }
   }
-  document.addEventListener('DOMContentLoaded', () => { buildBar(); wrap(); refresh(); setTimeout(refresh, 800); });
+  document.addEventListener('DOMContentLoaded', () => { wrap(); refresh(); setTimeout(refresh, 800); });
 })();

@@ -131,10 +131,10 @@ New members (those who appear after onboarding began, for their first 60 days) s
 
 ## Getting around the app
 
-- **Home → "What would you like to do?"**: big buttons for what this person does (members: sign up, my week, ZRL, TTT, DIRT, rides, profile; staff: Control room, members, email, AI helpers…). Only pages they are allowed to see are offered.
-- **Go to:** the 🧭 button in the header, or press **G** (Ctrl/Cmd+K for riders; staff keep Ctrl/Cmd+K and "/" for rider search). Type plain words such as "sign up", "emails" or "race day"; arrow keys and Enter choose.
-- **You are here:** a slim strip on every page: Home › group › page, with one sentence on what the page is for (press *Got it* to hide the sentence for that page).
-- **Menu groups:** Me · Racing · Rides · Club · Staff tools (staff only). The Control room's tabs are grouped Today · Set up · Numbers.
-- **Phones:** a bottom bar (Home, Races, Me, Staff for staff, Go to) opens short lists instead of a strip of small buttons.
+- **Menu groups:** Me · Racing · Rides · Club · Staff tools (staff only); Home first. The Control room's tabs are grouped Today · Set up · Numbers.
+- **Go to:** the 🔎 button in the header, or press **/** (or Ctrl/Cmd+K): type a page name ("events", "ZRL", "my details") and jump there; staff can also type a rider's name or Zwift ID.
+- **Phones:** held upright, the menu is a bottom bar (Home, Week, Racing, Events, Members, More); *More* opens the Go to list.
+- **Home → "What would you like to do?"**: big buttons for what this person does (members: sign up, my week, ZRL, TTT, DIRT, rides, profile; staff: Control room, members, email, AI helpers…). Only pages they are allowed to see are offered; collapsible and remembered.
+- **You are here:** a slim strip on every page: Home › group › page, with one sentence on what the page is for (press *Got it* to hide the sentence for that page). Menu buttons carry the same sentence as a tooltip.
 - **Back button:** the browser's Back button and a phone's Back gesture return to the previous page inside the app; the tab title shows the page.
-- Page descriptions and search words live in one list at the top of `public/js/navhelp.js`: add a line there when a page is added.
+- Page descriptions live in one list at the top of `public/js/navhelp.js`: add a line there when a page is added.
