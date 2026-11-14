@@ -1617,6 +1617,23 @@ function exportMembersCsv(){
   const body=rows.map(m=>[m.name,m.id,(m.tier==='half'||m.tier==='associate')?'associate':'full',m.status,m.cat||'',m.zraCat||'',m.ftp||'',m.wkg||'',m.velo||'',m.ph||'',(m.cc||'').toUpperCase(),yes(!m.noZwift),yes(m.ob_discord),yes(m.ob_fb),yes(m.ob_zp)]);
   if(window.TableFilter) TableFilter.downloadCsv(`cryogen-members-${new Date().toISOString().slice(0,10)}.csv`,[head,...body]);
 }
+let mQuick='';
+const isAssocTier=m=>m.tier==='half'||m.tier==='associate';
+const QUICK_VIEWS={
+  assoc:{label:'Associates',test:isAssocTier},
+  full:{label:'Full members',test:m=>!isAssocTier(m)},
+  nozp:{label:'Not on ZwiftPower',test:m=>!m.ob_zp},
+  nodisc:{label:'Not on Discord',test:m=>!m.ob_discord},
+  nofb:{label:'Not on Facebook',test:m=>!m.ob_fb},
+  notclub:{label:'Not on the Zwift roster',test:m=>!!m.noZwift},
+  inactive:{label:'Not active',test:m=>!m.active}
+};
+function setQuick(k){ mQuick=(mQuick===k?'':k); mPage=1; renderMembers(); }
+function renderQuickViews(){
+  const el=document.getElementById('m-quick'); if(!el) return;
+  const stf=(role==='admin'||role==='mod'); if(!stf&&mQuick&&['nozp','nodisc','nofb','notclub'].includes(mQuick)) mQuick='';
+  el.innerHTML=Object.keys(QUICK_VIEWS).filter(k=>stf||!['nozp','nodisc','nofb','notclub'].includes(k)).map(k=>`<button type="button" class="chip${mQuick===k?' on':''}" aria-pressed="${mQuick===k}" onclick="setQuick('${k}')" style="padding:5px 10px;border-radius:14px;border:1px solid ${mQuick===k?'var(--accent)':'rgba(255,255,255,.12)'};background:${mQuick===k?'rgba(0,200,255,.15)':'rgba(255,255,255,.04)'};color:${mQuick===k?'var(--accent)':'#9ca3af'};font-size:12px;cursor:pointer">${QUICK_VIEWS[k].label}</button>`).join('');
+}
 function renderMembers(){
   renderOffboarding(); if(assocList||assocErr) renderAssocPanel();
   const data=[...riders,...wpOnly];
@@ -1631,9 +1648,10 @@ function renderMembers(){
     (!ph||m.ph===ph)&&
     (!zra||m.zraCat===zra)&&
     (!tier||m.tier===tier)&&
-    (!mActive||m.active)
+    (!mActive||m.active)&&
+    (!mQuick||(QUICK_VIEWS[mQuick]&&QUICK_VIEWS[mQuick].test(m)))
   );
-  
+  renderQuickViews();
   mFilteredIds=filtered.map(m=>String(m.id)); window.mFilteredRows=filtered;
   { const eb=document.getElementById('m-export'); if(eb) eb.style.display=(role==='admin'||role==='mod')?'':'none'; }
   const sorted=sortData(filtered,mSort);

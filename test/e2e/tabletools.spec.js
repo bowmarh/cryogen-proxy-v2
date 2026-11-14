@@ -102,3 +102,15 @@ test('"Select all" on a filtered list ticks only the rows shown, never the ones 
   await page.evaluate(() => { tidySel = new Set(); tidyAll(true); });
   expect(await page.evaluate(() => tidySel.size), 'a filter that shows nothing selects nothing').toBe(0);
 });
+
+test('Members quick views: one click narrows the list, a second click clears it', async ({ page, baseURL }) => {
+  await open(page, baseURL); await page.waitForFunction(() => typeof riders !== 'undefined' && riders.length >= 3, null, { timeout: 15000 });
+  await page.evaluate(() => showTab('members', document.getElementById('nav-members')));
+  const chips = page.locator('#m-quick button'); expect(await chips.count()).toBeGreaterThanOrEqual(7);   // staff see all seven
+  const all = await page.evaluate(() => [...riders, ...wpOnly].length);
+  const expected = await page.evaluate(() => [...riders, ...wpOnly].filter(m => m.tier === 'half' || m.tier === 'associate').length);
+  await page.locator('#m-quick button', { hasText: 'Associates' }).click();
+  await expect(page.locator('#members-sub')).toContainText(`Showing ${expected} of ${all}`);
+  await page.locator('#m-quick button', { hasText: 'Associates' }).click();
+  await expect(page.locator('#members-sub')).toContainText(`Showing ${all} of ${all}`);
+});
