@@ -119,3 +119,24 @@ test('one Discord member chosen for two riders is saved once', async () => {
   assert.equal(r.body.saved, 1);
   assert.match(r.body.skipped[0].reason, /another rider/);
 });
+
+test('name matching handles the usual Discord habits: no spaces, tags, another order, a typo, a short last name, a Zwift ID in the name', async () => {
+  const c = require('../lib/comms')({ redis: async () => [], HttpError: Error, text: x => x, requireRole() {}, discord: async () => {} });
+  const n = c.norm, s = (a, b) => c.nameScore(n(a), n(b));
+  assert.equal(s('harrymustard', 'Harry Mustard'), 95, 'joined up');
+  assert.equal(s('Scott Steele | XERT', 'Scott Steele'), 90, 'a tag added');
+  assert.equal(s('Steele Scott', 'Scott Steele'), 90, 'the other way round');
+  assert.equal(s('Danny Graham', 'Daniel Graham'), 0, 'a different first name is not guessed');
+  assert.equal(s('Michael Danckwerts', 'Michael Danckwert'), 75, 'one typo');
+  assert.equal(s('Stuart Mc', 'Stuart McDonald'), 65, 'the start of a last name');
+  assert.equal(s('Damo', 'Damian Moore'), 0, 'a nickname alone is not a match');
+  assert.equal(s('seanstanton.', 'Sean Stanton'), 95, 'punctuation ignored, joined up');
+});
+
+test('a Zwift ID in a Discord name is a certain match', async () => {
+  app.world.db = {}; process.env.DISCORD_BOT_TOKEN = 'bot-secret'; process.env.DISCORD_GUILD_ID = '123456789012345678';
+  world.guildMembers = [{ user: { id: '900000000000000009', username: 'xx', global_name: 'Speedy 4002' }, nick: null }];
+  const r = await app.get('/api/comms/discord-members', { token: admin });
+  const row = r.body.rows.find(x => x.discordId === '900000000000000009');
+  assert.equal(row.status, 'exact'); assert.equal(row.pick, '4002');
+});

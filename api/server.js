@@ -2935,6 +2935,7 @@ const mailSegments = async name => {
   if (name === 'captains'){ const z = await zrl.load(); return new Set(((z.round && z.round.teams) || []).map(t => t.captain).filter(Boolean).map(String)); }
   if (name === 'new') return new Set((await onboarding.scan()).filter(m => m.days <= 30).map(m => String(m.zwid)));
   if (name === 'quiet') return new Set((await lifecycle.quiet()).map(m => String(m.zwid)));
+  if (name === 'nodiscord'){ const l = await comms.loadLinks(); return new Set((await fetchRoster()).riders.map(r => String(r.riderId)).filter(z => !l[z])); }
   if (name.startsWith('cat:')){ const c = name.slice(4); return new Set((await fetchRoster()).riders.filter(r => r.zpCategory === c).map(r => String(r.riderId))); }
   return new Set();
 };
