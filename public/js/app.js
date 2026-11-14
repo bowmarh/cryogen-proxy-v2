@@ -518,6 +518,15 @@ async function myWeekAnswer(series,id,status){
   }catch(e){ alert('Could not reach the server. Please try again.'); return; }
   loadMyWeek();
 }
+async function myWeekTtt(riding){
+  try{
+    let r;
+    if(riding){ r=await fetch('/api/ttt/repeat',{method:'POST',headers:tttHeaders()}); if(r.status===404){ showTab('ttt',document.querySelector('#main-nav button[onclick*="ttt"]')); return; } }
+    else r=await fetch('/api/ttt/signup',{method:'POST',headers:tttHeaders(),body:JSON.stringify({available:false})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Could not save your answer.'); return; }
+  }catch(e){ alert('Could not reach the server. Please try again.'); return; }
+  loadMyWeek();
+}
 async function myWeekAvail(week,status,team){
   try{
     const r=await fetch('/api/zrl/availability',{method:'POST',headers:tttHeaders(),body:JSON.stringify({week,status,team})});
@@ -554,7 +563,9 @@ function renderMyWeek(){
   // "I'm in the pen": shown from an hour before to forty-five minutes after a start, for a race the rider is in.
   const penBtn=u=>{ if(!u.pen||!u.timed) return ''; const mins=(u.atMs-Date.now())/60000; if(mins>60||mins<-45) return ''; const done=myWeekPen.has(u.pen.kind+':'+u.pen.id);
     return `<div style="margin-top:6px"><button ${done?'disabled':''} onclick="myWeekPenTap('${esc(u.pen.kind)}','${esc(u.pen.id)}')" style="padding:6px 14px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid rgba(16,185,129,0.5);background:${done?'rgba(16,185,129,0.2)':'transparent'};color:#34d399">${done?'✅ Your captain can see you are in the pen':'🏁 I\'m in the pen'}</button></div>`; };
-  const ans=u=>u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="${u.avail.series?`myWeekAnswer('${u.avail.series}','${esc(u.avail.id)}','${u.avail.mine===v?'':v}')`:`myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')`}" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(var(--accent-rgb),0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(var(--accent-rgb),0.15)':'transparent'};color:${u.avail.mine===v?'var(--accent)':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
+  // A TTT invitation: say yes (copies your last sign-up) or "Not this week", which clears it from the list instead of nagging.
+  const tttAns=u=>`<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap"><button onclick="myWeekTtt(true)" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#9ca3af">✅ I'm riding</button><button onclick="myWeekTtt(false)" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#9ca3af">❌ Not this week</button></div>`;
+  const ans=u=>(!u.avail&&u.kind==='TTT'&&u.state==='todo')?tttAns(u):u.avail?`<div style="display:flex;gap:4px;margin-top:6px">${[['yes','✅ Yes'],['maybe','🤔 Maybe'],['no','❌ No']].map(([v,l])=>`<button onclick="${u.avail.series?`myWeekAnswer('${u.avail.series}','${esc(u.avail.id)}','${u.avail.mine===v?'':v}')`:`myWeekAvail(${u.avail.week},'${u.avail.mine===v?'':v}','${esc(u.avail.team||'')}')`}" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:1px solid ${u.avail.mine===v?'rgba(var(--accent-rgb),0.6)':'rgba(255,255,255,0.15)'};background:${u.avail.mine===v?'rgba(var(--accent-rgb),0.15)':'transparent'};color:${u.avail.mine===v?'var(--accent)':'#9ca3af'}">${l}</button>`).join('')}</div>`:'';
   const rows=Object.keys(days).sort().map(k=>`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:2px">${esc(dayLabel(k))}</div>${days[k].map(u=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:none">${ico[u.state]||'•'}</div><div style="flex:none;min-width:46px;font-size:12px;color:#9ca3af;padding-top:1px">${u.timed?esc(new Date(u.atMs).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tzZone()})+tzUtcSuffix(u.atMs,true)):''}</div><div style="flex:1;min-width:0"><div><span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);margin-right:6px">${esc(u.kind)}</span><b>${esc(u.title)}</b></div><div style="font-size:12px;color:${col[u.state]||'#9ca3af'}">${esc(u.note)}</div>${ans(u)}${penBtn(u)}</div><button onclick="weekGo('${esc(u.go)}')" style="flex:none;padding:5px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:12px">Open →</button></div>`).join('')}</div>`).join('');
   const changeLine=changes.length?`<div role="status" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(var(--accent-rgb),0.08);font-size:12px;color:#d1d5db"><b>Since you last looked:</b> ${changes.map(esc).join(' · ')}</div>`:'';
   // One plain sentence at the top: the first thing that needs an answer, else the next thing you are in.

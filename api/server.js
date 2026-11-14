@@ -2639,7 +2639,7 @@ const assoc = require('../lib/assoc')({
 // read and their own upgrade journey. Everything else answers "for full members".
 const ASSOCIATE_ALLOWED = new Set(['GET /api/results', 'GET /api/results/leaderboard', 'GET /api/me/results', 'GET /api/me', 'GET /api/me/details', 'POST /api/me/prefs', 'POST /api/me/request', 'GET /api/access/me', 'POST /api/feedback', 'GET /api/me/referral', 'GET /api/state', 'GET /api/roster', 'GET /api/proxy',
   'GET /api/ttt', 'GET /api/ttt/mine', 'GET /api/ttt/season', 'GET /api/ttt/archive', 'POST /api/ttt/signup', 'POST /api/ttt/withdraw', 'POST /api/ttt/repeat',
-  'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
+  'GET /api/zrl', 'GET /api/zrl/mine', 'GET /api/zrl/standings', 'GET /api/zrl/links', 'POST /api/zrl/signup', 'POST /api/zrl/withdraw', 'POST /api/zrl/availability',
   'POST /api/signups', 'POST /api/rsvps', 'POST /api/rsvps/cancel',
   'GET /api/me/week', 'GET /api/me/tz', 'POST /api/me/tz', 'GET /api/me/calendar', 'POST /api/me/calendar', 'POST /api/me/calendar/remove', 'GET /api/me/discord', 'GET /api/me/discord/start', 'POST /api/me/discord', 'POST /api/me/discord/verify', 'POST /api/me/discord/prefs', 'POST /api/me/discord/remove', 'POST /api/me/discord/test', 'GET /api/assoc/status', 'POST /api/assoc/discord', 'POST /api/assoc/request']);
 async function handleAssoc(assocRoute, req, res){
