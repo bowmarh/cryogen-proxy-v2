@@ -2298,8 +2298,9 @@ async function tttExport(kind,season){
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
 }
+function tttMoveWeek(date){ tttWrite('/api/ttt/move-week',{date}); }
 function tttNewWeek(){
-  const next=new Date(); next.setDate(next.getDate()+((3-next.getDay()+7)%7||7)); // next Wednesday
+  const next=new Date(); next.setDate(next.getDate()+((4-next.getDay()+7)%7||7)); // the next Thursday: the TTT is every Thursday
   const date=prompt('Date of the next TTT (YYYY-MM-DD). The current week will be archived with its line-ups.',next.toISOString().slice(0,10));
   if(!date)return;
   const title=prompt('Title for the week',`Weekly TTT · ${new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}`);
@@ -2317,7 +2318,10 @@ function renderTtt(){
   const w=d.week; const archived=!!tttArchiveView;
   const avail=d.signups.filter(s=>s.available).length;
   const badge=(on,txtOn,txtOff,col)=>`<span class="badge" style="background:${on?col+'22':'rgba(255,255,255,0.05)'};color:${on?col:'#8b95a5'};border:1px solid ${on?col+'44':'rgba(255,255,255,0.1)'}">${on?txtOn:txtOff}</span>`;
-  el.innerHTML=`
+  // The TTT is every Thursday. If this week was set up on another day, staff get a one-tap fix (sign-ups and line-ups are kept).
+  const wd=new Date(w.date+'T00:00:00Z').getUTCDay(), thu=(()=>{ const dt=new Date(w.date+'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate()+(4-(wd||7))); return dt.toISOString().slice(0,10); })();
+  const moveBar=(!archived&&(role==='admin'||role==='mod')&&wd!==4)?`<div role="status" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);font-size:13px">📅 This week is set for <b>${esc(new Date(w.date+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC',weekday:'long',day:'numeric',month:'short'}))}</b>, but the TTT is every <b>Thursday</b>. <button type="button" onclick="tttMoveWeek('${thu}')" style="margin-left:8px;padding:5px 12px;border-radius:8px;border:1px solid rgba(251,191,36,0.6);background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;cursor:pointer">Move to ${esc(new Date(thu+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'}))}</button></div>`:'';
+  el.innerHTML=moveBar+`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <div><div style="font-size:18px;font-weight:900">${esc(w.title)}</div>
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${archived?badge(true,'Archived','', '#9ca3af'):badge(w.open,'Sign-ups open','Sign-ups closed','#10B981')+badge(w.published,'Line-ups published','Line-ups not published yet','var(--accent)')}<span style="font-size:12px;color:#8b95a5;align-self:center">${avail} available · ${d.signups.length} signed up</span></div>

@@ -457,7 +457,7 @@ function parseTeams(list){
 // Race is on the week's date. Sign-ups close CLOSE_DAYS_BEFORE days earlier at CLOSE_TIME,
 // a reminder goes out 24h before that, and the next week starts the day after the race.
 const TTT_TZ = 'Europe/London';
-const TTT_CLOSE_DAYS_BEFORE = 2;   // Wednesday race -> Monday
+const TTT_CLOSE_DAYS_BEFORE = 2;   // the TTT is on a Thursday: sign-ups close on the Tuesday evening
 const TTT_CLOSE_HOUR = 19;         // 7pm
 const TTT_NEXT_WEEK_HOUR = 9;      // 9am the day after the race
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1116,6 +1116,17 @@ const TTT_ROUTES = {
     if (commands.length) await redis(commands);
   },
 
+  // Staff: move the RUNNING week to another date (for example a week that was set up on the wrong day). Sign-ups and line-ups stay as they are; the week keeps
+  // its id (that is how it is stored), the date, title and sign-up closing time follow the new date.
+  'POST /api/ttt/move-week': async (req, body) => {
+    requireRole(req, ['admin', 'mod']);
+    const date = text(body.date, 'date', 10);
+    if (!validDate(date)) throw new HttpError(400, 'The date must be a real date, like 2026-11-19.');
+    const { week } = await requireWeek();
+    const closesAt = ukTime(addDays(date, -TTT_CLOSE_DAYS_BEFORE), TTT_CLOSE_HOUR);
+    const moved = { ...week, date, title: weekTitle(date), closesAt: closesAt > Date.now() ? new Date(closesAt).toISOString() : null };
+    await redis([['SET', TTT_KEYS.week, JSON.stringify(moved)]]);
+  },
   'POST /api/ttt/new-week': async (req, body) => {
     requireRole(req, ['admin', 'mod']);
     const date = text(body.date, 'date', 10);

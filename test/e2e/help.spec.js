@@ -58,3 +58,19 @@ test('ZRL page: an administrator adds the league links and they show as buttons 
   await expect(box.getByRole('link', { name: /RacePass/ })).toHaveAttribute('href', 'https://example.com/racepass');
   await expect(box.getByRole('link', { name: /League standings/ })).toHaveAttribute('target', '_blank');
 });
+
+test('TTT: a week set up on a Wednesday shows staff a one-tap "Move to Thursday"', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  const d = new Date(); d.setUTCDate(d.getUTCDate() + ((3 - d.getUTCDay() + 7) % 7 || 7) + 7);   // a Wednesday, a week or so ahead
+  const wed = d.toISOString().slice(0, 10), thu = new Date(d.getTime() + 86400000).toISOString().slice(0, 10);
+  expect((await page.request.post('/api/ttt/new-week', { data: { date: wed }, headers: { Authorization: 'Bearer ' + tok } })).ok()).toBe(true);
+  await admin(page, baseURL);
+  await page.evaluate(() => showTab('ttt', document.querySelector('#main-nav button[onclick*="ttt"]')));
+  const bar = page.locator('#ttt-root [role=status]', { hasText: 'every Thursday' }); await expect(bar).toBeVisible({ timeout: 15000 });
+  await expect(bar).toContainText('Wednesday');
+  await bar.getByRole('button', { name: /Move to Thu/ }).click();
+  await expect(page.locator('#ttt-root')).toContainText('Thu', { timeout: 15000 });
+  await expect(page.locator('#ttt-root [role=status]', { hasText: 'every Thursday' })).toHaveCount(0);
+  const wk = await (await page.request.get('/api/ttt', { headers: { Authorization: 'Bearer ' + tok } })).json(); expect(wk.week.date).toBe(thu);
+});
