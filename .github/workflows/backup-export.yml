@@ -33,7 +33,7 @@ jobs:
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -in snapshot.json.gz -out cryogen-backup.json.gz.enc
           rm -f snapshot.json.gz
           ls -l cryogen-backup.json.gz.enc
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cryogen-backup-${{ github.run_number }}
           path: cryogen-backup.json.gz.enc
