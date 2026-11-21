@@ -118,6 +118,8 @@ html[data-density="compact"] th{padding:6px 10px!important}
 html[data-theme="light"]{filter:invert(.93) hue-rotate(180deg);background:#fff}
 html[data-theme="light"] img,html[data-theme="light"] video,html[data-theme="light"] canvas{filter:invert(1) hue-rotate(180deg)}
 html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:light}
+/* Room at the bottom of every page, so the floating "Something wrong?" button (bottom right) never sits on top of the last row or the page arrows of a table. */
+main{padding-bottom:88px!important}
 </style>
 <script>
 // Applied before the page paints so there is no flash: the saved choice, else the device's setting.
@@ -410,8 +412,8 @@ html[data-theme="light"] input,html[data-theme="light"] select{color-scheme:ligh
     <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center">
       <span id="m-page-info" style="font-size:12px;color:#9aa3b2"></span>
       <div style="display:flex;gap:6px">
-        <button onclick="changeMPage(-1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">←</button>
-        <button onclick="changeMPage(1)" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
+        <button onclick="changeMPage(-1)" aria-label="Previous page" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">←</button>
+        <button onclick="changeMPage(1)" aria-label="Next page" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#9ca3af">→</button>
       </div>
     </div></div>
   </div>

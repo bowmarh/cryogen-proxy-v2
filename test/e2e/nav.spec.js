@@ -113,3 +113,19 @@ test('Racing: the # is the real vELO place and does not change when you sort; ri
   expect([...rows].sort()).toEqual(['1:Zed', '2:Mia', '3:Abe']);   // whatever the order on screen, the places are the vELO places
   await expect(page.locator('#racing-body tr', { hasText: 'Mia' })).toContainText('—');   // no scores: no phenotype claimed
 });
+
+test('Members: the "Something wrong?" button never sits on top of the page arrows at the bottom of the table', async ({ page, baseURL }) => {
+  for (const vp of [{ width: 1280, height: 700 }, { width: 390, height: 780 }]) {
+    await page.setViewportSize(vp);
+    await admin(page, baseURL);
+    await page.evaluate(() => showTab('members', document.getElementById('nav-members')));
+    await page.waitForFunction(() => typeof riders !== 'undefined' && riders.length >= 3, null, { timeout: 15000 });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { const m = document.getElementById('main'); m.scrollTop = m.scrollHeight; window.scrollTo(0, document.documentElement.scrollHeight); });   // the page or the main area scrolls, depending on the screen
+    await page.waitForTimeout(300);
+    for (const name of ['Previous page', 'Next page']) {
+      const hit = await page.evaluate(n => { const b = document.querySelector(`#page-members button[aria-label="${n}"]`); const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el === b || b.contains(el); }, name);
+      expect(hit, `${name} is reachable at ${vp.width}px wide`).toBe(true);
+    }
+  }
+});
