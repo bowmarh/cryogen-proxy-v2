@@ -62,3 +62,25 @@ test('DIRT: points are matched by Zwift ID or name, merged with the places alrea
   assert.equal((await app.post('/api/drs/points-import', { stage: st.id, csv: table }, { token: await app.memberSession(ID(3), { name: 'Lad 3' }) })).status, 200);
   assert.equal((await app.post('/api/drs/points-import', { stage: st.id, csv: table }, { token: await app.memberSession(ID(2), { name: 'Lad 2' }) })).status, 403);
 });
+
+test('ZRL: a table copied straight off a web page is understood without a heading row, with spaces, one cell per line, "1st", "T2" and arrows; teams match by name words', async () => {
+  await app.post('/api/zrl/round', { name: 'R', start: h.ymd(8), closes: h.ymd(10) }, A);
+  await app.post('/api/zrl/teams', { teams: [{ name: 'CRYO-GEN Hawks', region: 'eu' }, { name: 'CRYO-GEN Magpies', region: 'eu' }] }, A);
+  const prev = async csvText => (await app.post('/api/zrl/results-import', { week: 0, csv: csvText }, A));
+  const want = [['CRYO-GEN Hawks', 3], ['CRYO-GEN Magpies', 6]];
+  // tab separated, no heading, places as 1st/2nd, a club tag after the name, movement arrows
+  let r = await prev('1st\tSome Team\t120\n2nd\tOther Squad\t110\n▲2 3rd\tHawks [GB]\t100\n4th\tFoo\t90\n5th\tBar\t80\n6th\tCRYO-GEN Magpies\t70\n');
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.deepEqual(r.body.preview.rows.map(x => [x.name, x.pos]), want);
+  // two or more spaces between cells
+  r = await prev('1   Alpha   9\n2   Beta   8\n3   Hawks   7\n4   Gamma   6\n5   Delta   5\nT6   Magpies   4');
+  assert.deepEqual(r.body.preview.rows.map(x => [x.name, x.pos]), want);
+  // one cell per line: place, team, points
+  r = await prev('1\nAlpha\n90\n2\nBeta\n80\n3\nCRYO-GEN Hawks\n70\n4\nGamma\n60\n5\nDelta\n50\n6\nMagpies\n40\n');
+  assert.deepEqual(r.body.preview.rows.map(x => [x.name, x.pos]), want);
+  // the number of teams (the largest place) gives the league points: field minus place plus one
+  assert.deepEqual(r.body.preview.rows.map(x => x.points), [4, 1]);
+  // nothing of ours in it
+  assert.equal((await prev('1 Alpha 9\n2 Beta 8\n3 Gamma 7')).status, 400);
+  // a table WITH headings still works exactly as before
+  r = await prev('Team,Position\nHawks,2\nOther,1\n'); assert.deepEqual(r.body.preview.rows.map(x => [x.name, x.pos]), [['CRYO-GEN Hawks', 2]]);
+});

@@ -127,3 +127,12 @@ test('the "Where you stand" card shows on the dashboard for a member, with both 
   const card = page.locator('#myplace-card'); await expect(card).toContainText('Where you stand'); await expect(card).toContainText('ZRL race 2'); await expect(card).toContainText('9th overall');
   await expect(card).toContainText('#2 of 2'); await expect(card.getByRole('button', { name: /Share/ })).toBeVisible();
 });
+
+test('the ZRL results paste box says no heading row is needed; the other paste boxes still ask for one', async ({ page, baseURL }) => {
+  await admin(page, baseURL);
+  await page.evaluate(() => tableImportOpen({ title: 'Team results for race 1', hint: 'On the WTRL results page, select the table, copy it and paste it here.', loose: true, path: '/api/zrl/results-import', extra: { week: 0 }, done() {} }));
+  const m = page.locator('#tableModal'); await expect(m).toContainText('select the table, copy it and paste it here'); await expect(m).not.toContainText('first row should name the columns');
+  await page.evaluate(() => tableImportClose());
+  await page.evaluate(() => tableImportOpen({ title: 'Stage points', hint: 'Paste the DRS results table.', path: '/api/drs/points-import', extra: {}, done() {} }));
+  await expect(page.locator('#tableModal')).toContainText('first row should name the columns');
+});
