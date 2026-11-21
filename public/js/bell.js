@@ -57,7 +57,11 @@
     document.body.appendChild(panel); btn.setAttribute('aria-expanded', 'true'); draw(); load();
     document.addEventListener('keydown', onKey, true); setTimeout(() => document.addEventListener('click', onDoc, true), 0);
   }
-  function start() { paintBtn(); load(); setInterval(() => { if (!document.hidden) load(); }, 180000); document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); }); }
+  // Every look costs the club's storage a few commands, so the bell checks sparingly: at start, every ten minutes while the page is on screen, when you come back to the
+  // tab after at least five minutes away, and always when you open the panel.
+  let lastLoad = 0;
+  const loadOften = (minMs) => { if (!document.hidden && Date.now() - lastLoad >= minMs) { lastLoad = Date.now(); load(); } };
+  function start() { paintBtn(); lastLoad = Date.now(); load(); setInterval(() => loadOften(540000), 600000); document.addEventListener('visibilitychange', () => loadOften(300000)); }
   window.addEventListener('load', () => setTimeout(start, 900));
   window.Bell = { load, paint: paintBtn, items: () => items };
 })();
