@@ -99,3 +99,31 @@ test('on a phone, offers such as "Stay signed in" sit at the top under the heade
   await page.evaluate(() => { const b = document.createElement('div'); b.id = 'stay-banner'; b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9998;background:#0f172a;padding:12px'; b.textContent = 'Stay signed in on this device?'; document.body.appendChild(b); });
   const box = await page.locator('#stay-banner').boundingBox(); expect(box.y).toBeLessThan(120);   // at the top, not the bottom
 });
+
+test('"Where you stand": your last race in a sentence and your place in the club by vELO with the gaps to the riders around you', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  await page.waitForFunction(() => typeof riders !== 'undefined' && riders.length >= 3, null, { timeout: 15000 });
+  const out = await page.evaluate(() => {
+    memberRider = { id: 1002, name: 'Rider Two' };
+    riders = [{ id: 1001, name: 'Alex Hart', velo: 1900, active: true }, { id: 1002, name: 'Rider Two', velo: 1850, active: true }, { id: 1003, name: 'Sam Lee (CRYO-GEN)', velo: 1700, active: true }];
+    return MyPlace.placeLine();
+  });
+  expect(out).toContain('#2'); expect(out).toContain('of 3'); expect(out).toContain('Alex Hart is 50 ahead'); expect(out).toContain('Sam Lee is 150 behind');
+  const line = await page.evaluate(() => MyPlace.raceLine({ pos: 9, catPos: 3, cat: 'B', field: 120, around: { clubRiders: 4, beaten: 2, ahead: { name: 'Ann Brown', gap: 15.4 }, behind: { name: 'Cy Doe', gap: 75 } } }));
+  expect(line).toContain('9th'); expect(line).toContain('3rd in B'); expect(line).toContain('of 120'); expect(line).toContain('You beat 2 clubmates');
+  expect(line).toContain('Ann Brown was just ahead by 15 s'); expect(line).toContain('Cy Doe was 1:15 behind you');
+  expect(await page.evaluate(() => MyPlace.raceLine({ pos: 1, around: { beaten: 1 } }))).toContain('1st'); expect(await page.evaluate(() => MyPlace.raceLine({ pos: 12, around: null }))).toContain('12th');
+});
+
+test('the "Where you stand" card shows on the dashboard for a member, with both parts and a Share button', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.route('**/api/me/results', route => route.fulfill({ json: { results: [{ id: 'a', title: 'ZRL race 2', pos: 9, catPos: 3, cat: 'B', field: 120, around: { clubRiders: 4, beaten: 2, ahead: { name: 'Ann Brown', gap: 15.4 }, behind: null } }] } }));
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  await page.waitForFunction(() => typeof riders !== 'undefined' && riders.length >= 3, null, { timeout: 15000 });
+  await page.evaluate(() => { memberRider = { id: 1002, name: 'Rider Two' }; riders = [{ id: 1001, name: 'Alex Hart', velo: 1900, active: true }, { id: 1002, name: 'Rider Two', velo: 1850, active: true }]; return MyPlace.load(); });
+  const card = page.locator('#myplace-card'); await expect(card).toContainText('Where you stand'); await expect(card).toContainText('ZRL race 2'); await expect(card).toContainText('9th overall');
+  await expect(card).toContainText('#2 of 2'); await expect(card.getByRole('button', { name: /Share/ })).toBeVisible();
+});

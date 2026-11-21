@@ -93,3 +93,19 @@ test('the public club page shows recent results as counts and best place only, n
   assert.deepEqual(r.body.results[0], { title: EVENT.title, date: '2026-11-03', riders: 2, podiums: 2, best: 1, bestCat: 'A' });
   assert.doesNotMatch(JSON.stringify(r.body.results), /Rider [01]|1000|1001/);
 });
+
+test('"your result in a sentence": who was just ahead and behind among clubmates, by how many seconds, and how many were beaten', async () => {
+  const db = {}, redis = async cmds => cmds.map(c => h.redisRun(db, c));
+  const r = require('../lib/clubresults')({ redis, HttpError: Error, requireRole() {}, roleFromRequest: () => '', memberFromRequest: req => req.member, fetchZrResults() {}, clubRiders: async () => new Map() });
+  db['cg:results:events'] = { a: JSON.stringify({ id: 'a', title: 'Race A', time: 1, field: 120, riders: [
+    { zwid: '1', name: 'Ann', pos: 4, catPos: 1, cat: 'A', time: 1800 },
+    { zwid: '2', name: 'Bo', pos: 9, catPos: 3, cat: 'B', time: 1815.4 },
+    { zwid: '3', name: 'Cy', pos: 12, catPos: 5, cat: 'B', time: 1822 },
+    { zwid: '4', name: 'Di', pos: 30, catPos: 9, cat: 'C' }] }) };
+  const me = (await r.routes['GET /api/me/results']({ member: { zwid: '2' } })).results[0];
+  assert.deepEqual(me.around, { clubRiders: 4, beaten: 2, ahead: { name: 'Ann', gap: 15.4 }, behind: { name: 'Cy', gap: 6.6 } });
+  const first = (await r.routes['GET /api/me/results']({ member: { zwid: '1' } })).results[0];
+  assert.equal(first.around.ahead, null); assert.equal(first.around.beaten, 3);
+  const noTime = (await r.routes['GET /api/me/results']({ member: { zwid: '3' } })).results[0];
+  assert.equal(noTime.around.behind.gap, null, 'a rider with no time gives a name but no gap');
+});

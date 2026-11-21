@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-23', title: "What's new", all: ['Your Home page now has "Where you stand": your last race in a sentence (who you beat, who was just ahead, by how much) and your place in the club by vELO, with a Share button.'],
+      staff: [] },
     { id: '2026-11-22', title: "What's new", all: ['My Profile now shows your Zwift ID and your time zone, with a Change button (on a phone it used to be hidden behind the ⋯ menu).', 'The race-day card says when the race starts in your time zone, with a link if the zone is wrong.', 'On a phone, prompts like "Stay signed in" now sit at the top so they never cover the bottom controls, and can be closed with ×.'],
       staff: [] },
     { id: '2026-11-20', title: "What's new", all: [],
