@@ -237,6 +237,7 @@
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)">Race day · ${esc(u.kind)}</div>
       <div style="font-size:16px;font-weight:800;margin:4px 0">${esc(u.title)}</div>
       <div data-countdown="${u.atMs}" aria-live="off" style="font-size:38px;font-weight:900;font-family:monospace;letter-spacing:.04em">--:--:--</div>
+      <div style="font-size:12px;color:#9ca3af">Starts ${esc(new Date(u.atMs).toLocaleString('en-GB', { timeZone: typeof tzZone === 'function' ? tzZone() : undefined, weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} ${esc(typeof tzShort === 'function' ? tzShort(u.atMs) : '')} <button type="button" onclick="openTz()" style="background:none;border:0;color:var(--accent);cursor:pointer;font-size:12px;padding:0 4px">wrong time zone?</button></div>
       <div id="raceday-chips" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0"></div>
       <button type="button" ${done ? 'disabled' : ''} onclick="myWeekPenTap('${esc(u.pen.kind)}','${esc(u.pen.id)}')" style="padding:12px 26px;font-size:16px;font-weight:800;border-radius:10px;cursor:pointer;border:2px solid #10B981;background:${done ? 'rgba(16,185,129,.25)' : '#10B981'};color:${done ? '#34d399' : '#04210f'}">${done ? '✅ You are in the pen' : "🏁 I'm in the pen"}</button>
       ${u.link ? `<div style="margin-top:8px;font-size:12px"><a href="${esc(u.link)}" target="_blank" rel="noopener">Open the event in Zwift</a></div>` : ''}</div>`;

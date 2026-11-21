@@ -57,7 +57,7 @@
   // The offer after signing in: a card at the bottom of the screen that blocks nothing (the app stays usable underneath).
   function banner(html) {
     let b = document.getElementById('stay-banner'); if (!b) { b = document.createElement('div'); b.id = 'stay-banner'; b.setAttribute('role', 'region'); b.setAttribute('aria-label', 'Stay signed in'); b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9998;max-width:420px;margin:0 auto;background:#0f172a;border:1px solid rgba(34,211,238,.4);border-radius:14px;padding:14px;color:#e5e7eb;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5)'; document.body.appendChild(b); }
-    b.innerHTML = html; b.style.display = 'block';
+    b.innerHTML = html + '<button type="button" id="stay-x" aria-label="Close" style="position:absolute;top:6px;right:8px;background:none;border:0;color:#9ca3af;font-size:20px;line-height:1;cursor:pointer">×</button>'; b.style.display = 'block'; b.style.position = 'fixed'; document.getElementById('stay-x').onclick = () => { b.style.display = 'none'; };   // closes it for now; it is offered again next sign-in
   }
   const closeBanner = () => { const b = document.getElementById('stay-banner'); if (b) b.style.display = 'none'; };
   const close = () => { const m = document.getElementById('stay-modal'); if (m) m.style.display = 'none'; };

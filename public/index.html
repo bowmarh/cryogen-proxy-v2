@@ -25,6 +25,8 @@ select option{background:#0f1623}::-webkit-scrollbar{width:6px}::-webkit-scrollb
   #tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;color:#9aa3b2;font-size:11px;padding:6px 2px;min-height:48px;border-radius:10px;cursor:pointer}
   #tabbar button span:first-child{font-size:19px;line-height:1}
   #tabbar button.on{color:var(--accent);background:rgba(var(--accent-rgb),0.12);font-weight:700}
+  /* offers and prompts sit at the TOP on a phone, under the header: the bottom belongs to the browser's own back/forward controls and our bar */
+  #install-bar,#stay-banner,#stale-banner{top:calc(66px + env(safe-area-inset-top))!important;bottom:auto!important}
   /* floating things that sat in the bottom corner now sit above the bar, not on top of it */
   #fb-btn{bottom:calc(68px + env(safe-area-inset-bottom))!important;right:10px!important}
   #whatsnew{bottom:calc(74px + env(safe-area-inset-bottom))!important}

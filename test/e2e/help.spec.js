@@ -74,3 +74,28 @@ test('TTT: a week set up on a Wednesday shows staff a one-tap "Move to Thursday"
   await expect(page.locator('#ttt-root [role=status]', { hasText: 'every Thursday' })).toHaveCount(0);
   const wk = await (await page.request.get('/api/ttt', { headers: { Authorization: 'Bearer ' + tok } })).json(); expect(wk.week.date).toBe(thu);
 });
+
+test('My Profile shows the rider their Zwift ID and time zone with a Change button; the race card says when it starts in their time zone', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${baseURL}/api/auth/wp?t=${encodeURIComponent(h.ssoToken({ zwid: '1002', name: 'Rider Two' }))}`);
+  await expect(page.locator('#app')).toBeVisible({ timeout: 15000 });
+  await page.evaluate(() => showTab('profile', document.getElementById('nav-profile')));
+  const prof = page.locator('#profile-content'); await expect(prof).toContainText('Zwift ID', { timeout: 15000 }); await expect(prof).toContainText('1002');
+  await expect(prof).toContainText('Time zone'); await prof.getByRole('button', { name: 'Change' }).click(); await expect(page.locator('#tzModal')).toBeVisible();
+  await page.evaluate(() => closeTz());
+  await page.evaluate(() => {
+    showTab('dashboard', document.querySelector('#main-nav button[onclick*="dashboard"]'));
+    myWeek = { windowDays: 7, todo: 0, generated: new Date().toISOString(), name: 'T', items: [{ kind: 'ZRL', title: 'Team · race 2', state: 'in', note: "You're in the line-up", atMs: Date.now() + 5400000, date: new Date().toISOString().slice(0, 10), timed: true, link: '', pen: { kind: 'zrl', id: '1:t' } }] };
+    renderMyWeek();
+  });
+  await expect(page.locator('#raceday')).toContainText('Starts'); await expect(page.locator('#raceday')).toContainText('wrong time zone?');
+});
+
+test('on a phone, offers such as "Stay signed in" sit at the top under the header, never over the bottom controls', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  const tok = (await (await page.request.post('/api/login', { data: { role: 'admin', password: h.BASE_ENV.ADMIN_PASSWORD } })).json()).token;
+  await page.addInitScript(t => { if (location.origin.startsWith('http://127.0.0.1')) { sessionStorage.setItem('token', t); sessionStorage.setItem('role', 'admin'); } }, tok);
+  await page.goto(baseURL); await page.evaluate(() => launchApp('admin')); await page.waitForTimeout(900);
+  await page.evaluate(() => { const b = document.createElement('div'); b.id = 'stay-banner'; b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9998;background:#0f172a;padding:12px'; b.textContent = 'Stay signed in on this device?'; document.body.appendChild(b); });
+  const box = await page.locator('#stay-banner').boundingBox(); expect(box.y).toBeLessThan(120);   // at the top, not the bottom
+});

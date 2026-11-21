@@ -2967,10 +2967,11 @@ function renderProfile(){
       <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,rgba(var(--accent-rgb),0.13),#0080FF22);border:2px solid rgba(var(--accent-rgb),0.4);display:flex;align-items:center;justify-content:center;font-size:28px">${toFlag(r.cc)}</div>
       <div>
         <div style="font-size:22px;font-weight:900">${esc(r.name)}</div>
+        <div style="font-size:13px;color:#9ca3af;margin-top:4px">Zwift ID <b style="color:#e5e7eb;font-family:monospace">${esc(String(r.id))}</b> · 🕒 Time zone <b style="color:#e5e7eb">${esc(tzPref==='device'?'my device ('+tzZone()+')':tzZone())}</b> <button type="button" onclick="openTz()" style="margin-left:4px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:none;color:var(--accent);cursor:pointer;font-size:12px">Change</button></div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
           ${catB(r.cat)}
           ${r.zraCat?`<span style="font-size:12px;color:${zraC};font-weight:700;background:${zraC}18;border:1px solid ${zraC}44;padding:2px 10px;border-radius:4px">${r.zraCat}</span>`:''}
-          <span style="font-size:12px;color:#8b95a5">${PH_EMOJI[r.ph]||'⭐'} ${r.ph}</span>
+          ${r.ph?`<span style="font-size:12px;color:#8b95a5">${PH_EMOJI[r.ph]||'⭐'} ${r.ph}</span>`:''}
           <span style="font-size:12px;font-family:monospace;color:var(--accent);font-weight:700">vELO ${r.velo}</span>
         </div>
         <div style="margin-top:6px;font-size:12px;color:#8b95a5">Membership: ${esc(r.tier==='full'?'Full':'Associate')} · ${esc(r.status||'active')}${sessionStorage.getItem('sso')?' · <span style="color:#10B981">✓ signed in with cryogen.team</span>':''}</div>
