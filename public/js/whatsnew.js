@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-22', title: "What's new", all: ['My Profile now shows your Zwift ID and your time zone, with a Change button (on a phone it used to be hidden behind the ⋯ menu).', 'The race-day card says when the race starts in your time zone, with a link if the zone is wrong.', 'On a phone, prompts like "Stay signed in" now sit at the top so they never cover the bottom controls, and can be closed with ×.'],
+      staff: [] },
     { id: '2026-11-20', title: "What's new", all: [],
       staff: ['TTT is every Thursday: new weeks now default to Thursday. If this week shows another day, TTT Week has a "Move to Thursday" button (sign-ups and line-ups stay).'] },
     { id: '2026-11-19', title: "What's new", all: ['🔔 The bell at the top shows the latest club news, such as "rosters are out", with a count of what is new.', '📺 If you stream your races, add your link on the ZRL page; everyone can see who is streaming, grouped by team.', 'TTT invitations now have "Not this week", so they stop nagging.', 'The ZRL page can show links to the league\'s RacePass, results and standings.'],
