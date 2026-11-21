@@ -290,6 +290,7 @@ function installFetch(world) {
       world.discord.push({ channel: u.pathname.slice(1), body: JSON.parse(opts.body) });
       return new Response(null, { status: 204 }); // Discord answers 204 with no body
     }
+    if (u.host.endsWith('wtrl.racing')) return json({}, 404);   // never the real WTRL from a test
     return real(input, opts);
   };
   return () => { global.fetch = real; };
