@@ -120,12 +120,12 @@ test('Members: the "Something wrong?" button never sits on top of the page arrow
     await admin(page, baseURL);
     await page.evaluate(() => showTab('members', document.getElementById('nav-members')));
     await page.waitForFunction(() => typeof riders !== 'undefined' && riders.length >= 3, null, { timeout: 15000 });
-    await page.waitForTimeout(500);
-    await page.evaluate(() => { const m = document.getElementById('main'); m.scrollTop = m.scrollHeight; window.scrollTo(0, document.documentElement.scrollHeight); });   // the page or the main area scrolls, depending on the screen
-    await page.waitForTimeout(300);
+    await page.waitForLoadState('networkidle');
+    // Scroll to the very bottom, and again after anything that loaded late has changed the page height (the page or the main area scrolls, depending on the screen).
+    for (let i = 0; i < 4; i++) { await page.evaluate(() => { const m = document.getElementById('main'); m.scrollTop = m.scrollHeight; window.scrollTo(0, document.documentElement.scrollHeight); }); await page.waitForTimeout(250); }
     for (const name of ['Previous page', 'Next page']) {
-      const hit = await page.evaluate(n => { const b = document.querySelector(`#page-members button[aria-label="${n}"]`); const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el === b || b.contains(el); }, name);
-      expect(hit, `${name} is reachable at ${vp.width}px wide`).toBe(true);
+      const hit = await page.evaluate(n => { const b = document.querySelector(`#page-members button[aria-label="${n}"]`); const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { ok: el === b || b.contains(el), on_top: el ? `${el.tagName}#${el.id}.${String(el.className).slice(0, 40)} "${(el.textContent || '').trim().slice(0, 40)}"` : 'nothing (off screen)', y: Math.round(r.top), vh: innerHeight }; }, name);
+      expect(hit.ok, `${name} is reachable at ${vp.width}px wide (on top of it: ${hit.on_top}; its top is at ${hit.y}px of ${hit.vh}px)`).toBe(true);
     }
   }
 });
