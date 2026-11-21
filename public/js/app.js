@@ -4155,16 +4155,28 @@ function zrlMyCard(){
   }
   return out.join('');
 }
+function zrlTimeline(r){
+  const t0=Date.parse(String(r.start||'').slice(0,10)+'T00:00:00Z'); if(!(t0>0)||!(r.weeks>0)) return '';
+  const now=Date.now(), day=864e5, ends=i=>t0+i*7*day+day;
+  const next=Array.from({length:r.weeks},(_,i)=>i).find(i=>ends(i)>now);
+  const dots=Array.from({length:r.weeks},(_,i)=>{
+    const done=ends(i)<=now, isNext=i===next, c=done?'#22c55e':isNext?'var(--accent)':'#4b5563';
+    const when=new Date(t0+i*7*day).toLocaleDateString('en-GB',{timeZone:'UTC',day:'numeric',month:'short'});
+    return `<div style="flex:1;min-width:46px;text-align:center"><div style="height:4px;background:${c};border-radius:2px;margin-bottom:6px"></div><div style="font-size:11px;font-weight:${isNext?800:600};color:${isNext?'var(--accent)':done?'#22c55e':'#9ca3af'}">${done?'✓ ':''}Race ${i+1}</div><div style="font-size:10px;color:#6b7280">${when}</div></div>`;
+  }).join('');
+  const left=next===undefined?'Season complete':next===0&&now<t0?'First race '+Math.max(0,Math.ceil((t0-now)/day))+' days away':'Race '+(next+1)+' of '+r.weeks+' is next';
+  return `<div class="card" style="padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:8px">Season timeline · ${esc(left)}</div><div style="display:flex;gap:4px;overflow-x:auto">${dots}</div></div>`;
+}
 function renderZrl(d){
   const staff=role==='admin'||role==='mod';
   if(!d.round) return `<div class="card" style="padding:20px;font-size:14px;color:#9ca3af">${window.uiEmpty?uiEmpty('🚀','No ZRL round yet',"We'll announce the next round in Discord when sign-ups open.",'Back to the dashboard',"showTab('dashboard',document.querySelector('.navbtn'))"):"No ZRL round is open right now. We'll announce it in Discord when the next one starts."}</div>${staff?zrlStaffPanel(d):''}`;
-  if(staff) return renderZrlStaff(d);
+  if(staff) return zrlTimeline(d.round)+renderZrlStaff(d);
   const r=d.round, dem=d.demand;
   const closes=r.closesAt?` · sign-ups close ${new Date(r.closesAt).toLocaleString('en-GB',{timeZone:tzZone(),weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} ${tzLabel()}`:'';
   const h3=x=>`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin:6px 0 8px">${x}</div>`;
   return `<div style="margin-bottom:16px"><div style="font-size:16px;font-weight:800">${esc(r.name)}</div>
       <div style="font-size:12px;color:#8b95a5">${r.weeks} races from ${esc(seasonDay(r.start))} · ${r.rosterSize} riders a team, ${r.racing} race each week${esc(closes)}</div></div>
-    ${zrlHelpCard(zrlMy&&zrlMy.captainOf&&zrlMy.captainOf.length?'captain':'rider')}${zrlMyCard()}<div id="zrl-standings">${zrlStandingsHtml()}</div>${zrlSignupCard(d)}
+    ${zrlTimeline(r)}${zrlHelpCard(zrlMy&&zrlMy.captainOf&&zrlMy.captainOf.length?'captain':'rider')}${zrlMyCard()}<div id="zrl-standings">${zrlStandingsHtml()}</div>${zrlSignupCard(d)}
     ${h3('Where we need riders')}<div class="stat4" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">${dem.regions.map(x=>zrlDemandCard(x,r)).join('')}</div>
     ${h3('Who is in ('+dem.riders+')'+(staff?' <button onclick="zrlEditStart(\'new\')" style="margin-left:8px;padding:2px 10px;font-size:11px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;cursor:pointer;text-transform:none">+ Add a rider</button>':''))}${staff?zrlEditorCard(d):''}${zrlPoolTable(d,staff)}
     ${staff?zrlStaffPanel(d):''}`;
