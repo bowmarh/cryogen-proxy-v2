@@ -2550,7 +2550,9 @@ const staff = require('../lib/staff')({ redis, HttpError, requireRole, text }); 
 
 // What the automation changed, with an undo (lib/autolog.js).
 const autoLog = require('../lib/autolog')({ redis, HttpError, requireRole });
+const wtrlSched = require('../lib/wtrlsched')({ redis });
 const zrl = require('../lib/zrl')({
+  wtrlSched,
   staffNameOf: req => String((sessionFromRequest(req) || {}).staffName || ''),
   autoLog, notify: (...a) => comms.notify(...a),   // comms is created further down
   redis, HttpError, text, requireRole, roleFromRequest, memberFromRequest, identify, discord, discordEscape, fetchRoster,
