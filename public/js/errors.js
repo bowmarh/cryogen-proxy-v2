@@ -9,7 +9,7 @@
     if (b || !document.body) return;
     b = document.createElement('div'); b.id = 'net-banner'; b.setAttribute('role', 'alert');
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9997;background:#7c2d12;color:#fff;padding:8px 12px;font-size:13px;text-align:center';
-    b.innerHTML = "Can't reach the club server right now. Check your Wi-Fi or mobile data. <button type='button' style='margin-left:8px;padding:2px 10px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer' onclick='location.reload()'>Try again</button>";
+    b.innerHTML = "Can't reach the club server right now. Check your connection; if you're on Wi-Fi, try mobile data, or turn off any VPN or Private Relay. <button type='button' style='margin-left:8px;padding:2px 10px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer' onclick='location.reload()'>Try again</button>";
     document.body.appendChild(b);
   };
   window.fetch = function (input, opts) {
