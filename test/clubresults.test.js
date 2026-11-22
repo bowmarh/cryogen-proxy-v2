@@ -147,6 +147,8 @@ test('kudos: a member cheers a clubmate once, can take it back, never their own,
   const list = await r.routes['GET /api/results']({ member: { zwid: '3' } });
   assert.deepEqual(list.events[0].kudos['1'], { n: 1, mine: true });
   assert.deepEqual(list.events[0].kudos['2'], { n: 0, mine: false });
+  assert.equal((await r.routes['GET /api/me/results']({ member: { zwid: '1' } })).results[0].kudos, 1, 'the rider being cheered sees the count on their own results');
+  assert.equal((await r.routes['GET /api/me/results']({ member: { zwid: '2' } })).results[0].kudos, 0);
 });
 
 test('badges, weekly goal and season recap are worked out from the rider\'s own results', () => {
