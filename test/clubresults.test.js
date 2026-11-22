@@ -109,3 +109,26 @@ test('"your result in a sentence": who was just ahead and behind among clubmates
   const noTime = (await r.routes['GET /api/me/results']({ member: { zwid: '3' } })).results[0];
   assert.equal(noTime.around.behind.gap, null, 'a rider with no time gives a name but no gap');
 });
+
+test('monthly points: 3 a finish, +1 top 10, +10/+6/+4 podium; only this month counts', async () => {
+  const db = {}, redis = async cmds => cmds.map(c => h.redisRun(db, c));
+  const r = require('../lib/clubresults')({ redis, HttpError: Error, requireRole() {}, roleFromRequest: () => '', memberFromRequest: req => req.member, fetchZrResults() {}, clubRiders: async () => new Map() });
+  const ev = (id, iso, riders) => JSON.stringify({ id, title: `Race ${id}`, time: Date.parse(iso) / 1000, field: 50, riders });
+  db['cg:results:events'] = {
+    a: ev('a', '2026-11-02T19:00:00Z', [{ zwid: '1', name: 'Ann', catPos: 1 }, { zwid: '2', name: 'Bo', catPos: 12 }]),
+    b: ev('b', '2026-11-03T19:00:00Z', [{ zwid: '2', name: 'Bo', catPos: 3 }]),
+    c: ev('c', '2026-10-30T19:00:00Z', [{ zwid: '2', name: 'Bo', catPos: 1 }]),   // last month
+  };
+  const L = await r.leaderboard(Date.parse('2026-11-04T10:00:00Z'));
+  assert.equal(L.monthName, 'November 2026');
+  assert.deepEqual(L.month.map(x => [x.name, x.points, x.races]), [['Ann', 14, 1], ['Bo', 11, 2]]);
+});
+
+test('the racing streak counts weeks in a row up to this week or last', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), w = { addEventListener() {} };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '..', 'public/js/myplace.js'), 'utf8'), { window: w, document: {} });
+  const now = Date.parse('2026-11-19T12:00:00Z'), t = d => (now - d * 864e5) / 1000;
+  assert.equal(w.MyPlace.streakOf([{ time: t(0) }, { time: t(7) }, { time: t(14) }], now), 3);
+  assert.equal(w.MyPlace.streakOf([{ time: t(7) }, { time: t(14) }], now), 2, 'not raced yet this week still counts');
+  assert.equal(w.MyPlace.streakOf([{ time: t(21) }], now), 0);
+});
