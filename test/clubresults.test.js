@@ -132,3 +132,33 @@ test('the racing streak counts weeks in a row up to this week or last', () => {
   assert.equal(w.MyPlace.streakOf([{ time: t(7) }, { time: t(14) }], now), 2, 'not raced yet this week still counts');
   assert.equal(w.MyPlace.streakOf([{ time: t(21) }], now), 0);
 });
+
+test('kudos: a member cheers a clubmate once, can take it back, never their own, and the counts come with the results', async () => {
+  const db = {}, redis = async cmds => cmds.map(c => h.redisRun(db, c));
+  const r = require('../lib/clubresults')({ redis, HttpError: class extends Error { constructor(s, m) { super(m); this.status = s; } }, requireRole() {}, roleFromRequest: () => '', memberFromRequest: req => req.member, fetchZrResults() {}, clubRiders: async () => new Map() });
+  db['cg:results:events'] = { e1: JSON.stringify({ id: 'e1', title: 'Race', time: 1, field: 9, riders: [{ zwid: '1', name: 'Ann', catPos: 1 }, { zwid: '2', name: 'Bo', catPos: 2 }] }) };
+  const post = (zwid, body) => r.routes['POST /api/results/kudos']({ member: zwid ? { zwid } : null }, body);
+  assert.deepEqual(await post('2', { event: 'e1', zwid: '1' }), { n: 1, mine: true });
+  assert.deepEqual(await post('3', { event: 'e1', zwid: '1' }), { n: 2, mine: true });
+  assert.deepEqual(await post('2', { event: 'e1', zwid: '1' }), { n: 1, mine: false }, 'a second tap takes it back');
+  await assert.rejects(() => post('1', { event: 'e1', zwid: '1' }), /clubmates/);
+  await assert.rejects(() => post('2', { event: 'e1', zwid: '99' }), /not in the club results/);
+  await assert.rejects(() => post(null, { event: 'e1', zwid: '1' }), /Sign in/);
+  const list = await r.routes['GET /api/results']({ member: { zwid: '3' } });
+  assert.deepEqual(list.events[0].kudos['1'], { n: 1, mine: true });
+  assert.deepEqual(list.events[0].kudos['2'], { n: 0, mine: false });
+});
+
+test('badges, weekly goal and season recap are worked out from the rider\'s own results', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), w = {}, ctx = { window: w, document: { getElementById: () => null }, sessionStorage: {}, localStorage: {} };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '..', 'public/js/milestones.js'), 'utf8'), ctx);
+  const now = Date.parse('2026-11-19T12:00:00Z'), t = d => (now - d * 864e5) / 1000;
+  const list = [{ time: t(0), catPos: 1 }, { time: t(7), catPos: 5 }, { time: t(14), pos: 40 }, { time: t(21), catPos: 3 }];
+  const s = w.Milestones.stats(list, now);
+  assert.equal([s.races, s.podiums, s.wins, s.best, s.bestStreak, s.thisWeek].join(','), '4,2,1,1,4,1');
+  const ok = w.Milestones.BADGES.filter(b => b.test(s)).map(b => b.id);
+  assert.equal(ok.join(','), 'first,podium,win,top10,streak4');
+  const rc = w.Milestones.recap(list, now);
+  assert.equal([rc.races, rc.wins, rc.busiest.month].join(','), '4,1,November');
+  assert.deepEqual(w.Milestones.stats([], now).races, 0);
+});

@@ -43,6 +43,7 @@
     render();
   }
   function render() {
+    if (window.Milestones) window.Milestones.render(results || []);
     const el = document.getElementById('myplace-card'); if (!el) return;
     if ((window.role || sessionStorage.getItem('role')) !== 'member') { el.innerHTML = ''; return; }
     const last = (results || []).find(r => r.pos != null || r.catPos != null), race = last ? raceLine(last) : '', place = placeLine(), streak = streakOf(results);
