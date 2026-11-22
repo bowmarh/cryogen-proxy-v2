@@ -4159,10 +4159,12 @@ function zrlTimeline(r){
   const t0=Date.parse(String(r.start||'').slice(0,10)+'T00:00:00Z'); if(!(t0>0)||!(r.weeks>0)) return '';
   const now=Date.now(), day=864e5, ends=i=>t0+i*7*day+day;
   const next=Array.from({length:r.weeks},(_,i)=>i).find(i=>ends(i)>now);
+  const ords=n=>n+(n===1?'st':n===2?'nd':n===3?'rd':'th');
+  const best=i=>{ let b=null; try{ ((typeof zrlStand!=='undefined'&&zrlStand&&zrlStand.groups)||[]).forEach(g=>g.teams.forEach(t=>{ const w=t.weeks&&t.weeks[i]; if(w&&w.pos&&(b===null||w.pos<b)) b=w.pos; })); }catch(e){} return b; };
   const dots=Array.from({length:r.weeks},(_,i)=>{
     const done=ends(i)<=now, isNext=i===next, c=done?'#22c55e':isNext?'var(--accent)':'#4b5563';
     const when=new Date(t0+i*7*day).toLocaleDateString('en-GB',{timeZone:'UTC',day:'numeric',month:'short'});
-    return `<div style="flex:1;min-width:46px;text-align:center"><div style="height:4px;background:${c};border-radius:2px;margin-bottom:6px"></div><div style="font-size:11px;font-weight:${isNext?800:600};color:${isNext?'var(--accent)':done?'#22c55e':'#9ca3af'}">${done?'✓ ':''}Race ${i+1}</div><div style="font-size:10px;color:#6b7280">${when}</div></div>`;
+    return `<div style="flex:1;min-width:46px;text-align:center"><div style="height:4px;background:${c};border-radius:2px;margin-bottom:6px"></div><div style="font-size:11px;font-weight:${isNext?800:600};color:${isNext?'var(--accent)':done?'#22c55e':'#9ca3af'}">${done?'✓ ':''}Race ${i+1}</div><div style="font-size:10px;color:#6b7280">${when}</div>${best(i)?`<div style="font-size:10px;color:#22c55e;margin-top:2px">🏁 best ${ords(best(i))}</div>`:''}</div>`;
   }).join('');
   const left=next===undefined?'Season complete':next===0&&now<t0?'First race '+Math.max(0,Math.ceil((t0-now)/day))+' days away':'Race '+(next+1)+' of '+r.weeks+' is next';
   return `<div class="card" style="padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:8px">Season timeline · ${esc(left)}</div><div style="display:flex;gap:4px;overflow-x:auto">${dots}</div></div>`;
