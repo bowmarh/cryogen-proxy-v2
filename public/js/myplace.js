@@ -50,7 +50,7 @@
     if (!race && !place) { el.innerHTML = ''; return; }
     el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:6px">🏁 Where you stand</div>`
       + (race ? `<div style="font-size:13px;line-height:1.5;margin-bottom:6px"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">Your last race · ${E(last.title)}</span><br>${race.charAt(0).toUpperCase() + race.slice(1)} <button type="button" id="myplace-share" onclick="MyPlace.share()" style="margin-left:6px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:none;color:var(--accent);cursor:pointer;font-size:12px">📤 Share</button></div>` : '')
-      + (streak >= 2 ? `<div style="font-size:13px;margin-bottom:6px">🔥 <b>${streak}-week racing streak</b>. Race this week to keep it going.</div>` : '') + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
+      + (last && last.kudos ? `<div style="font-size:13px;margin-bottom:6px">👏 <b>${last.kudos}</b> clubmate${last.kudos === 1 ? '' : 's'} cheered your last race.</div>` : '') + (streak >= 2 ? `<div style="font-size:13px;margin-bottom:6px">🔥 <b>${streak}-week racing streak</b>. Race this week to keep it going.</div>` : '') + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
   }
   function start() {
     const m = document.getElementById('main'); if (!m) return; let was = false;

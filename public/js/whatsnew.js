@@ -5,7 +5,7 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
-    { id: '2026-11-26', title: "What's new", all: ['Home has a weekly goal ring, race badges and a "My season so far" recap.', 'Results have a 👏 button: give a clubmate kudos for a good race.'],
+    { id: '2026-11-26', title: "What's new", all: ['Home has a weekly goal ring, race badges and a "My season so far" recap.', 'Results have a 👏 button: give a clubmate kudos for a good race. If someone cheers yours, Home tells you.'],
       staff: [] },
     { id: '2026-11-25', title: "What's new", all: ['Results now have a monthly points league: 3 points a finish, +1 for a top 10, and +4/+6/+10 for a podium. Most points wins the month.', 'Race two weeks in a row and Home shows your 🔥 racing streak.', 'Results read from ZwiftRacing.app carry a ✓ Verified badge.'],
       staff: [] },
