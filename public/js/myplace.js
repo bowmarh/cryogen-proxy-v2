@@ -23,6 +23,11 @@
     const you = all[i], up = all[i - 1], down = all[i + 1], fmt = n => Number(n).toLocaleString('en-GB');
     return `You are <b>#${i + 1}</b> of ${all.length} in the club by vELO (<b>${fmt(you.velo)}</b>).${up ? ` ${E(first(up.name))} is ${fmt(up.velo - you.velo)} ahead.` : ' You lead the club.'}${down ? ` ${E(first(down.name))} is ${fmt(you.velo - down.velo)} behind.` : ''}`;
   }
+  // A racing streak, the Duolingo idea: how many weeks in a row (up to this week or last) you have raced.
+  function streakOf(list, now = Date.now()) {
+    const wk = t => Math.floor((t * 1000 - 4 * 864e5) / (7 * 864e5)), weeks = new Set((list || []).filter(r => r.time).map(r => wk(r.time)));
+    let w = wk(now / 1000); if (!weeks.has(w)) w--; let n = 0; while (weeks.has(w)) { n++; w--; } return n;
+  }
   // A result worth sharing: plain text for WhatsApp, Discord or anywhere (the phone's share sheet when there is one, else copied).
   const plain = h => String(h).replace(/<[^>]+>/g, '');
   async function share() {
@@ -40,11 +45,11 @@
   function render() {
     const el = document.getElementById('myplace-card'); if (!el) return;
     if ((window.role || sessionStorage.getItem('role')) !== 'member') { el.innerHTML = ''; return; }
-    const last = (results || []).find(r => r.pos != null || r.catPos != null), race = last ? raceLine(last) : '', place = placeLine();
+    const last = (results || []).find(r => r.pos != null || r.catPos != null), race = last ? raceLine(last) : '', place = placeLine(), streak = streakOf(results);
     if (!race && !place) { el.innerHTML = ''; return; }
     el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:6px">🏁 Where you stand</div>`
       + (race ? `<div style="font-size:13px;line-height:1.5;margin-bottom:6px"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">Your last race · ${E(last.title)}</span><br>${race.charAt(0).toUpperCase() + race.slice(1)} <button type="button" id="myplace-share" onclick="MyPlace.share()" style="margin-left:6px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:none;color:var(--accent);cursor:pointer;font-size:12px">📤 Share</button></div>` : '')
-      + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
+      + (streak >= 2 ? `<div style="font-size:13px;margin-bottom:6px">🔥 <b>${streak}-week racing streak</b>. Race this week to keep it going.</div>` : '') + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
   }
   function start() {
     const m = document.getElementById('main'); if (!m) return; let was = false;
@@ -52,5 +57,5 @@
     new MutationObserver(check).observe(m, { attributes: true, subtree: true, attributeFilter: ['class'] }); check();
   }
   window.addEventListener('load', () => setTimeout(start, 900));
-  window.MyPlace = { load, render, raceLine, placeLine, share };
+  window.MyPlace = { load, render, raceLine, placeLine, share, streakOf };
 })();

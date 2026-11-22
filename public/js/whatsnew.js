@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-25', title: "What's new", all: ['Results now have a monthly points league: 3 points a finish, +1 for a top 10, and +4/+6/+10 for a podium. Most points wins the month.', 'Race two weeks in a row and Home shows your 🔥 racing streak.', 'Results read from ZwiftRacing.app carry a ✓ Verified badge.'],
+      staff: [] },
     { id: '2026-11-24', title: "What's new", all: [],
       staff: ['ZRL results: copy the table straight off the WTRL page and paste it. No heading row needed; your teams are found by name and the place beside each one.'] },
     { id: '2026-11-23', title: "What's new", all: ['Your Home page now has "Where you stand": your last race in a sentence (who you beat, who was just ahead, by how much) and your place in the club by vELO, with a Share button.'],
