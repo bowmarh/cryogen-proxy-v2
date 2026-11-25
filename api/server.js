@@ -2532,16 +2532,47 @@ async function handleSheet(endpoint, res){
   sendJSON(res, 200, endpoint === 'rides' ? { rides: rows, headers, updated } : { headers, rows, updated });
 }
 
-// ── Static files (local dev) ───────────────────────────────
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg' };
+// ── Static files (local dev and Hostinger; Vercel serves public/ itself) ──
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
+// The same headers vercel.json gives every page, so the app behaves the same on Hostinger.
+const STATIC_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()' };
+const COMPRESSIBLE = /^(text\/|application\/(javascript|json|xml|manifest\+json)|image\/svg)/;
+const zlib = require('zlib');
+// Script and page names carry no version, so they are re-checked on every visit (cheap with an ETag); pictures and vendored libraries are kept a week.
+function cacheFor(rel){
+  if (/\.(html|json|webmanifest|txt|xml)$/.test(rel) || rel === '/sw.js') return 'no-cache';
+  if (/^\/vendor\/|\.(png|jpe?g|webp|svg|ico|woff2)$/.test(rel)) return 'public, max-age=604800';
+  return 'no-cache';
+}
 
-function serveStatic(res, reqPath){
-  const filePath = path.join(PUBLIC_DIR, path.normalize(reqPath === '/' ? '/index.html' : reqPath));
-  if (!filePath.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()){
-    return sendJSON(res, 404, { error: 'Not found' });
-  }
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
-  fs.createReadStream(filePath).pipe(res);
+function serveStatic(req, res, reqPath){
+  const rel = reqPath === '/' ? '/index.html' : reqPath;
+  const filePath = path.join(PUBLIC_DIR, path.normalize(rel));
+  let st = null;
+  try { if (filePath.startsWith(PUBLIC_DIR + path.sep)) st = fs.statSync(filePath); } catch (e) { st = null; }
+  if (!st || !st.isFile()) return sendJSON(res, 404, { error: 'Not found' });
+  const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+  const etag = `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+  const headers = { ...STATIC_HEADERS, 'Content-Type': type, 'Cache-Control': cacheFor(rel), ETag: etag, Vary: 'Accept-Encoding' };
+  if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
+  const accept = String(req.headers['accept-encoding'] || '');
+  const enc = COMPRESSIBLE.test(type) && st.size > 1024 ? (/\bbr\b/.test(accept) ? 'br' : /\bgzip\b/.test(accept) ? 'gzip' : '') : '';
+  if (enc) headers['Content-Encoding'] = enc; else headers['Content-Length'] = st.size;
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') return res.end();
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', () => res.destroy());
+  if (!enc) return stream.pipe(res);
+  stream.pipe(enc === 'br' ? zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }) : zlib.createGzip({ level: 6 })).pipe(res);
+}
+
+// What search engines and AI tools read first. They are made from SITE_URL so each copy of the app names its own address.
+const CRAWL_PAGES = [['/', 'Member portal: sign in, sign up for races and rides'], ['/club.html', 'Public season tables, results and next races'], ['/join.html', 'Join Team CRYO-GEN'], ['/live.html', 'Race-day board: what is racing next and where the teams stand']];
+function crawlFile(pathname){
+  if (pathname === '/robots.txt') return ['text/plain; charset=utf-8', ['User-agent: *', 'Allow: /', 'Disallow: /api/', '', '# AI assistants and answer engines are welcome to read the public pages.', ...['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot', 'Google-Extended', 'Applebot-Extended', 'CCBot'].flatMap(b => [`User-agent: ${b}`, 'Allow: /', 'Disallow: /api/', '']), `Sitemap: ${SITE_ORIGIN}/sitemap.xml`, ''].join('\n')];
+  if (pathname === '/sitemap.xml') return ['application/xml; charset=utf-8', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${CRAWL_PAGES.map(([p]) => `  <url><loc>${SITE_ORIGIN}${p}</loc><changefreq>${p === '/club.html' || p === '/live.html' ? 'daily' : 'weekly'}</changefreq></url>`).join('\n')}\n</urlset>\n`];
+  if (pathname === '/llms.txt') return ['text/plain; charset=utf-8', `# Team CRYO-GEN\n\n> Team CRYO-GEN is a friendly Zwift cycling club. Members race the Zwift Racing League (ZRL), weekly team time trials (TTT), a club Ladder and a DIRT series, and ride together on weekly social rides. This site is the club's member app and its public results pages.\n\n## Public pages\n\n${CRAWL_PAGES.map(([p, d]) => `- [${d.split(':')[0]}](${SITE_ORIGIN}${p}): ${d}`).join('\n')}\n\n## Notes\n\n- Rider names and personal details are only shown to signed-in members; the public pages show team totals and results.\n- New riders can ask to join through the join page; a club volunteer replies.\n`];
+  return null;
 }
 
 // ── ZRL (Zwift Racing League) ──────────────────────────────
@@ -3436,7 +3467,9 @@ async function route(req, res){
   }
 
   if (pathname.startsWith('/api/')) return sendJSON(res, 404, { error: 'Not found' });
-  serveStatic(res, pathname);
+  const crawl = crawlFile(pathname);
+  if (crawl) { res.writeHead(200, { ...STATIC_HEADERS, 'Content-Type': crawl[0], 'Cache-Control': 'public, max-age=3600' }); return res.end(req.method === 'HEAD' ? undefined : crawl[1]); }
+  serveStatic(req, res, pathname);
 }
 
 // An unexpected failure (not a refusal the app chose to make) is told to the admin channel, once an hour for the same place and message.

@@ -36,5 +36,12 @@ test('the daily Vercel run happens after the 09:00 UK rollover in both summer an
 
 test('the function limits and the /api rewrite are still in place', () => {
   assert.equal(config.functions['api/server.js'].maxDuration, 60);
-  assert.deepEqual(config.rewrites, [{ source: '/api/(.*)', destination: '/api/server' }]);
+  assert.deepEqual(config.rewrites, [{ source: '/api/(.*)', destination: '/api/server' }, ...['/robots.txt', '/sitemap.xml', '/llms.txt'].map(source => ({ source, destination: '/api/server' }))]);
+});
+
+test('the club structured data on the dashboard is valid JSON', () => {
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  assert.ok(m, 'the dashboard describes the club for search engines and AI tools');
+  assert.equal(JSON.parse(m[1])['@type'], 'SportsTeam');
 });

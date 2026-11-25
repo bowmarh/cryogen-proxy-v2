@@ -17,7 +17,7 @@ before(async () => { app = await h.startApp(h.createWorld()); });
 after(() => app.close());
 
 test('every inline script parses (a typo there would blank the whole dashboard)', () => {
-  const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
+  const scripts = [...html.matchAll(/<script(?![^>]*\b(?:src=|type="application\/ld\+json"))[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
   assert.ok(scripts.length >= 1);
   [...scripts, ...externalScripts].forEach((code, i) => assert.doesNotThrow(() => new vm.Script(code, { filename: `dashboard script ${i + 1}` })));
 });

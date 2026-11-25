@@ -9,6 +9,18 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/server"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/server"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/server"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/api/server"
     }
   ],
   "crons": [
