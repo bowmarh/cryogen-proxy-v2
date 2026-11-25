@@ -20,6 +20,9 @@ jobs:
       - name: Run due scheduled jobs
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # Which copy of the app runs the jobs. Set the CRON_SITE_URL repository variable (Settings → Secrets and variables → Actions →
+          # Variables) to move them, e.g. to https://club.cryogen.team on Hostinger. Only ONE copy may run them: both share the database.
+          SITE: ${{ vars.CRON_SITE_URL || 'https://club.cryo-gen.team' }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::The CRON_SECRET repository secret is not set, so no scheduled job can run."
@@ -27,8 +30,8 @@ jobs:
           fi
           code=$(curl -sS --max-time 45 -o resp.json -w '%{http_code}' -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "https://club.cryo-gen.team/api/cron/tick?speed=auto") || code=000
-          echo "HTTP $code"
+            "${SITE%/}/api/cron/tick?speed=auto") || code=000
+          echo "$SITE: HTTP $code"
           cat resp.json 2>/dev/null; echo
           if [ "$code" != "200" ]; then
             echo "::error::The dashboard answered HTTP $code."
