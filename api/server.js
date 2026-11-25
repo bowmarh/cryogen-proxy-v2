@@ -2536,6 +2536,8 @@ async function handleSheet(endpoint, res){
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 // The same headers vercel.json gives every page, so the app behaves the same on Hostinger.
 const STATIC_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()' };
+// Where agents can read about the site (RFC 8288); vercel.json sends the same header on Vercel.
+const AGENT_LINKS = '</llms.txt>; rel="describedby"; type="text/plain", </sitemap.xml>; rel="sitemap"; type="application/xml", </.well-known/mcp/server-card.json>; rel="mcp-server-card"; type="application/json"';
 const COMPRESSIBLE = /^(text\/|application\/(javascript|json|xml|manifest\+json)|image\/svg)/;
 const zlib = require('zlib');
 // Script and page names carry no version, so they are re-checked on every visit (cheap with an ETag); pictures and vendored libraries are kept a week.
@@ -2553,7 +2555,8 @@ function serveStatic(req, res, reqPath){
   if (!st || !st.isFile()) return sendJSON(res, 404, { error: 'Not found' });
   const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
   const etag = `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
-  const headers = { ...STATIC_HEADERS, 'Content-Type': type, 'Cache-Control': cacheFor(rel), ETag: etag, Vary: 'Accept-Encoding' };
+  const headers = { ...STATIC_HEADERS, 'Content-Type': type, 'Cache-Control': cacheFor(rel), ETag: etag, Vary: 'Accept-Encoding, Accept' };
+  if (rel === '/index.html') headers.Link = AGENT_LINKS;
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
   const accept = String(req.headers['accept-encoding'] || '');
   const enc = COMPRESSIBLE.test(type) && st.size > 1024 ? (/\bbr\b/.test(accept) ? 'br' : /\bgzip\b/.test(accept) ? 'gzip' : '') : '';
@@ -2567,10 +2570,20 @@ function serveStatic(req, res, reqPath){
 }
 
 // What search engines and AI tools read first. They are made from SITE_URL so each copy of the app names its own address.
-const CRAWL_PAGES = [['/', 'Member portal: sign in, sign up for races and rides'], ['/club.html', 'Public season tables, results and next races'], ['/join.html', 'Join Team CRYO-GEN'], ['/live.html', 'Race-day board: what is racing next and where the teams stand']];
+const agentDocs = require('../lib/agentdocs');
+const CRAWL_PAGES = agentDocs.PAGES.map(([p, t, d]) => [p, `${t}: ${d}`]);
+// When a page last changed: the file's own date, or today for the pages that are rebuilt from live results.
+const STARTED_DAY = new Date().toISOString().slice(0, 10);
+function lastmodFor(p){
+  if (p === '/club.html' || p === '/live.html') return new Date().toISOString().slice(0, 10);
+  try { const st = fs.statSync(path.join(PUBLIC_DIR, p === '/' ? 'index.html' : p.slice(1))); if (st.mtimeMs > 1.6e12) return new Date(st.mtimeMs).toISOString().slice(0, 10); } catch (e) { /* fall through */ }
+  return STARTED_DAY;
+}
+const CONTENT_SIGNAL = 'Content-Signal: search=yes, ai-input=yes, ai-train=no';
 function crawlFile(pathname){
-  if (pathname === '/robots.txt') return ['text/plain; charset=utf-8', ['User-agent: *', 'Allow: /', 'Disallow: /api/', '', '# AI assistants and answer engines are welcome to read the public pages.', ...['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot', 'Google-Extended', 'Applebot-Extended', 'CCBot'].flatMap(b => [`User-agent: ${b}`, 'Allow: /', 'Disallow: /api/', '']), `Sitemap: ${SITE_ORIGIN}/sitemap.xml`, ''].join('\n')];
-  if (pathname === '/sitemap.xml') return ['application/xml; charset=utf-8', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${CRAWL_PAGES.map(([p]) => `  <url><loc>${SITE_ORIGIN}${p}</loc><changefreq>${p === '/club.html' || p === '/live.html' ? 'daily' : 'weekly'}</changefreq></url>`).join('\n')}\n</urlset>\n`];
+  if (pathname === '/robots.txt') return ['text/plain; charset=utf-8', ['User-agent: *', CONTENT_SIGNAL, 'Allow: /', 'Disallow: /api/', '', '# AI assistants and answer engines are welcome to read the public pages.', ...['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot', 'Google-Extended', 'Applebot-Extended', 'CCBot'].flatMap(b => [`User-agent: ${b}`, CONTENT_SIGNAL, 'Allow: /', 'Disallow: /api/', '']), `Sitemap: ${SITE_ORIGIN}/sitemap.xml`, ''].join('\n')];
+  if (pathname === '/sitemap.xml') return ['application/xml; charset=utf-8', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${CRAWL_PAGES.map(([p]) => `  <url><loc>${SITE_ORIGIN}${p}</loc><lastmod>${lastmodFor(p)}</lastmod><changefreq>${p === '/club.html' || p === '/live.html' ? 'daily' : 'weekly'}</changefreq></url>`).join('\n')}\n</urlset>\n`];
+  if (pathname === '/.well-known/mcp/server-card.json') return ['application/json; charset=utf-8', JSON.stringify(agentDocs.serverCard(SITE_ORIGIN), null, 2)];
   if (pathname === '/llms.txt') return ['text/plain; charset=utf-8', `# Team CRYO-GEN\n\n> Team CRYO-GEN is a friendly Zwift cycling club. Members race the Zwift Racing League (ZRL), weekly team time trials (TTT), a club Ladder and a DIRT series, and ride together on weekly social rides. This site is the club's member app and its public results pages.\n\n## Public pages\n\n${CRAWL_PAGES.map(([p, d]) => `- [${d.split(':')[0]}](${SITE_ORIGIN}${p}): ${d}`).join('\n')}\n\n## Notes\n\n- Rider names and personal details are only shown to signed-in members; the public pages show team totals and results.\n- New riders can ask to join through the join page; a club volunteer replies.\n`];
   return null;
 }
@@ -3466,7 +3479,19 @@ async function route(req, res){
     return handleSheet(endpoint, res);
   }
 
+  if (pathname === '/api/mcp'){
+    // A small read-only MCP server (Streamable HTTP, JSON replies) with public club information only.
+    if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST', 'Content-Type': 'application/json; charset=utf-8' }); return res.end(JSON.stringify({ error: 'POST JSON-RPC messages to this address.' })); }
+    const out = agentDocs.handleMcp(await readJSONBody(req), SITE_ORIGIN);
+    if (out === null) { res.writeHead(202, STATIC_HEADERS); return res.end(); }
+    return sendJSON(res, 200, out);
+  }
+
   if (pathname.startsWith('/api/')) return sendJSON(res, 404, { error: 'Not found' });
+  if (/\btext\/markdown\b/.test(String(req.headers.accept || '')) && ['GET', 'HEAD'].includes(req.method)){
+    const md = agentDocs.markdownFor(pathname, SITE_ORIGIN);
+    if (md) { res.writeHead(200, { ...STATIC_HEADERS, 'Content-Type': 'text/markdown; charset=utf-8', Vary: 'Accept', 'Cache-Control': 'public, max-age=3600' }); return res.end(req.method === 'HEAD' ? undefined : md); }
+  }
   const crawl = crawlFile(pathname);
   if (crawl) { res.writeHead(200, { ...STATIC_HEADERS, 'Content-Type': crawl[0], 'Cache-Control': 'public, max-age=3600' }); return res.end(req.method === 'HEAD' ? undefined : crawl[1]); }
   serveStatic(req, res, pathname);

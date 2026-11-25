@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>CRYO-GEN: races and results</title>
-<meta name="description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/><meta property="og:type" content="website"/><meta property="og:site_name" content="Team CRYO-GEN"/><meta property="og:title" content="Team CRYO-GEN: races and results"/><meta property="og:description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/><meta property="og:image" content="/icon-512.png"/><meta name="twitter:card" content="summary"/>
+<link rel="canonical" href="https://club.cryogen.team/club.html"/><meta name="description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/><meta property="og:type" content="website"/><meta property="og:site_name" content="Team CRYO-GEN"/><meta property="og:title" content="Team CRYO-GEN: races and results"/><meta property="og:description" content="Season tables, results and next races for Team CRYO-GEN on Zwift."/><meta property="og:image" content="/icon-512.png"/><meta name="twitter:card" content="summary"/>
 <style>
 :root{--accent:#00D4FF;--accent-rgb:0,212,255}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -61,5 +61,5 @@ const fmt=(date,at)=>at?new Date(at).toLocaleString(undefined,{weekday:'short',d
   if(c){ const tick=()=>{ const ms=Number(c.dataset.at)-Date.now(); if(ms<=0){ c.textContent='Under way'; return; } const t=Math.floor(ms/1000), dd=Math.floor(t/86400); c.textContent=(dd?dd+'d ':'')+String(Math.floor(t%86400/3600)).padStart(2,'0')+':'+String(Math.floor(t%3600/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }; tick(); setInterval(tick,1000); }
 })();
 </script>
-</body>
+<script src="/js/webmcp.js"></script></body>
 </html>

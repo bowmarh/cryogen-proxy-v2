@@ -11,5 +11,8 @@
     "@garmin/fitsdk": "21.221.0",
     "@playwright/test": "^1.65.0",
     "axe-core": "4.14.0"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.11.4"
   }
 }

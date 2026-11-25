@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>CRYO-GEN: race day board</title>
-<meta name="description" content="Race-day board for Team CRYO-GEN: what is racing next, how many riders are in the pen, and where the teams stand."/><meta property="og:type" content="website"/><meta property="og:site_name" content="Team CRYO-GEN"/><meta property="og:title" content="Team CRYO-GEN: race day board"/><meta property="og:description" content="Race-day board for Team CRYO-GEN: what is racing next, how many riders are in the pen, and where the teams stand."/><meta property="og:image" content="/icon-512.png"/><meta name="twitter:card" content="summary"/>
+<link rel="canonical" href="https://club.cryogen.team/live.html"/><meta name="description" content="Race-day board for Team CRYO-GEN: what is racing next, how many riders are in the pen, and where the teams stand."/><meta property="og:type" content="website"/><meta property="og:site_name" content="Team CRYO-GEN"/><meta property="og:title" content="Team CRYO-GEN: race day board"/><meta property="og:description" content="Race-day board for Team CRYO-GEN: what is racing next, how many riders are in the pen, and where the teams stand."/><meta property="og:image" content="/icon-512.png"/><meta name="twitter:card" content="summary"/>
 <meta name="robots" content="noindex"/>
 <style>
 :root{--accent:#00D4FF}
@@ -65,5 +65,5 @@ footer{margin-top:28px;font-size:12px;color:#8b95a5}
   setInterval(() => { const c = document.getElementById('count'); if (c && data) { const next = data.events.find(e => e.at > Date.now()); if (next) c.textContent = clock(next.at - Date.now()); } }, 1000);
 })();
 </script>
-</body>
+<script src="/js/webmcp.js"></script></body>
 </html>
