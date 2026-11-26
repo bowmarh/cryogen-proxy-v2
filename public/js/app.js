@@ -2870,7 +2870,7 @@ function renderRides(){
   const xb=document.getElementById('rides-export-btn'); if(xb) xb.style.display=(role==='admin'||role==='mod')?'inline-block':'none';
   renderMyRides();
   document.getElementById('rides-list').innerHTML=(sharedError?`<div class="card" style="padding:12px 16px;margin-bottom:16px;border-color:rgba(251,191,36,0.3);color:#FBBF24;font-size:13px">⚠️ ${esc(sharedError)}</div>`:'')+allRides.map(ride=>{
-    const att=rsvps[ride.id]||[];const max=parseInt(ride.max)||25;const left=max-att.length;const rid=esc(ride.id);const pct=Math.min(att.length/max*100,100);
+    const all=rsvps[ride.id]||[];const max=parseInt(ride.max)||25;const att=all.slice(0,max),wait=all.slice(max);const left=max-att.length;const rid=esc(ride.id);const pct=Math.min(att.length/max*100,100);
     return`<div class="card" style="padding:20px;margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
         <div style="flex:1">
@@ -2890,12 +2890,12 @@ function renderRides(){
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:11px;color:#8b95a5">
-        <span>📍 ${esc(ride.route)}</span><span>📏 ${esc(ride.dist)}</span><span>⚡ ${esc(ride.pace)}</span><span>👥 ${att.length}/${max}</span>
+        <span>📍 ${esc(ride.route)}</span><span>📏 ${esc(ride.dist)}</span><span>⚡ ${esc(ride.pace)}</span><span>👥 ${att.length}/${max}${wait.length?` · ⏳ ${wait.length} waiting`:''}</span>
       </div>
       <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px">
         <div style="width:${pct}%;height:100%;background:${pct>85?'#F87171':'var(--accent)'};border-radius:2px"></div>
       </div>
-      ${att.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#9aa3b2;align-self:center">+${att.length-8} more</span>`:''}</div>`:''}
+      ${(att.length||wait.length)?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${att.slice(0,8).map(r=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="Click to cancel" style="font-size:11px;background:rgba(255,255,255,0.05);color:#9ca3af;border:1px solid rgba(255,255,255,0.08);padding:2px 10px;border-radius:99px">${esc(r.name)}</button>`).join('')}${att.length>8?`<span style="font-size:11px;color:#9aa3b2;align-self:center">+${att.length-8} more</span>`:''}${wait.map((r,i)=>`<button data-ride="${rid}" data-name="${esc(r.name)}" onclick="cancelRsvp(this.dataset.ride,this.dataset.name)" title="On the waitlist, place ${i+1}. Click to cancel" style="font-size:11px;background:rgba(251,191,36,0.08);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:99px">⏳ ${i+1}. ${esc(r.name)}</button>`).join('')}</div>`:''}
       ${String(rsvpId)===String(ride.id)?
         `<div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="rsvp-${rid}" data-ride="${rid}" class="inp" placeholder="Your name" style="flex:1;min-width:150px;border-color:rgba(var(--accent-rgb),0.4)" onkeydown="if(event.key==='Enter')confirmRsvp(this.dataset.ride)"/>
@@ -2913,6 +2913,8 @@ async function ridesExport(){
   if(!res.ok){ alert(d.error||('Request failed ('+res.status+')')); return; }
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+d.csv],{type:'text/csv;charset=utf-8'})); a.download=d.filename; document.body.appendChild(a); a.click(); a.remove();
 }
+// 1-based place on a ride's waitlist for any of these lower-case names, or 0 when going. The first `max` RSVPs are going; later ones wait.
+function waitPlace(r,names){const all=rsvps[r.id]||[],max=parseInt(r.max)||25;const i=all.slice(max).findIndex(x=>names.includes(x.name.toLowerCase()));return i<0?0:i+1;}
 function renderMyRides(){
   const el=document.getElementById('my-rides'); if(!el) return;
   const names=[(memberRider&&memberRider.name)||'', (function(){ try{ return sessionStorage.getItem('memberName')||''; }catch(e){ return ''; } })()].map(x=>x.toLowerCase()).filter(Boolean); if(!names.length){ el.innerHTML=''; return; }
@@ -2920,7 +2922,7 @@ function renderMyRides(){
   const mine=rides.filter(r=>(rsvps[r.id]||[]).some(x=>names.includes(x.name.toLowerCase()))).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const next=mine.filter(r=>r.date>=today), past=mine.length-next.length;
   el.innerHTML=`<div class="card" style="padding:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:10px">🚴 My rides</div>
-    ${next.length?next.map(r=>`<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1"><b>${esc(r.title)}</b> <span style="color:#9ca3af">· ${esc(new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}))}${r.time?' · '+esc(r.time):''}</span></div>${safeUrl(r.link)?`<a href="${safeUrl(r.link)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent)">Zwift event →</a>`:''}</div>`).join(''):'<div style="font-size:13px;color:#9ca3af">You have no rides coming up. <a href="#" onclick="showTab(\'rides\',[...document.querySelectorAll(\'#main-nav .navbtn\')].find(b=>/Social Rides/.test(b.textContent)));return false" style="color:var(--accent)">Find a ride →</a></div>'}
+    ${next.length?next.map(r=>`<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05)"><div style="flex:1"><b>${esc(r.title)}</b> <span style="color:#9ca3af">· ${esc(new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}))}${r.time?' · '+esc(r.time):''}</span>${waitPlace(r,names)?` <span style="font-size:11px;color:#fbbf24">⏳ #${waitPlace(r,names)} on the waitlist</span>`:''}</div>${safeUrl(r.link)?`<a href="${safeUrl(r.link)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent)">Zwift event →</a>`:''}</div>`).join(''):'<div style="font-size:13px;color:#9ca3af">You have no rides coming up. <a href="#" onclick="showTab(\'rides\',[...document.querySelectorAll(\'#main-nav .navbtn\')].find(b=>/Social Rides/.test(b.textContent)));return false" style="color:var(--accent)">Find a ride →</a></div>'}
     ${past?`<div style="font-size:11px;color:#8b95a5;margin-top:8px">${past} earlier ride${past===1?'':'s'} you RSVP'd to.</div>`:''}</div>`;
 }
 function confirmRsvp(id){
@@ -2928,7 +2930,8 @@ function confirmRsvp(id){
   if(!name)return;
   const cur=rsvps[id]||[];
   if(cur.find(r=>r.name.toLowerCase()===name.toLowerCase())){alert("Already RSVP'd!");return;}
-  sharedWrite('/api/rsvps',{rideId:id,name}).then(ok=>{if(ok){rsvpId=null;renderRides();}});
+  const ride=(rides||[]).find(x=>String(x.id)===String(id)),wasFull=cur.length>=((ride&&parseInt(ride.max))||25);
+  sharedWrite('/api/rsvps',{rideId:id,name}).then(ok=>{if(ok){rsvpId=null;renderRides();if(wasFull)setTimeout(()=>alert("This ride is full, so you're on the waitlist. If someone cancels you move up automatically and the club channel will say so."),50);}});
 }
 function cancelRsvp(id,name){if(confirm(`Cancel ${name}'s RSVP?`))sharedWrite('/api/rsvps/cancel',{rideId:id,name});}
 function createRide(){
