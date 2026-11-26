@@ -194,3 +194,14 @@ test('the Today strip lists only today\'s items in time order, and nothing on an
   assert.equal(w.Today.html([items[2]], now), '');
   assert.equal(w.Today.html([], now), '');
 });
+
+test('Home celebrates a new personal best finish or a first podium, and stays quiet otherwise', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), w = { addEventListener() {} };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '..', 'public/js/myplace.js'), 'utf8'), { window: w, document: {} });
+  const c = w.MyPlace.celebrate, r = (time, catPos) => ({ time, catPos });
+  assert.equal(c([r(3, 5), r(2, 9), r(1, 12)]).includes('personal best finish'), true, '5th beats 9th and 12th');
+  assert.match(c([r(3, 2), r(2, 9), r(1, 12)]), /first podium/);
+  assert.equal(c([r(3, 2), r(2, 3), r(1, 12)]).includes('first podium'), false, 'already stood on a podium');
+  assert.equal(c([r(3, 2), r(2, 1)]), '', 'not better than the best');
+  assert.equal(c([r(1, 4)]), '', 'one race is not a comparison');
+});

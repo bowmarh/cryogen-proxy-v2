@@ -37,6 +37,15 @@
     return { n, frozen };
   }
   const streakOf = (list, now) => streakInfo(list, now).n;
+  // Strava's "new PR" moment: say so when the last race is the rider's best finish so far, or their first podium.
+  function celebrate(list) {
+    const done = (list || []).filter(r => r.time && (r.catPos != null || r.pos != null)), place = r => (r.catPos != null ? r.catPos : r.pos);
+    if (done.length < 2) return '';
+    const sorted = [...done].sort((a, b) => b.time - a.time), last = sorted[0], earlier = sorted.slice(1).map(place), p = place(last);
+    if (p <= 3 && !earlier.some(x => x <= 3)) return `🥳 <b>Your first podium!</b> ${ord(p)} in your last race.`;
+    if (p < Math.min(...earlier)) return `🎉 <b>A new personal best finish:</b> ${ord(p)}.`;
+    return '';
+  }
   // A result worth sharing: plain text for WhatsApp, Discord or anywhere (the phone's share sheet when there is one, else copied).
   const plain = h => String(h).replace(/<[^>]+>/g, '');
   async function share() {
@@ -59,7 +68,7 @@
     if (!race && !place) { el.innerHTML = ''; return; }
     el.innerHTML = `<div class="card" style="padding:14px 16px;margin-bottom:16px"><div style="font-weight:800;margin-bottom:6px">🏁 Where you stand</div>`
       + (race ? `<div style="font-size:13px;line-height:1.5;margin-bottom:6px"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">Your last race · ${E(last.title)}</span><br>${race.charAt(0).toUpperCase() + race.slice(1)} <button type="button" id="myplace-share" onclick="MyPlace.share()" style="margin-left:6px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:none;color:var(--accent);cursor:pointer;font-size:12px">📤 Share</button></div>` : '')
-      + (last && last.kudos ? `<div style="font-size:13px;margin-bottom:6px">👏 <b>${last.kudos}</b> clubmate${last.kudos === 1 ? '' : 's'} cheered your last race.</div>` : '') + (streak >= 2 ? `<div style="font-size:13px;margin-bottom:6px">🔥 <b>${streak}-week racing streak</b>${sk.frozen ? ` · 🧊 ${sk.frozen} missed week${sk.frozen === 1 ? '' : 's'} forgiven (one a month)` : ''}. Race this week to keep it going.</div>` : '') + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
+      + (celebrate(results) ? `<div style="font-size:13px;margin-bottom:6px">${celebrate(results)}</div>` : '') + (last && last.kudos ? `<div style="font-size:13px;margin-bottom:6px">👏 <b>${last.kudos}</b> clubmate${last.kudos === 1 ? '' : 's'} cheered your last race.</div>` : '') + (streak >= 2 ? `<div style="font-size:13px;margin-bottom:6px">🔥 <b>${streak}-week racing streak</b>${sk.frozen ? ` · 🧊 ${sk.frozen} missed week${sk.frozen === 1 ? '' : 's'} forgiven (one a month)` : ''}. Race this week to keep it going.</div>` : '') + (place ? `<div style="font-size:13px;line-height:1.5"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5">In the club</span><br>${place}</div>` : '') + '</div>';
   }
   function start() {
     const m = document.getElementById('main'); if (!m) return; let was = false;
@@ -67,5 +76,5 @@
     new MutationObserver(check).observe(m, { attributes: true, subtree: true, attributeFilter: ['class'] }); check();
   }
   window.addEventListener('load', () => setTimeout(start, 900));
-  window.MyPlace = { load, render, raceLine, placeLine, share, streakOf, streakInfo };
+  window.MyPlace = { load, render, raceLine, placeLine, share, streakOf, streakInfo, celebrate };
 })();
