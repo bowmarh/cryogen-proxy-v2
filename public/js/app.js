@@ -593,7 +593,7 @@ function weekGo(go){
 }
 async function loadWeek(){
   const el=document.getElementById('week-content'); if(!el) return;
-  if(!weekData) el.innerHTML='<div class="card" style="padding:20px;color:#9ca3af">Loading…</div>';
+  if(!weekData) el.innerHTML='<div class="card" style="padding:20px" role="status" aria-label="Loading"><div class="skel" style="height:18px;width:40%;margin-bottom:12px"></div><div class="skel" style="height:12px;width:90%;margin-bottom:8px"></div><div class="skel" style="height:12px;width:75%;margin-bottom:8px"></div><div class="skel" style="height:12px;width:60%"></div></div>';
   try{
     const r=await fetch('/api/week',{headers:tttHeaders()}); const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
