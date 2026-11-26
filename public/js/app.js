@@ -2870,6 +2870,7 @@ function renderRides(){
   const allRides = everyRide.filter(r=>String(r.date)>=todayStr), pastRides = everyRide.filter(r=>String(r.date)<todayStr).reverse();
   const xb=document.getElementById('rides-export-btn'); if(xb) xb.style.display=(role==='admin'||role==='mod')?'inline-block':'none';
   renderMyRides();
+  loadRideOn();
   document.getElementById('rides-list').innerHTML=(sharedError?`<div class="card" style="padding:12px 16px;margin-bottom:16px;border-color:rgba(251,191,36,0.3);color:#FBBF24;font-size:13px">⚠️ ${esc(sharedError)}</div>`:'')+allRides.map(ride=>{
     const all=rsvps[ride.id]||[];const max=parseInt(ride.max)||25;const att=all.slice(0,max),wait=all.slice(max);const left=max-att.length;const rid=esc(ride.id);const pct=Math.min(att.length/max*100,100);
     return`<div class="card" style="padding:20px;margin-bottom:16px">
@@ -4486,6 +4487,38 @@ function kudosBtn(e,x){ const k=(e.kudos||{})[x.zwid]||{n:0,mine:false}, me=type
   return ` <button type="button" class="kudos-btn" data-e="${esc(e.id)}" data-z="${esc(x.zwid)}" aria-pressed="${k.mine}" title="${k.mine?'Take your kudos back':'Give kudos'}" onclick="kudosGive(this)" style="font-size:11px;padding:0 6px;border-radius:10px;border:1px solid ${k.mine?'var(--accent)':'rgba(255,255,255,0.15)'};background:${k.mine?'rgba(var(--accent-rgb),0.15)':'transparent'};color:inherit;cursor:pointer">👏 ${k.n||''}</button>`; }
 async function kudosGive(b){ b.disabled=true; try{ const r=await fetch('/api/results/kudos',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({event:b.dataset.e,zwid:b.dataset.z})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
     b.setAttribute('aria-pressed',d.mine); b.textContent='👏 '+(d.n||''); b.style.borderColor=d.mine?'var(--accent)':'rgba(255,255,255,0.15)'; b.style.background=d.mine?'rgba(var(--accent-rgb),0.15)':'transparent'; b.title=d.mine?'Take your kudos back':'Give kudos'; }catch(e){ alert(e.message); } finally{ b.disabled=false; } }
+// 💪 Ride On: after a social ride, members cheer the riders they shared it with (like the 👏 kudos on results). The server decides who may
+// (you must have been going, within 30 days) and sends only counts and your own ticks, never anyone's Zwift ID.
+let rideOnData=null,rideOnLoading=false;
+async function loadRideOn(force){
+  if(role!=='member'){ rideOnData=null; renderRideOn(); return; }
+  if(rideOnData&&!force){ renderRideOn(); return; }
+  if(rideOnLoading) return; rideOnLoading=true;
+  try{ const r=await fetch('/api/rides/rideon',{headers:tttHeaders()}); if(r.ok) rideOnData=await r.json(); }catch(e){} finally{ rideOnLoading=false; }
+  renderRideOn();
+}
+function renderRideOn(){
+  const list=document.getElementById('rides-list'); if(!list) return;
+  let el=document.getElementById('rideon-card');
+  const d=rideOnData, ids=d?Object.keys(d.rides).sort((a,b)=>String(d.rides[b].date).localeCompare(String(d.rides[a].date))):[];
+  if(!ids.length){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='rideon-card'; list.parentNode.insertBefore(el,list); }
+  el.className='card'; el.style.cssText='padding:16px;margin-bottom:16px';
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px"><div style="font-size:14px;font-weight:700">💪 Ride On</div>${d.received?`<div style="font-size:12px;color:#8b95a5">You got <b>${d.received}</b> Ride On${d.received===1?'':'s'} in the last 30 days</div>`:''}</div>
+    <div style="font-size:12px;color:#8b95a5;margin-bottom:10px">Tap a rider you shared a ride with to say Ride On. Tap again to take it back.</div>`
+    +ids.map(id=>{ const r=d.rides[id]; return `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">${esc(r.title)} <span style="color:#8b95a5;font-weight:400">· ${esc(new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}))}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${r.riders.length?r.riders.map(x=>`<button type="button" class="rideon-btn" data-ride="${esc(id)}" data-name="${esc(x.name)}" aria-pressed="${x.mine}" title="${x.mine?'Take your Ride On back':'Give a Ride On'}" onclick="rideOnGive(this)" style="font-size:11px;padding:2px 10px;border-radius:99px;border:1px solid ${x.mine?'var(--accent)':'rgba(255,255,255,0.15)'};background:${x.mine?'rgba(var(--accent-rgb),0.15)':'transparent'};color:inherit;cursor:pointer">💪 ${esc(x.name)}${x.n?` · ${x.n}`:''}</button>`).join(''):'<span style="font-size:12px;color:#8b95a5">You were the only rider on this one.</span>'}</div></div>`; }).join('');
+}
+async function rideOnGive(b){
+  b.disabled=true;
+  try{
+    const r=await fetch('/api/rides/rideon',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({rideId:b.dataset.ride,name:b.dataset.name})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    const row=rideOnData&&rideOnData.rides[b.dataset.ride]&&rideOnData.rides[b.dataset.ride].riders.find(x=>x.name===b.dataset.name);
+    if(row){ row.n=d.n; row.mine=d.mine; }
+    renderRideOn();
+  }catch(e){ alert(e.message); b.disabled=false; }
+}
 async function resultsAdd(b){ const i=document.getElementById('results-add'), m=document.getElementById('results-msg'); b.disabled=true; m.textContent='Fetching…';
   try{ const r=await fetch('/api/results/add',{method:'POST',headers:{...tttHeaders(),'Content-Type':'application/json'},body:JSON.stringify({event:i.value})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status)); if(d.fetched) await loadResults(); else m.textContent=d.note; }
   catch(e){ m.textContent=e.message; } finally{ b.disabled=false; } }
