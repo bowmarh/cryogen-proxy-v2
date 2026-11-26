@@ -48,7 +48,7 @@
   }
   let last = null, showRecap = false;
   function render(list) {
-    if (list) { last = list; loadChallenge(); }
+    if (list) { last = list; if (list.length && (window.role || sessionStorage.getItem('role')) === 'member') loadChallenge(); }
     const el = document.getElementById('milestones-card'); if (!el) return;
     if ((window.role || sessionStorage.getItem('role')) !== 'member' || !last || !last.length) { el.innerHTML = ''; return; }
     const s = stats(last), got = BADGES.filter(b => b.test(s)), goal = getGoal(), rc = recap(last);

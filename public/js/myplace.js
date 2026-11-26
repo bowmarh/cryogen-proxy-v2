@@ -56,6 +56,7 @@
   }
   let results = null, loaded = 0;
   async function load() {
+    if ((window.role || sessionStorage.getItem('role')) !== 'member') return render();   // only members have results: no request (and no 401) for a visitor or staff
     if (Date.now() - loaded < 300000 && results) return render();
     try { const r = await fetch('/api/me/results', { headers: typeof tttHeaders === 'function' ? tttHeaders() : {} }); if (r.ok) { results = (await r.json()).results || []; loaded = Date.now(); } } catch (e) { /* the place line still shows */ }
     render();
