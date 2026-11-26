@@ -122,6 +122,7 @@ test('monthly points: 3 a finish, +1 top 10, +10/+6/+4 podium; only this month c
   const L = await r.leaderboard(Date.parse('2026-11-04T10:00:00Z'));
   assert.equal(L.monthName, 'November 2026');
   assert.deepEqual(L.month.map(x => [x.name, x.points, x.races]), [['Ann', 14, 1], ['Bo', 11, 2]]);
+  assert.deepEqual({ ...L.challenge }, { done: 3, goal: 25, last: 1 }, 'three finishes this month; the goal starts at 25 and follows last month once that is bigger');
 });
 
 test('the racing streak counts weeks in a row up to this week or last', () => {
@@ -164,3 +165,14 @@ test('badges, weekly goal and season recap are worked out from the rider\'s own 
   assert.equal([rc.races, rc.wins, rc.busiest.month].join(','), '4,1,November');
   assert.deepEqual(w.Milestones.stats([], now).races, 0);
 });
+
+test('the club challenge card shows progress, turns green when beaten, and is empty with no data', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), w = {}, ctx = { window: w, document: { getElementById: () => null }, sessionStorage: {}, localStorage: {} };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '..', 'public/js/milestones.js'), 'utf8'), ctx);
+  assert.equal(w.Milestones.challengeHtml(), '');
+  w.Milestones.setChallenge({ done: 10, goal: 25, last: 20 });
+  const html = w.Milestones.challengeHtml();
+  assert.match(html, /<b>10<\/b> of 25/); assert.match(html, /15 to go/); assert.match(html, /width:40%/);
+  w.Milestones.setChallenge({ done: 30, goal: 25, last: 20 });
+  assert.match(w.Milestones.challengeHtml(), /goal beaten/);
+}); 

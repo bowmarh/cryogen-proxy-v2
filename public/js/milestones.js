@@ -34,9 +34,21 @@
     const r = 26, c = 2 * Math.PI * r, f = goal ? Math.min(1, done / goal) : 0;
     return `<svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="${done} of ${goal} races this week"><circle cx="32" cy="32" r="${r}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="7"/><circle cx="32" cy="32" r="${r}" fill="none" stroke="${f >= 1 ? '#22c55e' : 'var(--accent)'}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">${done}/${goal || '–'}</text></svg>`;
   }
+  let challenge = null, chAt = 0;
+  async function loadChallenge() {
+    if (Date.now() - chAt < 600000) return; chAt = Date.now();
+    try { const r = await fetch('/api/results/leaderboard', { headers: typeof tttHeaders === 'function' ? tttHeaders() : {} }); if (r.ok) { challenge = (await r.json()).challenge || null; render(); } } catch (e) { /* the card just stays out */ }
+  }
+  function challengeHtml() {
+    if (!challenge || !(challenge.goal > 0)) return '';
+    const pct = Math.min(100, Math.round(challenge.done / challenge.goal * 100)), met = challenge.done >= challenge.goal;
+    return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:4px">🤝 Club challenge this month</div>
+      <div style="font-size:13px;margin-bottom:6px"><b>${challenge.done}</b> of ${challenge.goal} club race finishes${met ? ' · goal beaten, well done team!' : ` · ${challenge.goal - challenge.done} to go`}</div>
+      <div role="progressbar" aria-valuemin="0" aria-valuemax="${challenge.goal}" aria-valuenow="${Math.min(challenge.done, challenge.goal)}" style="height:8px;border-radius:4px;background:rgba(255,255,255,0.1);overflow:hidden"><div style="height:100%;width:${pct}%;background:${met ? '#22c55e' : 'var(--accent)'}"></div></div></div>`;
+  }
   let last = null, showRecap = false;
   function render(list) {
-    if (list) last = list;
+    if (list) { last = list; loadChallenge(); }
     const el = document.getElementById('milestones-card'); if (!el) return;
     if ((window.role || sessionStorage.getItem('role')) !== 'member' || !last || !last.length) { el.innerHTML = ''; return; }
     const s = stats(last), got = BADGES.filter(b => b.test(s)), goal = getGoal(), rc = recap(last);
@@ -46,10 +58,11 @@
       <div style="flex:1;min-width:180px"><div style="font-weight:800">🎯 Weekly goal</div><div style="font-size:12px;color:#8b95a5;margin:2px 0 6px">${goal ? (s.thisWeek >= goal ? 'Goal reached. Nice week.' : `${goal - s.thisWeek} more race${goal - s.thisWeek === 1 ? '' : 's'} to fill the ring.`) : 'Pick how many races you want each week.'}</div>
         <div role="group" aria-label="Races a week goal">${[1, 2, 3, 4].map(n => `<button type="button" class="goal-btn" data-n="${n}" aria-pressed="${goal === n}" style="font-size:12px;padding:2px 10px;margin-right:4px;border-radius:10px;border:1px solid ${goal === n ? 'var(--accent)' : 'rgba(255,255,255,0.15)'};background:${goal === n ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'};color:inherit;cursor:pointer">${n}</button>`).join('')}</div></div></div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8b95a5;margin-bottom:6px">Badges · ${got.length} of ${BADGES.length}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${badges}</div>
+      ${challengeHtml()}
       <div style="margin-top:10px"><button type="button" id="recap-toggle" class="btn" style="font-size:12px;padding:4px 12px">${showRecap ? 'Hide' : '📊 My season so far'}</button></div>
       ${showRecap ? `<div style="margin-top:10px;font-size:13px;line-height:1.6">${rc.races ? `This season: <b>${rc.races}</b> race${rc.races === 1 ? '' : 's'}, <b>${rc.podiums}</b> podium${rc.podiums === 1 ? '' : 's'}, <b>${rc.wins}</b> win${rc.wins === 1 ? '' : 's'}${rc.best !== null ? `, best finish <b>#${rc.best}</b>` : ''}${rc.avg !== null ? `, average place <b>#${rc.avg}</b>` : ''}. ${rc.busiest ? `Busiest month: <b>${E(rc.busiest.month)}</b> (${rc.busiest.races}). ` : ''}${rc.streak >= 2 ? `Longest streak: <b>${rc.streak} weeks</b>.` : ''}` : 'No races yet this season. Your first one starts the story.'}</div>` : ''}</div>`;
     el.querySelectorAll('.goal-btn').forEach(b => b.addEventListener('click', () => { setGoal(Number(b.dataset.n)); render(); }));
     const t = document.getElementById('recap-toggle'); if (t) t.addEventListener('click', () => { showRecap = !showRecap; render(); });
   }
-  window.Milestones = { render, stats, recap, BADGES };
+  window.Milestones = { render, stats, recap, BADGES, challengeHtml, setChallenge: c => { challenge = c; } };
 })();
