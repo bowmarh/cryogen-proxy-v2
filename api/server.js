@@ -1,5 +1,6 @@
 const { zrFetch, zrKeySet } = require('../lib/zrkey');   // ZwiftRacing.app: main key with the spare as backup
 const http = require('http');
+const ridecap = require('../lib/ridecap');   // social-ride capacity: the first `max` RSVPs are going, the rest are waitlisted
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -384,8 +385,12 @@ const DATA_ROUTES = {
     const cell = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
     const rides = state.rides.filter(r => (id ? r.id === id : r.date >= today)).sort((a, b) => a.date.localeCompare(b.date));
     if (id && !rides.length) throw new HttpError(404, 'That ride was not found.');
-    const rows = [['Ride', 'Date', 'Time', 'Rider', 'RSVP made']];
-    for (const r of rides) for (const x of state.rsvps[r.id] || []) rows.push([r.title, r.date, r.time || '', x.name, x.ts || '']);
+    const rows = [['Ride', 'Date', 'Time', 'Rider', 'RSVP made', 'Status']];
+    for (const r of rides) {
+      const { going, waitlist } = ridecap.split(state.rsvps[r.id], ridecap.maxOf(r));
+      for (const x of going) rows.push([r.title, r.date, r.time || '', x.name, x.ts || '', 'Going']);
+      waitlist.forEach((x, i) => rows.push([r.title, r.date, r.time || '', x.name, x.ts || '', `Waitlist #${i + 1}`]));
+    }
     if (rows.length === 1) throw new HttpError(409, 'Nobody has RSVP\'d yet.');
     return { filename: `rsvps-${id ? 'ride' : 'upcoming'}-${today}.csv`, csv: rows.map(r => r.map(cell).join(',')).join('\n') };
   },
@@ -407,7 +412,19 @@ const DATA_ROUTES = {
   },
 
   'POST /api/rsvps/cancel': async (req, body) => {
-    await redis([['HDEL', KEYS.rsvps, `${rideId(body.rideId)}|${identify(req, body).name.toLowerCase()}`]]);
+    const id = rideId(body.rideId), { name } = identify(req, body);
+    // If a going rider cancels a full ride, the first waitlisted rider moves up automatically; say so in the club channel.
+    let moved = null, ride = null;
+    try {
+      const state = await loadState();
+      ride = state.rides.find(r => r.id === id) || null;
+      if (ride) moved = ridecap.promotedOnCancel(state.rsvps[id], name, ridecap.maxOf(ride));
+    } catch (e) { console.error('Waitlist check:', e.message); }
+    await redis([['HDEL', KEYS.rsvps, `${id}|${name.toLowerCase()}`]]);
+    if (moved) {
+      await discord('public', { content: `🎉 **${discordEscape(moved.name)}** moves up from the waitlist and is now riding **${discordEscape(ride.title)}** (${ride.date}${ride.time ? ` at ${discordEscape(ride.time)}` : ''}).` })
+        .catch(e => console.error('Waitlist post:', e.message));
+    }
   },
 };
 
@@ -1795,10 +1812,10 @@ async function runRidesSchedule(now = Date.now()){
     if (ride.date !== today && ride.date !== tomorrow) continue;
     const [claimed] = await redis([['HSETNX', KEYS.rideSent, `${ride.id}:reminder`, new Date(now).toISOString()]]);
     if (!claimed) continue;
-    const going = (state.rsvps[ride.id] || []).length, max = parseInt(ride.max, 10) || 25;
+    const max = ridecap.maxOf(ride), { going: goingList, waitlist } = ridecap.split(state.rsvps[ride.id], max), going = goingList.length;
     const details = [ride.route && `📍 ${ride.route}`, ride.dist && `📏 ${ride.dist}`, ride.pace && `⚡ ${ride.pace}`].filter(Boolean).map(discordEscape).join(' · ');
     const link = ride.link && !/[<>\s]/.test(ride.link) ? `\nZwift event: <${ride.link}>` : '';
-    await discord('public', { content: `🚴 **${discordEscape(ride.title)}** is ${ride.date === today ? 'today' : 'tomorrow'}${ride.time ? ` at ${discordEscape(ride.time)}` : ''}.${details ? `\n${details}` : ''}\n${going} riding, ${Math.max(0, max - going)} place${max - going === 1 ? '' : 's'} left. RSVP: ${SITE_URL} → 🚴 Social Rides${link}` });
+    await discord('public', { content: `🚴 **${discordEscape(ride.title)}** is ${ride.date === today ? 'today' : 'tomorrow'}${ride.time ? ` at ${discordEscape(ride.time)}` : ''}.${details ? `\n${details}` : ''}\n${going} riding, ${Math.max(0, max - going)} place${max - going === 1 ? '' : 's'} left${waitlist.length ? ` (${waitlist.length} on the waitlist)` : ''}. RSVP: ${SITE_URL} → 🚴 Social Rides${link}` });
     done.push('ride-reminder');
   }
   return done;
@@ -2226,11 +2243,14 @@ async function seasonOf(member){
     const dates = new Map();
     for (let i = 0; i < (rideRaw || []).length; i += 2) { try { dates.set(rideRaw[i], JSON.parse(rideRaw[i + 1]).date); } catch (e) { /* skip */ } }
     let total = 0, past = 0;
-    for (let i = 0; i < (rsvpRaw || []).length; i += 2) {
-      let who = ''; try { who = String(JSON.parse(rsvpRaw[i + 1]).name || '').toLowerCase(); } catch (e) { /* skip */ }
-      if (!names.has(who)) continue;
+    // Waitlisted riders have not joined the ride, so they are not counted.
+    const rideMap = new Map();
+    for (let i = 0; i < (rideRaw || []).length; i += 2) { try { rideMap.set(rideRaw[i], JSON.parse(rideRaw[i + 1])); } catch (e) { /* skip */ } }
+    const flat = []; for (let i = 0; i < (rsvpRaw || []).length; i += 2) flat.push([rsvpRaw[i], rsvpRaw[i + 1]]);
+    for (const e of ridecap.goingEntries(flat, rideMap)) {
+      if (!names.has(e.name)) continue;
       total++;
-      const d = dates.get(rsvpRaw[i].split('|')[0]);
+      const d = dates.get(e.rideId);
       if (d && d < today) past++;
     }
     return { rsvps: total, attended: past };
@@ -2670,10 +2690,13 @@ const assoc = require('../lib/assoc')({
   redis, HttpError, text, requireRole, memberFromRequest, discord, discordEscape, siteUrl: SITE_URL,
   // What an associate has done: social rides joined (RSVPs under their name) and team events (a TTT or ZRL sign-up).
   activityOf: async (zwid, name) => {
-    const [rsvps, last, zrlSignup] = await redis([['HGETALL', KEYS.rsvps], ['HGET', TTT_KEYS.last, zwid], ['HGET', zrl.KEYS.signups, zwid]]);
+    const [rsvps, rideRaw, last, zrlSignup] = await redis([['HGETALL', KEYS.rsvps], ['HGETALL', KEYS.rides], ['HGET', TTT_KEYS.last, zwid], ['HGET', zrl.KEYS.signups, zwid]]);
     const mine = String(name || '').toLowerCase();
-    let n = 0;
-    for (let i = 0; i < (rsvps || []).length; i += 2) { try { if (String(JSON.parse(rsvps[i + 1]).name || '').toLowerCase() === mine) n++; } catch (e) { /* skip */ } }
+    // Only rides they are actually going on count towards the checklist, not a waitlist place.
+    const rideMap = new Map();
+    for (let i = 0; i < (rideRaw || []).length; i += 2) { try { rideMap.set(rideRaw[i], JSON.parse(rideRaw[i + 1])); } catch (e) { /* skip */ } }
+    const flat = []; for (let i = 0; i < (rsvps || []).length; i += 2) flat.push([rsvps[i], rsvps[i + 1]]);
+    const n = ridecap.goingEntries(flat, rideMap).filter(e => e.name === mine).length;
     return { rsvps: n, teamEvents: (last ? 1 : 0) + (zrlSignup ? 1 : 0) };
   },
   inClub: async zwid => { try { return (await fetchRoster()).riders.some(r => String(r.riderId) === String(zwid)); } catch (e) { return false; } },
