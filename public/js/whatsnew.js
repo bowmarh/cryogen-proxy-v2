@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-12-02', title: "What's new", all: ['Social rides now have a real waitlist: once a ride is full, new RSVPs wait their turn and move up automatically when someone cancels (the club channel says who).'],
+      staff: ['The RSVP export has a Status column (Going or Waitlist #n), and ride reminders mention how many are waiting.'] },
     { id: '2026-12-01', title: "What's new", all: ['The Go to box (press /) now lists the pages you opened lately first.'],
       staff: [] },
     { id: '2026-11-30', title: "What's new", all: ['Home now celebrates a new personal best finish and your first podium.'],
