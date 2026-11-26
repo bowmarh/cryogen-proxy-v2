@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-11-28', title: "What's new", all: ['Home has a ☀️ Today strip: what is on for you today, in time order.', 'Your racing streak now forgives one missed week a month (🧊).', 'Every Monday the bell carries a one-line recap of the club\'s week.'],
+      staff: [] },
     { id: '2026-11-27', title: "What's new", all: ['Home has a club challenge: everyone\'s race finishes this month against a team goal, with a progress bar.'],
       staff: [] },
     { id: '2026-11-26', title: "What's new", all: ['Home has a weekly goal ring, race badges and a "My season so far" recap.', 'Results have a 👏 button: give a clubmate kudos for a good race. If someone cheers yours, Home tells you.'],

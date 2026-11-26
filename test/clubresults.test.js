@@ -132,6 +132,10 @@ test('the racing streak counts weeks in a row up to this week or last', () => {
   assert.equal(w.MyPlace.streakOf([{ time: t(0) }, { time: t(7) }, { time: t(14) }], now), 3);
   assert.equal(w.MyPlace.streakOf([{ time: t(7) }, { time: t(14) }], now), 2, 'not raced yet this week still counts');
   assert.equal(w.MyPlace.streakOf([{ time: t(21) }], now), 0);
+  // The freeze: one missed week a month is forgiven, a second one in the same month is not.
+  const f = w.MyPlace.streakInfo([{ time: t(0) }, { time: t(14) }, { time: t(21) }], now);
+  assert.equal(f.n + ',' + f.frozen, '3,1', 'a single gap does not break the run');
+  assert.equal(w.MyPlace.streakOf([{ time: t(0) }, { time: t(21) }, { time: t(42) }], now) <= 2, true, 'two gaps in one month break it');
 });
 
 test('kudos: a member cheers a clubmate once, can take it back, never their own, and the counts come with the results', async () => {
@@ -176,3 +180,17 @@ test('the club challenge card shows progress, turns green when beaten, and is em
   w.Milestones.setChallenge({ done: 30, goal: 25, last: 20 });
   assert.match(w.Milestones.challengeHtml(), /goal beaten/);
 }); 
+
+test('the Today strip lists only today\'s items in time order, and nothing on an empty day', () => {
+  const vm = require('node:vm'), fs = require('node:fs'), w = { addEventListener() {} }, ctx = { window: w, document: { getElementById: () => null }, sessionStorage: {}, setInterval() {} };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '..', 'public/js/today.js'), 'utf8'), ctx);
+  const now = Date.parse('2026-11-26T10:00:00Z'), H = 3600000;
+  const items = [{ timed: true, atMs: now + 8 * H, kind: 'TTT', title: 'Thursday TTT', state: 'in' }, { timed: true, atMs: now + 2 * H, kind: 'ZRL', title: 'Round 3', state: 'todo' },
+    { timed: true, atMs: now + 48 * H, kind: 'Ride', title: 'Sunday social', state: 'info' }];
+  const got = w.Today.todayItems(items, now);
+  assert.equal(got.map(x => x.kind).join(','), 'ZRL,TTT', 'tomorrow and later are left out; earliest first');
+  const html = w.Today.html(items, now);
+  assert.match(html, /Needs your answer/); assert.match(html, /You&#39;re in|You're in/);
+  assert.equal(w.Today.html([items[2]], now), '');
+  assert.equal(w.Today.html([], now), '');
+});
