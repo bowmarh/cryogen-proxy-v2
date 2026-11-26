@@ -1174,6 +1174,7 @@ async function applyAccessBadge(){
 
 // ── Navigation ─────────────────────────────────────────────
 function showTab(id,btn){
+  try{ if(window.QuickFind&&QuickFind.note) QuickFind.note(id); }catch(e){}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');

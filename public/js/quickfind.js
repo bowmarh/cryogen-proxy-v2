@@ -36,6 +36,11 @@
     out.push({ kind: 'page', id: 'tour', label: '🎬 Quick tour', group: 'Help', words: norm('quick tour help guide how to use the app walkthrough'), el: { click: () => { if (window.Tour) Tour.start(); } } });
     return out;
   }
+  // Recently visited pages (the Slack / VS Code idea): the last few pages opened on this device, offered first when the box is empty.
+  const RK = 'cg:recent:pages';
+  const recentIds = () => { try { const a = JSON.parse(localStorage.getItem(RK) || '[]'); return Array.isArray(a) ? a.filter(x => typeof x === 'string').slice(0, 8) : []; } catch (e) { return []; } };
+  function note(id) { if (!/^[a-z]+$/.test(String(id || ''))) return; try { localStorage.setItem(RK, JSON.stringify([id, ...recentIds().filter(x => x !== id)].slice(0, 8))); } catch (e) { /* kept for this visit only */ } }
+  function withRecent(list, current) { const ids = recentIds().filter(x => x !== current && x !== 'dashboard'), got = ids.map(i => list.find(p => p.id === i)).filter(Boolean).slice(0, 4); return got.length ? [...got.map(p => ({ ...p, group: 'Recent' })), ...list] : list; }
   const findPages = q => { const w = norm(q).split(/\s+/).filter(Boolean); return pages().filter(p => w.every(x => p.words.includes(x))); };
   function open() {
     close();
@@ -48,7 +53,7 @@
     const go = h => { close(); if (h.kind === 'page') h.el.click(); else if (typeof openRider === 'function') openRider(String(h.p.id), ''); };
     const row = 'padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap';
     const draw = () => {
-      const t = q.value.trim(), pg = (t ? findPages(t) : pages()).map(p => ({ kind: 'page', ...p }));
+      const t = q.value.trim(), pg = (t ? findPages(t) : withRecent(pages(), (document.querySelector('.page.active') || {}).id && document.querySelector('.page.active').id.replace(/^page-/, ''))).map(p => ({ kind: 'page', ...p }));
       const rd = isStaff && t ? search(t).map(p => ({ kind: 'rider', p })) : [];
       hits = [...pg, ...rd];
       let lastGroup = null;
@@ -69,5 +74,5 @@
     const signedIn = !!(window.role || sessionStorage.getItem('role')), login = document.getElementById('login-screen');
     if (signedIn && !(login && login.offsetParent !== null) && !typing && (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'))) { e.preventDefault(); open(); }
   });
-  window.QuickFind = { open, close, refresh, search, pages };
+  window.QuickFind = { open, close, refresh, search, pages, note, recentIds, withRecent };
 })();
