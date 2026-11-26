@@ -40,6 +40,12 @@ test('the club theme: anyone can read it, only an admin can set it, and bad valu
   assert.equal((await app.post('/api/club/theme', { accent: '#ff8800' })).status, 401);
   assert.equal((await app.post('/api/club/theme', { accent: 'red' }, { token: admin })).status, 400);
   assert.equal((await app.post('/api/club/theme', { logo: 'http://x.test/a.png' }, { token: admin })).status, 400);
+  const site = await app.post('/api/club/theme', { logo: 'https://example.com' }, { token: admin });
+  assert.equal(site.status, 400); assert.match(site.body.error, /website, not of a picture/, 'a bare site address is not a logo');
+  assert.equal((await app.post('/api/club/theme', { logo: 'https://example.com/' }, { token: admin })).status, 400);
+  app.world.db['cg:club:theme'] = JSON.stringify({ logo: 'https://cryogen.team' });   // a bare site address saved earlier is dropped when read, not fetched on every load
+  assert.equal((await app.get('/api/club/theme')).body.logo, '');
+  delete app.world.db['cg:club:theme'];
   const ok = await app.post('/api/club/theme', { accent: '#FF8800', welcome: 'Ride <b>fast</b>, be kind', logo: 'https://example.com/logo.png' }, { token: admin });
   assert.deepEqual([ok.body.accent, ok.body.welcome, ok.body.logo], ['#ff8800', 'Ride bfast/b, be kind', 'https://example.com/logo.png']);
   assert.equal((await app.get('/api/club/theme')).body.accent, '#ff8800');
