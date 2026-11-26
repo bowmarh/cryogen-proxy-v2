@@ -5,6 +5,8 @@
   const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KEY = 'cg:whatsnew:seen';
   const NOTES = [
+    { id: '2026-12-01', title: "What's new", all: ['The Go to box (press /) now lists the pages you opened lately first.'],
+      staff: [] },
     { id: '2026-11-30', title: "What's new", all: ['Home now celebrates a new personal best finish and your first podium.'],
       staff: [] },
     { id: '2026-11-29', title: "What's new", all: ['Keyboard shortcuts: press ? for the list, or g then a letter to jump to a page (g z for ZRL).', 'Pages now show a soft placeholder while they load instead of a bare "Loading…".'],
